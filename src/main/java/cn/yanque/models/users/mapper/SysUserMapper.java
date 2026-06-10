@@ -23,4 +23,6 @@ public interface SysUserMapper {
     int deleteUserRoles(@Param("userId") Long userId);
 
     int insertUserRoles(@Param("userId") Long userId, @Param("roleIds") List<Long> roleIds);
+
+    List<Long> selectRoleIdsByUserId(@Param("userId") Long userId);
 }

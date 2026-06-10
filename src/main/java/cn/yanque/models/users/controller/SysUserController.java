@@ -2,16 +2,8 @@ package cn.yanque.models.users.controller;
 
 import cn.yanque.common.api.ApiResponse;
 import cn.yanque.common.api.PageResult;
-import cn.yanque.models.users.pojo.vo.req.UserCreateReq;
-import cn.yanque.models.users.pojo.vo.req.UserPageReq;
-import cn.yanque.models.users.pojo.vo.req.UserRoleAssignReq;
-import cn.yanque.models.users.pojo.vo.req.UserUpdateReq;
-import cn.yanque.models.users.pojo.vo.res.UserCreateRes;
-import cn.yanque.models.users.pojo.vo.res.UserDeleteRes;
-import cn.yanque.models.users.pojo.vo.res.UserDetailRes;
-import cn.yanque.models.users.pojo.vo.res.UserPageRes;
-import cn.yanque.models.users.pojo.vo.res.UserRoleAssignRes;
-import cn.yanque.models.users.pojo.vo.res.UserUpdateRes;
+import cn.yanque.models.users.pojo.vo.req.*;
+import cn.yanque.models.users.pojo.vo.res.*;
 import cn.yanque.models.users.service.SysUserService;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,6 +74,12 @@ public class SysUserController {
                                                           @Valid @RequestBody UserRoleAssignReq req){
 
         return ApiResponse.success(sysUserService.assignUserRoles(id, req));
+    }
+
+    @PostMapping("/login")
+    @Operation(description = "用户登录")
+    public ApiResponse<LoginRes> login(@Valid @RequestBody LoginReq req){
+        return ApiResponse.success(sysUserService.LoginReq(req));
     }
 
 }

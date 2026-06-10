@@ -1,20 +1,20 @@
 package cn.yanque.models.users.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.jwt.JWTUtil;
 import cn.yanque.common.api.PageResult;
 import cn.yanque.common.enums.ActiveEnum;
 import cn.yanque.common.exception.BusinessException;
+import cn.yanque.models.users.mapper.SysPermissionMapper;
+import cn.yanque.models.users.mapper.SysRoleMapper;
 import cn.yanque.models.users.mapper.SysUserMapper;
+import cn.yanque.models.users.pojo.entity.SysPermissionEntity;
+import cn.yanque.models.users.pojo.entity.SysRoleEntity;
 import cn.yanque.models.users.pojo.entity.SysUserEntity;
-import cn.yanque.models.users.pojo.vo.req.UserCreateReq;
-import cn.yanque.models.users.pojo.vo.req.UserPageReq;
-import cn.yanque.models.users.pojo.vo.req.UserRoleAssignReq;
-import cn.yanque.models.users.pojo.vo.req.UserUpdateReq;
-import cn.yanque.models.users.pojo.vo.res.UserCreateRes;
-import cn.yanque.models.users.pojo.vo.res.UserDeleteRes;
-import cn.yanque.models.users.pojo.vo.res.UserDetailRes;
-import cn.yanque.models.users.pojo.vo.res.UserPageRes;
-import cn.yanque.models.users.pojo.vo.res.UserRoleAssignRes;
-import cn.yanque.models.users.pojo.vo.res.UserUpdateRes;
+import cn.yanque.models.users.pojo.vo.bo.QueryPermissionBo;
+import cn.yanque.models.users.pojo.vo.bo.QueryUserBo;
+import cn.yanque.models.users.pojo.vo.req.*;
+import cn.yanque.models.users.pojo.vo.res.*;
 import cn.yanque.models.users.service.SysUserService;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -25,7 +25,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 @Service
 public class SysUserServiceImpl implements SysUserService {
@@ -33,6 +36,12 @@ public class SysUserServiceImpl implements SysUserService {
 
     @Autowired
     private SysUserMapper sysUserMapper;
+
+    @Autowired
+    private SysRoleMapper sysRoleMapper;
+
+    @Autowired
+    private SysPermissionMapper sysPermissionMapper;
 
 
     @Override
@@ -137,6 +146,80 @@ public class SysUserServiceImpl implements SysUserService {
         res.setUserId(userId);
         res.setRoleIds(req.getRoleIds());
         return res;
+    }
+
+    @Override
+    public LoginRes LoginReq(LoginReq req) {
+
+        LoginRes loginRes = new LoginRes();
+
+        //1.查询用户
+        SysUserEntity sysUserEntity = sysUserMapper.selectByUsername(req.getUsername());
+
+        //2.判断是否存在
+        if (sysUserEntity == null || !sysUserEntity.getStatus().equals(ActiveEnum.ACTIVE.name())) {
+            throw BusinessException.UserNotExist.newInstance("用户不存在或已失效");
+        }
+
+        // 判断密码
+        if (!req.getPassword().equals(sysUserEntity.getPassword())) {
+            throw BusinessException.PasswordError;
+        }
+
+        UserDetailRes userDetailRes = new UserDetailRes();
+        BeanUtils.copyProperties(sysUserEntity, userDetailRes);
+        loginRes.setUserDetailRes(userDetailRes);
+
+        //3.生成token
+        String token = createToken(sysUserEntity);
+        loginRes.setToken(token);
+
+        //4.查询角色权限
+        List<Long> roleIds = sysUserMapper.selectRoleIdsByUserId(sysUserEntity.getId());
+
+        if (CollectionUtil.isEmpty(roleIds)) {
+            return loginRes;
+        }
+
+        QueryUserBo queryUserBo = new QueryUserBo();
+        queryUserBo.setIds(roleIds);
+        List<SysRoleEntity> sysRoleEntityList = sysRoleMapper.selectList(queryUserBo);
+        List<RoleDetailRes> roleDetailResList = sysRoleEntityList.stream().map(sysRoleEntity -> {
+            RoleDetailRes roleDetailRes = new RoleDetailRes();
+            BeanUtils.copyProperties(sysRoleEntity, roleDetailRes);
+            return roleDetailRes;
+        }).toList();
+        loginRes.setRoleDetailResList(roleDetailResList);
+
+
+        List<Long> permissionIds = sysRoleMapper.selectPermissionIdsByRoleId(roleIds);
+        permissionIds = permissionIds.stream().distinct().toList();
+
+        if (CollectionUtil.isEmpty(permissionIds)) {
+            return loginRes;
+        }
+
+        QueryPermissionBo queryPermissionBo = new QueryPermissionBo();
+        queryPermissionBo.setIds(permissionIds);
+        List<SysPermissionEntity> sysPermissionEntityList = sysPermissionMapper.selectList(queryPermissionBo);
+
+
+        List<PermissionDetailRes> permissionDetailResList = sysPermissionEntityList.stream().map(sysPermissionEntity -> {
+            PermissionDetailRes permissionDetailRes = new PermissionDetailRes();
+            BeanUtils.copyProperties(sysPermissionEntity, permissionDetailRes);
+            return permissionDetailRes;
+        }).toList();
+
+        loginRes.setPermissionDetailResList(permissionDetailResList);
+        //5.组装信息返回
+        return loginRes;
+    }
+
+    private String createToken(SysUserEntity sysUserEntity) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("uid", sysUserEntity.getId());
+        map.put("expire_time", System.currentTimeMillis() + 1000 * 60 * 60);
+        return JWTUtil.createToken(map, "1234".getBytes());
     }
 
     private UserDetailRes buildUserDetailRes(SysUserEntity user) {

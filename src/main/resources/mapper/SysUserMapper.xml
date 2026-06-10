@@ -126,4 +126,11 @@
             (#{userId}, #{roleId}, now())
         </foreach>
     </insert>
+
+    <select id="selectRoleIdsByUserId" resultType="java.lang.Long">
+        select role_id
+        from sys_user_role
+        where user_id = #{userId}
+        order by role_id asc
+    </select>
 </mapper>
