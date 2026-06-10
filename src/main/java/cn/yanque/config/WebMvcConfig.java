@@ -1,0 +1,38 @@
+package cn.yanque.config;
+
+import cn.yanque.models.auth.interceptor.JwtAuthInterceptor;
+import cn.yanque.models.auth.interceptor.PermissionInterceptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebMvcConfig implements WebMvcConfigurer {
+
+    @Autowired
+    private JwtAuthInterceptor jwtAuthInterceptor;
+
+    @Autowired
+    private PermissionInterceptor permissionInterceptor;
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(jwtAuthInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns(
+                        "/api/sysUser/login",
+                        "/v3/api-docs/**",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**");
+
+        registry.addInterceptor(permissionInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns(
+                        "/api/sysUser/login",
+                        "/v3/api-docs/**",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**");
+        WebMvcConfigurer.super.addInterceptors(registry);
+    }
+}
