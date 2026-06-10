@@ -9,6 +9,10 @@ public class BusinessException extends RuntimeException {
 
     public static final BusinessException UserExist = new BusinessException(10001, "用户已存在");
     public static final BusinessException UserNotExist = new BusinessException(10002, "用户不存在");
+    public static final BusinessException PermissionExist = new BusinessException(11001, "权限已存在");
+    public static final BusinessException PermissionNotExist = new BusinessException(11002, "权限不存在");
+    public static final BusinessException RoleExist = new BusinessException(12001, "角色已存在");
+    public static final BusinessException RoleNotExist = new BusinessException(12002, "角色不存在");
 
 
 

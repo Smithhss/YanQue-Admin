@@ -60,7 +60,7 @@
                 or nickname like concat('%', #{keyword}, '%')
                 or real_name like concat('%', #{keyword}, '%'))
             </if>
-            <if test="status != null">
+            <if test="status != null and status != ''">
                 and status = #{status}
             </if>
             <if test="roleCode != null and roleCode != ''">
@@ -95,7 +95,7 @@
     </update>
 
     <!-- 查询用户关联的角色 -->
-    <select id="selectRolesByUserId" resultType="cn.yanque.models.users.pojo.entity.SysUserEntity">
+    <select id="selectRolesByUserId" resultType="cn.yanque.models.users.pojo.entity.SysRoleEntity">
         select r.*
         from sys_role r
         inner join sys_user_role ur on ur.role_id = r.id
@@ -104,7 +104,7 @@
     </select>
 
     <!-- 查询用户通过角色聚合出的权限 -->
-    <select id="selectRolePermissionsByUserId" resultType="cn.yanque.models.users.pojo.entity.SysUserEntity">
+    <select id="selectRolePermissionsByUserId" resultType="cn.yanque.models.users.pojo.entity.SysPermissionEntity">
         select distinct p.*
         from sys_permission p
         inner join sys_role_permission rp on rp.permission_id = p.id

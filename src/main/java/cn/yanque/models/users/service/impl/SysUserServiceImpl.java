@@ -1,15 +1,31 @@
 package cn.yanque.models.users.service.impl;
 
+import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.ActiveEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.users.mapper.SysUserMapper;
 import cn.yanque.models.users.pojo.entity.SysUserEntity;
 import cn.yanque.models.users.pojo.vo.req.UserCreateReq;
+import cn.yanque.models.users.pojo.vo.req.UserPageReq;
+import cn.yanque.models.users.pojo.vo.req.UserRoleAssignReq;
+import cn.yanque.models.users.pojo.vo.req.UserUpdateReq;
+import cn.yanque.models.users.pojo.vo.res.UserCreateRes;
+import cn.yanque.models.users.pojo.vo.res.UserDeleteRes;
+import cn.yanque.models.users.pojo.vo.res.UserDetailRes;
+import cn.yanque.models.users.pojo.vo.res.UserPageRes;
+import cn.yanque.models.users.pojo.vo.res.UserRoleAssignRes;
+import cn.yanque.models.users.pojo.vo.res.UserUpdateRes;
 import cn.yanque.models.users.service.SysUserService;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class SysUserServiceImpl implements SysUserService {
@@ -20,7 +36,8 @@ public class SysUserServiceImpl implements SysUserService {
 
 
     @Override
-    public void addUser(UserCreateReq req) {
+    @Transactional(rollbackFor = Exception.class)
+    public UserCreateRes addUser(UserCreateReq req) {
 
         SysUserEntity user = new SysUserEntity();
         user.setUsername(req.getUsername());
@@ -38,6 +55,99 @@ public class SysUserServiceImpl implements SysUserService {
             throw BusinessException.UserExist;
         }
 
+        UserCreateRes res = new UserCreateRes();
+        res.setId(user.getId());
+        return res;
+    }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserUpdateRes updateUser(UserUpdateReq req) {
+        SysUserEntity user = new SysUserEntity();
+        user.setId(req.getId());
+        user.setNickname(req.getNickname());
+        user.setRealName(req.getRealName());
+        user.setPhone(req.getPhone());
+        user.setEmail(req.getEmail());
+        user.setUnionId(req.getUnionId());
+        user.setStatus(req.getStatus());
+        user.setUpdatedAt(new Date());
+
+        int rows;
+        try {
+            rows = sysUserMapper.updateById(user);
+        } catch (DuplicateKeyException e) {
+            throw BusinessException.UserExist;
+        }
+        if (rows == 0) {
+            throw BusinessException.UserNotExist;
+        }
+        UserUpdateRes res = new UserUpdateRes();
+        res.setId(req.getId());
+        return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserDeleteRes deleteUser(Long id) {
+        sysUserMapper.deleteUserRoles(id);
+        int rows = sysUserMapper.deleteById(id);
+        if (rows == 0) {
+            throw BusinessException.UserNotExist;
+        }
+        UserDeleteRes res = new UserDeleteRes();
+        res.setId(id);
+        return res;
+    }
+
+    @Override
+    public UserDetailRes getUserById(Long id) {
+        SysUserEntity user = sysUserMapper.selectById(id);
+        if (user == null) {
+            throw BusinessException.UserNotExist;
+        }
+        return buildUserDetailRes(user);
+    }
+
+    @Override
+    public PageResult<UserPageRes> pageUser(UserPageReq req) {
+        int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
+        int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
+        PageHelper.startPage(pageNum, pageSize);
+        List<SysUserEntity> list = sysUserMapper.selectPage(req.getKeyword(), req.getStatus(), req.getRoleCode());
+        PageInfo<SysUserEntity> pageInfo = new PageInfo<>(list);
+        List<UserPageRes> records = list.stream().map(this::buildUserPageRes).toList();
+        return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserRoleAssignRes assignUserRoles(Long userId, UserRoleAssignReq req) {
+        SysUserEntity user = sysUserMapper.selectById(userId);
+        if (user == null) {
+            throw BusinessException.UserNotExist;
+        }
+
+        sysUserMapper.deleteUserRoles(userId);
+        if (!req.getRoleIds().isEmpty()) {
+            sysUserMapper.insertUserRoles(userId, req.getRoleIds());
+        }
+
+        UserRoleAssignRes res = new UserRoleAssignRes();
+        res.setUserId(userId);
+        res.setRoleIds(req.getRoleIds());
+        return res;
+    }
+
+    private UserDetailRes buildUserDetailRes(SysUserEntity user) {
+        UserDetailRes res = new UserDetailRes();
+        BeanUtils.copyProperties(user, res);
+        return res;
+    }
+
+    private UserPageRes buildUserPageRes(SysUserEntity user) {
+        UserPageRes res = new UserPageRes();
+        BeanUtils.copyProperties(user, res);
+        return res;
     }
 }

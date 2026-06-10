@@ -24,7 +24,7 @@ public class SysPermissionEntity {
     /** 权限描述 */
     private String description;
     /** 状态，ACTIVE启用，INACTIVE禁用 */
-    private Integer status;
+    private String status;
     /** 创建时间 */
     private Date createdAt;
     /** 更新时间 */
