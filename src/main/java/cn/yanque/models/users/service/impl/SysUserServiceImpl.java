@@ -3,6 +3,8 @@ package cn.yanque.models.users.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.jwt.JWTUtil;
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.dataConfig.service.SysConfig;
+import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.common.enums.ActiveEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.common.utils.RedisUtil;
@@ -28,12 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Base64;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
+import java.util.*;
 
 @Service
 public class SysUserServiceImpl implements SysUserService {
@@ -55,6 +52,9 @@ public class SysUserServiceImpl implements SysUserService {
 
     @Autowired
     private RedisUtil redisUtil;
+
+    @Autowired
+    private SysConfigService sysConfigService;
 
 
     @Override
@@ -162,7 +162,7 @@ public class SysUserServiceImpl implements SysUserService {
     }
 
     @Override
-    public LoginRes LoginReq(LoginReq req) {
+    public LoginRes login(LoginReq req) {
 
         LoginRes loginRes = new LoginRes();
 
@@ -257,7 +257,7 @@ public class SysUserServiceImpl implements SysUserService {
         Map<String, Object> map = new HashMap<>();
         map.put("uid", sysUserEntity.getId());
         map.put("expire_time", System.currentTimeMillis() + TOKEN_EXPIRE_MILLIS);
-        return JWTUtil.createToken(map, "1234".getBytes());
+        return JWTUtil.createToken(map, sysConfigService.get(SysConfig.jwtSecret).getBytes());
     }
 
     private String createSignSecret() {

@@ -14,6 +14,8 @@ public class BusinessException extends RuntimeException {
     public static final BusinessException PasswordError = new BusinessException(11003, "密码错误");
     public static final BusinessException RoleExist = new BusinessException(12001, "角色已存在");
     public static final BusinessException RoleNotExist = new BusinessException(12002, "角色不存在");
+    public static final BusinessException ConfigExist = new BusinessException(13001, "配置已存在");
+    public static final BusinessException ConfigNotExist = new BusinessException(13002, "配置不存在");
 
 
 

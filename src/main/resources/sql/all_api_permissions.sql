@@ -23,7 +23,8 @@ insert into sys_permission
 values
     (@system_id, 'system:user', '用户管理', 'MENU', null, 1010, '用户管理页面', 'ACTIVE', now(), now()),
     (@system_id, 'system:role', '角色管理', 'MENU', null, 1020, '角色管理页面', 'ACTIVE', now(), now()),
-    (@system_id, 'system:permission', '权限管理', 'MENU', null, 1030, '权限管理页面', 'ACTIVE', now(), now())
+    (@system_id, 'system:permission', '权限管理', 'MENU', null, 1030, '权限管理页面', 'ACTIVE', now(), now()),
+    (@system_id, 'system:config', '参数配置', 'MENU', null, 1040, '系统参数配置页面', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),
@@ -37,6 +38,7 @@ on duplicate key update
 set @user_menu_id := (select id from sys_permission where permission_code = 'system:user' limit 1);
 set @role_menu_id := (select id from sys_permission where permission_code = 'system:role' limit 1);
 set @permission_menu_id := (select id from sys_permission where permission_code = 'system:permission' limit 1);
+set @config_menu_id := (select id from sys_permission where permission_code = 'system:config' limit 1);
 
 insert into sys_permission
     (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
@@ -59,7 +61,13 @@ values
     (@permission_menu_id, 'api:permission:detail', '查询权限详情', 'API', '/yq-admin/api/sysPermission/{id}', 1132, '根据ID查询权限接口', 'ACTIVE', now(), now()),
     (@permission_menu_id, 'api:permission:create', '新增权限', 'API', '/yq-admin/api/sysPermission', 1133, '新增权限接口', 'ACTIVE', now(), now()),
     (@permission_menu_id, 'api:permission:update', '修改权限', 'API', '/yq-admin/api/sysPermission/{id}', 1134, '修改权限接口', 'ACTIVE', now(), now()),
-    (@permission_menu_id, 'api:permission:delete', '删除权限', 'API', '/yq-admin/api/sysPermission/{id}', 1135, '删除权限接口', 'ACTIVE', now(), now())
+    (@permission_menu_id, 'api:permission:delete', '删除权限', 'API', '/yq-admin/api/sysPermission/{id}', 1135, '删除权限接口', 'ACTIVE', now(), now()),
+
+    (@config_menu_id, 'api:config:page', '分页查询配置', 'API', '/yq-admin/api/sysConfig', 1141, '分页查询系统配置接口', 'ACTIVE', now(), now()),
+    (@config_menu_id, 'api:config:detail', '查询配置详情', 'API', '/yq-admin/api/sysConfig/{id}', 1142, '根据ID查询系统配置接口', 'ACTIVE', now(), now()),
+    (@config_menu_id, 'api:config:create', '新增配置', 'API', '/yq-admin/api/sysConfig', 1143, '新增系统配置接口', 'ACTIVE', now(), now()),
+    (@config_menu_id, 'api:config:update', '修改配置', 'API', '/yq-admin/api/sysConfig/{id}', 1144, '修改系统配置接口', 'ACTIVE', now(), now()),
+    (@config_menu_id, 'api:config:delete', '删除配置', 'API', '/yq-admin/api/sysConfig/{id}', 1145, '删除系统配置接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

@@ -6,7 +6,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-@MapperScans({@MapperScan("cn.yanque.models.users.mapper")})
+@MapperScans({
+        @MapperScan("cn.yanque.models.users.mapper"),
+        @MapperScan("cn.yanque.common.dataConfig.mapper")
+})
 public class YanqueApplication {
 
     public static void main(String[] args) {
