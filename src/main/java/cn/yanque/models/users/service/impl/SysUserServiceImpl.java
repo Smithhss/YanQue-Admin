@@ -5,6 +5,7 @@ import cn.hutool.jwt.JWTUtil;
 import cn.yanque.common.api.PageResult;
 import cn.yanque.common.enums.ActiveEnum;
 import cn.yanque.common.exception.BusinessException;
+import cn.yanque.common.utils.RedisUtil;
 import cn.yanque.models.users.mapper.SysPermissionMapper;
 import cn.yanque.models.users.mapper.SysRoleMapper;
 import cn.yanque.models.users.mapper.SysUserMapper;
@@ -25,6 +26,9 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +37,11 @@ import java.util.function.Function;
 
 @Service
 public class SysUserServiceImpl implements SysUserService {
+
+    private static final long TOKEN_EXPIRE_MILLIS = 1000 * 60 * 60;
+    private static final Duration SIGN_SECRET_EXPIRE = Duration.ofMillis(TOKEN_EXPIRE_MILLIS);
+    private static final String SIGN_SECRET_KEY_PREFIX = "yanque:sign:secret:";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
 
     @Autowired
@@ -43,6 +52,9 @@ public class SysUserServiceImpl implements SysUserService {
 
     @Autowired
     private SysPermissionMapper sysPermissionMapper;
+
+    @Autowired
+    private RedisUtil redisUtil;
 
 
     @Override
@@ -170,6 +182,9 @@ public class SysUserServiceImpl implements SysUserService {
         //3.生成token
         String token = createToken(sysUserEntity);
         loginRes.setToken(token);
+        String signSecret = createSignSecret();
+        redisUtil.set(SIGN_SECRET_KEY_PREFIX + sysUserEntity.getId(), signSecret, SIGN_SECRET_EXPIRE);
+        loginRes.setSignSecret(signSecret);
 
         UserInfo userInfo = getUserInfo(sysUserEntity.getId());
         UserDetailRes userDetailRes = new UserDetailRes();
@@ -241,8 +256,14 @@ public class SysUserServiceImpl implements SysUserService {
     private String createToken(SysUserEntity sysUserEntity) {
         Map<String, Object> map = new HashMap<>();
         map.put("uid", sysUserEntity.getId());
-        map.put("expire_time", System.currentTimeMillis() + 1000 * 60 * 60);
+        map.put("expire_time", System.currentTimeMillis() + TOKEN_EXPIRE_MILLIS);
         return JWTUtil.createToken(map, "1234".getBytes());
+    }
+
+    private String createSignSecret() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private UserDetailRes buildUserDetailRes(SysUserEntity user) {

@@ -9,6 +9,8 @@ public class LoginRes {
 
     private String token;
 
+    private String signSecret;
+
     private UserDetailRes userDetailRes;
 
     private List<PermissionDetailRes> permissionDetailResList;
