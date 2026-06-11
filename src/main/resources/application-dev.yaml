@@ -10,3 +10,7 @@ spring:
     url: jdbc:mysql://mysql-02a756b9c0e4-public.rds.volces.com:3306/yanque-shiyi?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root
     password: QWer1234!!!
+
+logging:
+  level:
+    cn.yqnaue: INFO
