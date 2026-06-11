@@ -5,6 +5,9 @@ import lombok.Data;
 
 import java.util.Date;
 
+/**
+ * 权限详情响应对象。
+ */
 @Data
 @Schema(description = "权限详情响应")
 public class PermissionDetailRes {

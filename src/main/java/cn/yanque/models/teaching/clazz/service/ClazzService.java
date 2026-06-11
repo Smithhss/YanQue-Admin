@@ -4,11 +4,7 @@ import cn.yanque.common.api.PageResult;
 import cn.yanque.models.teaching.clazz.pojo.vo.req.ClazzCreateReq;
 import cn.yanque.models.teaching.clazz.pojo.vo.req.ClazzPageReq;
 import cn.yanque.models.teaching.clazz.pojo.vo.req.ClazzUpdateReq;
-import cn.yanque.models.teaching.clazz.pojo.vo.res.ClazzCreateRes;
-import cn.yanque.models.teaching.clazz.pojo.vo.res.ClazzDeleteRes;
-import cn.yanque.models.teaching.clazz.pojo.vo.res.ClazzDetailRes;
-import cn.yanque.models.teaching.clazz.pojo.vo.res.ClazzPageRes;
-import cn.yanque.models.teaching.clazz.pojo.vo.res.ClazzUpdateRes;
+import cn.yanque.models.teaching.clazz.pojo.vo.res.*;
 
 /**
  * 班级管理业务接口。

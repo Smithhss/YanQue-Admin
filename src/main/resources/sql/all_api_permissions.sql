@@ -93,12 +93,13 @@ values
     (@course_menu_id, 'api:course-detail:create', '新增课程明细', 'API', '/yq-admin/api/course/{courseId}/details', 2128, '新增课程明细接口', 'ACTIVE', now(), now()),
     (@course_menu_id, 'api:course-detail:update', '修改课程明细', 'API', '/yq-admin/api/course/details/{id}', 2129, '修改课程明细接口', 'ACTIVE', now(), now()),
     (@course_menu_id, 'api:course-detail:delete', '删除课程明细', 'API', '/yq-admin/api/course/details/{id}', 2130, '删除课程明细接口', 'ACTIVE', now(), now()),
+    (@course_menu_id, 'api:course-detail:import', '导入课程明细', 'API', '/yq-admin/api/course/{courseId}/details/import', 2131, '导入课程明细接口', 'ACTIVE', now(), now()),
 
-    (@class_menu_id, 'api:class:page', '分页查询班级', 'API', '/yq-admin/api/classes', 2131, '分页查询班级接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class:detail', '查询班级详情', 'API', '/yq-admin/api/classes/{id}', 2132, '根据ID查询班级接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class:create', '新增班级', 'API', '/yq-admin/api/classes', 2133, '新增班级接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class:update', '修改班级', 'API', '/yq-admin/api/classes/{id}', 2134, '修改班级接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class:delete', '删除班级', 'API', '/yq-admin/api/classes/{id}', 2135, '删除班级接口', 'ACTIVE', now(), now())
+    (@class_menu_id, 'api:class:page', '分页查询班级', 'API', '/yq-admin/api/classes', 2141, '分页查询班级接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class:detail', '查询班级详情', 'API', '/yq-admin/api/classes/{id}', 2142, '根据ID查询班级接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class:create', '新增班级', 'API', '/yq-admin/api/classes', 2143, '新增班级接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class:update', '修改班级', 'API', '/yq-admin/api/classes/{id}', 2144, '修改班级接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class:delete', '删除班级', 'API', '/yq-admin/api/classes/{id}', 2145, '删除班级接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

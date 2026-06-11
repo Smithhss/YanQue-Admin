@@ -22,16 +22,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -173,5 +167,23 @@ public class CourseController {
     @Operation(description = "查询课程详情列表")
     public ApiResponse<List<CourseDetailItemRes>> listCourseDetails(@Parameter(description = "课程ID") @PathVariable Long courseId) {
         return ApiResponse.success(courseService.listCourseDetails(courseId));
+    }
+
+
+    /**
+     * 上传Excel导入课程详情。
+     * <p>
+     * 导入时会先删除该课程原有详情，再写入本次Excel中的阶段、天数和上课内容。
+     *
+     * @param courseId 课程ID
+     * @param file     课程详情Excel文件
+     * @return 空响应
+     */
+    @PostMapping("{courseId}/details/import")
+    @Operation(description = "上传课程详情")
+    public ApiResponse<Void> importClazzDetail(@Parameter(description = "课程ID") @PathVariable Long courseId,
+                                               @RequestPart("file") MultipartFile file) throws IOException {
+        courseService.importClazzDetail(courseId, file);
+        return ApiResponse.success();
     }
 }

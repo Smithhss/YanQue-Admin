@@ -15,7 +15,9 @@ import cn.yanque.models.teaching.course.pojo.vo.res.CourseDeleteRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CoursePageRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CourseUpdateRes;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -107,4 +109,9 @@ public interface CourseService {
      * @return 课程详情列表
      */
     List<CourseDetailItemRes> listCourseDetails(Long courseId);
+
+    /**
+     * 上传课程详情文件
+     */
+    void importClazzDetail(Long courseId, MultipartFile file) throws IOException;
 }

@@ -6,6 +6,9 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * 新增角色请求对象。
+ */
 @Data
 @Schema(description = "创建角色请求")
 public class RoleCreateReq {

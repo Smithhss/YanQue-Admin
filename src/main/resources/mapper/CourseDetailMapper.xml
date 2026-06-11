@@ -22,6 +22,14 @@
         values (#{courseId}, #{stageName}, #{dayNumber}, #{classContent})
     </insert>
 
+    <insert id="batchInsert">
+        insert into sys_course_detail (course_id, stage_name, day_number, class_content)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.courseId}, #{item.stageName}, #{item.dayNumber}, #{item.classContent})
+        </foreach>
+    </insert>
+
     <update id="updateById">
         update sys_course_detail
         set stage_name = #{stageName},

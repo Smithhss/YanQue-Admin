@@ -6,6 +6,9 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * 修改角色请求对象。
+ */
 @Data
 @Schema(description = "更新角色请求")
 public class RoleUpdateReq {

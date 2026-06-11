@@ -1,9 +1,12 @@
 package cn.yanque.models.teaching.course.service.impl;
 
+import cn.hutool.core.util.StrUtil;
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.StageNameEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.teaching.course.mapper.CourseDetailMapper;
 import cn.yanque.models.teaching.course.mapper.CourseMapper;
+import cn.yanque.models.teaching.course.pojo.Info.CourseImportInfo;
 import cn.yanque.models.teaching.course.pojo.entity.CourseDetailEntity;
 import cn.yanque.models.teaching.course.pojo.entity.CourseEntity;
 import cn.yanque.models.teaching.course.pojo.vo.req.CourseCreateReq;
@@ -21,13 +24,17 @@ import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CoursePageRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CourseUpdateRes;
 import cn.yanque.models.teaching.course.service.CourseService;
+import com.alibaba.excel.EasyExcel;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -182,6 +189,70 @@ public class CourseServiceImpl implements CourseService {
             throw BusinessException.CourseNotExist;
         }
         return courseDetailMapper.selectByCourseId(courseId).stream().map(this::buildCourseDetailItemRes).toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void importClazzDetail(Long courseId, MultipartFile file) throws IOException {
+
+        CourseEntity courseEntity = courseMapper.selectById(courseId);
+        if (courseEntity == null) {
+            throw BusinessException.CourseNotExist;
+        }
+
+        List<CourseImportInfo> dataList = EasyExcel.read(file.getInputStream(), CourseImportInfo.class, null).sheet().doReadSync();
+        if (dataList.isEmpty()) {
+            throw BusinessException.DateError.newInstance("导入文件不能为空");
+        }
+
+        List<CourseDetailEntity> courseDetailEntityList = new ArrayList<>();
+        List<String> existStageList = new ArrayList<>();
+        String curStage = "";
+        for (int i = 0; i < dataList.size(); i++) {
+            CourseImportInfo info = dataList.get(i);
+
+            checkImportData(info, i);
+
+            if (existStageList.contains(info.getStageName())) {
+                throw BusinessException.DateError.newInstance("第" + (i + 1) + "行阶段不连续");
+            }
+
+            if (StrUtil.isEmpty(curStage)) {
+                curStage = info.getStageName();
+            }
+
+            if (StrUtil.isNotEmpty(curStage) && !curStage.equals(info.getStageName())){
+                existStageList.add(curStage);
+                curStage = info.getStageName();
+            }
+
+
+            CourseDetailEntity courseDetailEntity = new CourseDetailEntity();
+            BeanUtils.copyProperties(info, courseDetailEntity);
+            courseDetailEntity.setCourseId(courseId);
+
+            courseDetailEntityList.add(courseDetailEntity);
+        }
+        courseDetailMapper.deleteByCourseId(courseId);
+        courseDetailMapper.batchInsert(courseDetailEntityList);
+
+    }
+
+    private void checkImportData(CourseImportInfo info, int row) {
+        if (StrUtil.isEmpty(info.getStageName()) || info.getDayNumber() == null || StrUtil.isEmpty(info.getClassContent())) {
+            throw BusinessException.DateError.newInstance("第" + row +1 + "行数据有字段为空");
+        }
+
+        try {
+            StageNameEnum.valueOf(info.getStageName());
+        } catch (IllegalArgumentException e) {
+            throw BusinessException.DateError.newInstance("第" + info.getDayNumber() + "阶段名称有误");
+        }
+
+
+        if (row + 1 != info.getDayNumber()) {
+            throw BusinessException.DateError.newInstance("第" + (row + 1) + "行天数有误");
+        }
     }
 
     private CourseDetailRes buildCourseDetailRes(CourseEntity course) {

@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.util.Date;
 
+/**
+ * 用户角色关系实体，对应 sys_user_role 表。
+ */
 @Data
 public class SysUserRoleEntity {
 

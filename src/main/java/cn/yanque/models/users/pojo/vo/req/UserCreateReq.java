@@ -5,6 +5,9 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * 新增用户请求对象。
+ */
 @Data
 @Schema(description = "创建用户请求")
 public class UserCreateReq {

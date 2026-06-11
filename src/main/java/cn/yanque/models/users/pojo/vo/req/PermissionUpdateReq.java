@@ -4,6 +4,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * 修改权限请求对象。
+ */
 @Data
 @Schema(description = "更新权限请求")
 public class PermissionUpdateReq {

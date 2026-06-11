@@ -5,6 +5,9 @@ import lombok.Data;
 
 import java.util.Date;
 
+/**
+ * 角色分页列表响应对象。
+ */
 @Data
 @Schema(description = "角色分页响应")
 public class RolePageRes {

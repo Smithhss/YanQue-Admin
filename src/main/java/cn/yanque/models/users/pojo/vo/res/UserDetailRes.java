@@ -6,6 +6,9 @@ import lombok.Data;
 
 import java.util.Date;
 
+/**
+ * 用户详情响应对象。
+ */
 @Data
 @Schema(description = "用户详情响应")
 public class UserDetailRes {
@@ -34,6 +37,7 @@ public class UserDetailRes {
     @Schema(description = "状态", allowableValues = {"ACTIVE", "INACTIVE"})
     private String status;
 
+    /** 状态中文描述，由 status 自动转换 */
     private String statusDesc;
 
     @Schema(description = "创建时间")
@@ -42,6 +46,11 @@ public class UserDetailRes {
     @Schema(description = "更新时间")
     private Date updatedAt;
 
+    /**
+     * 设置状态时同步生成状态描述。
+     *
+     * @param status 用户状态
+     */
     public void setStatus(String status) {
         this.status = status;
         this.setStatusDesc(ActiveEnum.valueOf(status).getDesc());

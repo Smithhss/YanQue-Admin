@@ -6,6 +6,9 @@ import lombok.Data;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * 角色详情响应对象。
+ */
 @Data
 @Schema(description = "角色详情响应")
 public class RoleDetailRes {
@@ -25,6 +28,7 @@ public class RoleDetailRes {
     @Schema(description = "状态", allowableValues = {"ACTIVE", "INACTIVE"})
     private String status;
 
+    /** 角色已绑定的权限ID列表 */
     @Schema(description = "权限ID列表")
     private List<Long> permissionIds;
 

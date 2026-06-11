@@ -5,6 +5,9 @@ import lombok.Data;
 
 import java.util.Date;
 
+/**
+ * 权限分页列表响应对象。
+ */
 @Data
 @Schema(description = "权限分页响应")
 public class PermissionPageRes {

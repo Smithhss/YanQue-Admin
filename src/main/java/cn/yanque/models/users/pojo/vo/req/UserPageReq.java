@@ -4,6 +4,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
 
+/**
+ * 用户分页查询请求对象。
+ */
 @Data
 @Schema(description = "用户分页查询请求")
 public class UserPageReq {

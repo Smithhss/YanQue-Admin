@@ -56,4 +56,10 @@ public interface CourseDetailMapper {
      * @return 影响行数
      */
     int deleteByCourseId(@Param("courseId") Long courseId);
+
+    /**
+     * 批量插入
+     */
+    void batchInsert(List<CourseDetailEntity> courseDetailEntityList);
+
 }

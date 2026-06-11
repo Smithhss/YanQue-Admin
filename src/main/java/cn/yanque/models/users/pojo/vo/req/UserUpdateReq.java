@@ -5,6 +5,9 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * 修改用户请求对象。
+ */
 @Data
 @Schema(description = "更新用户请求")
 public class UserUpdateReq {

@@ -5,6 +5,9 @@ import lombok.Data;
 
 import java.util.Date;
 
+/**
+ * 用户分页列表响应对象。
+ */
 @Data
 @Schema(description = "用户分页响应")
 public class UserPageRes {
