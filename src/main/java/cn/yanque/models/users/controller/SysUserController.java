@@ -1,5 +1,6 @@
 package cn.yanque.models.users.controller;
 
+import cn.yanque.common.annotations.NoAuthCheck;
 import cn.yanque.common.api.ApiResponse;
 import cn.yanque.common.api.PageResult;
 import cn.yanque.models.users.pojo.vo.req.*;

@@ -1,6 +1,7 @@
 package cn.yanque.models.users.service;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.models.users.pojo.info.UserInfo;
 import cn.yanque.models.users.pojo.vo.req.*;
 import cn.yanque.models.users.pojo.vo.res.*;
 
@@ -18,4 +19,6 @@ public interface SysUserService {
     UserRoleAssignRes assignUserRoles(Long userId, UserRoleAssignReq req);
 
     LoginRes LoginReq(LoginReq req);
+
+    UserInfo getUserInfo(Long id);
 }

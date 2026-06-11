@@ -11,6 +11,7 @@ import cn.yanque.models.users.mapper.SysUserMapper;
 import cn.yanque.models.users.pojo.entity.SysPermissionEntity;
 import cn.yanque.models.users.pojo.entity.SysRoleEntity;
 import cn.yanque.models.users.pojo.entity.SysUserEntity;
+import cn.yanque.models.users.pojo.info.UserInfo;
 import cn.yanque.models.users.pojo.vo.bo.QueryPermissionBo;
 import cn.yanque.models.users.pojo.vo.bo.QueryUserBo;
 import cn.yanque.models.users.pojo.vo.req.*;
@@ -166,45 +167,24 @@ public class SysUserServiceImpl implements SysUserService {
             throw BusinessException.PasswordError;
         }
 
-        UserDetailRes userDetailRes = new UserDetailRes();
-        BeanUtils.copyProperties(sysUserEntity, userDetailRes);
-        loginRes.setUserDetailRes(userDetailRes);
-
         //3.生成token
         String token = createToken(sysUserEntity);
         loginRes.setToken(token);
 
-        //4.查询角色权限
-        List<Long> roleIds = sysUserMapper.selectRoleIdsByUserId(sysUserEntity.getId());
+        UserInfo userInfo = getUserInfo(sysUserEntity.getId());
+        UserDetailRes userDetailRes = new UserDetailRes();
+        BeanUtils.copyProperties(userInfo.getSysUserEntity(), userDetailRes);
+        loginRes.setUserDetailRes(userDetailRes);
 
-        if (CollectionUtil.isEmpty(roleIds)) {
-            return loginRes;
-        }
 
-        QueryUserBo queryUserBo = new QueryUserBo();
-        queryUserBo.setIds(roleIds);
-        List<SysRoleEntity> sysRoleEntityList = sysRoleMapper.selectList(queryUserBo);
-        List<RoleDetailRes> roleDetailResList = sysRoleEntityList.stream().map(sysRoleEntity -> {
+        List<RoleDetailRes> roleDetailResList = userInfo.getSysRoleEntityList().stream().map(sysRoleEntity -> {
             RoleDetailRes roleDetailRes = new RoleDetailRes();
             BeanUtils.copyProperties(sysRoleEntity, roleDetailRes);
             return roleDetailRes;
         }).toList();
         loginRes.setRoleDetailResList(roleDetailResList);
 
-
-        List<Long> permissionIds = sysRoleMapper.selectPermissionIdsByRoleId(roleIds);
-        permissionIds = permissionIds.stream().distinct().toList();
-
-        if (CollectionUtil.isEmpty(permissionIds)) {
-            return loginRes;
-        }
-
-        QueryPermissionBo queryPermissionBo = new QueryPermissionBo();
-        queryPermissionBo.setIds(permissionIds);
-        List<SysPermissionEntity> sysPermissionEntityList = sysPermissionMapper.selectList(queryPermissionBo);
-
-
-        List<PermissionDetailRes> permissionDetailResList = sysPermissionEntityList.stream().map(sysPermissionEntity -> {
+        List<PermissionDetailRes> permissionDetailResList = userInfo.getSysPermissionEntityList().stream().map(sysPermissionEntity -> {
             PermissionDetailRes permissionDetailRes = new PermissionDetailRes();
             BeanUtils.copyProperties(sysPermissionEntity, permissionDetailRes);
             return permissionDetailRes;
@@ -213,6 +193,49 @@ public class SysUserServiceImpl implements SysUserService {
         loginRes.setPermissionDetailResList(permissionDetailResList);
         //5.组装信息返回
         return loginRes;
+    }
+
+
+    public UserInfo getUserInfo(Long id){
+        UserInfo userInfo = new UserInfo();
+        SysUserEntity sysUserEntity = sysUserMapper.selectById(id);
+
+        if (sysUserEntity == null) {
+            throw BusinessException.UserNotExist;
+        }
+
+        userInfo.setSysUserEntity(sysUserEntity);
+
+
+        //4.查询角色权限
+        List<Long> roleIds = sysUserMapper.selectRoleIdsByUserId(id);
+
+        if (CollectionUtil.isEmpty(roleIds)) {
+            return userInfo;
+        }
+
+        QueryUserBo queryUserBo = new QueryUserBo();
+        queryUserBo.setIds(roleIds);
+        List<SysRoleEntity> sysRoleEntityList = sysRoleMapper.selectList(queryUserBo);
+
+        userInfo.setSysRoleEntityList(sysRoleEntityList);
+
+
+        List<Long> permissionIds = sysRoleMapper.selectPermissionIdsByRoleId(roleIds);
+        permissionIds = permissionIds.stream().distinct().toList();
+
+        if (CollectionUtil.isEmpty(permissionIds)) {
+            return userInfo;
+        }
+
+        QueryPermissionBo queryPermissionBo = new QueryPermissionBo();
+        queryPermissionBo.setIds(permissionIds);
+        List<SysPermissionEntity> sysPermissionEntityList = sysPermissionMapper.selectList(queryPermissionBo);
+
+
+        userInfo.setSysPermissionEntityList(sysPermissionEntityList);
+        //5.组装信息返回
+        return userInfo;
     }
 
     private String createToken(SysUserEntity sysUserEntity) {
