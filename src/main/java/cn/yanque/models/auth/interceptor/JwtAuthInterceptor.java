@@ -23,6 +23,7 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // 前端统一使用 Authorization: Bearer xxx 传 token。
         String authorization = request.getHeader(AUTHORIZATION);
         if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
             throw new BusinessException(401, "未登录或Token缺失");
@@ -30,6 +31,7 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
 
         String token = authorization.substring(BEARER_PREFIX.length()).trim();
         try {
+            // JWT 密钥从系统配置读取，方便后续通过配置页面调整。
             JWT jwt = JWT.of(token).setKey(sysConfigService.get(SysConfig.jwtSecret).getBytes());
             if (!jwt.verify()) {
                 throw new BusinessException(401, "Token无效或已过期");
@@ -46,6 +48,7 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
                 throw new BusinessException(401, "Token无效或已过期");
             }
 
+            // 后续 SignInterceptor 和 PermissionInterceptor 都从 request attribute 中获取当前用户ID。
             request.setAttribute("userId", Long.parseLong(String.valueOf(userId)));
             return true;
         } catch (BusinessException ex) {

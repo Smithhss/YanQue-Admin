@@ -22,6 +22,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 拦截器按注册顺序执行：先解析 JWT 得到 userId，再验签，最后做接口权限判断。
         registry.addInterceptor(jwtAuthInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
@@ -30,6 +31,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/swagger-ui.html",
                         "/swagger-ui/**");
 
+        // 登录接口还没有 token 和签名密钥，所以需要排除；Swagger 也排除，方便本地调试接口文档。
         registry.addInterceptor(signInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
@@ -38,6 +40,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/swagger-ui.html",
                         "/swagger-ui/**");
 
+        // 权限拦截只控制业务 API，登录和接口文档不进入权限校验。
         registry.addInterceptor(permissionInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(

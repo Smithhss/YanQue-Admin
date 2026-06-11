@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.teaching.clazz.mapper.ClazzMapper">
+
+    <resultMap id="ClazzMap" type="cn.yanque.models.teaching.clazz.pojo.entity.ClazzEntity">
+        <id property="id" column="id"/>
+        <result property="classPeriod" column="class_period"/>
+        <result property="headTeacherId" column="head_teacher_id"/>
+        <result property="campusId" column="campus_id"/>
+        <result property="courseId" column="course_id"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, class_period, head_teacher_id, campus_id, course_id, created_at, updated_at
+    </sql>
+
+    <!-- 班级表只保存关联ID，名称由服务层批量查询后回填。 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_class (class_period, head_teacher_id, campus_id, course_id, created_at, updated_at)
+        values (#{classPeriod}, #{headTeacherId}, #{campusId}, #{courseId}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updateById">
+        update sys_class
+        set class_period = #{classPeriod},
+            head_teacher_id = #{headTeacherId},
+            campus_id = #{campusId},
+            course_id = #{courseId},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="ClazzMap">
+        select <include refid="BaseColumns"/>
+        from sys_class
+        where id = #{id}
+    </select>
+
+    <!-- 班级分页查询保持单表查询，筛选条件也都来自班级表字段。 -->
+    <select id="selectPage" resultMap="ClazzMap">
+        select <include refid="BaseColumns"/>
+        from sys_class
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and class_period like concat('%', #{keyword}, '%')
+            </if>
+            <if test="headTeacherId != null">
+                and head_teacher_id = #{headTeacherId}
+            </if>
+            <if test="campusId != null">
+                and campus_id = #{campusId}
+            </if>
+            <if test="courseId != null">
+                and course_id = #{courseId}
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <delete id="deleteById">
+        delete from sys_class where id = #{id}
+    </delete>
+</mapper>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.teaching.course.mapper.CourseMapper">
+
+    <resultMap id="CourseMap" type="cn.yanque.models.teaching.course.pojo.entity.CourseEntity">
+        <id property="id" column="id"/>
+        <result property="courseName" column="course_name"/>
+        <result property="courseDays" column="course_days"/>
+        <result property="materialPath" column="material_path"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, course_name, course_days, material_path, created_at, updated_at
+    </sql>
+
+    <!-- 新增课程，时间字段由服务层传入。 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_course (course_name, course_days, material_path, created_at, updated_at)
+        values (#{courseName}, #{courseDays}, #{materialPath}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updateById">
+        update sys_course
+        set course_name = #{courseName},
+            course_days = #{courseDays},
+            material_path = #{materialPath},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="CourseMap">
+        select <include refid="BaseColumns"/>
+        from sys_course
+        where id = #{id}
+    </select>
+
+    <!-- 班级列表回填课程名称时使用，避免在班级分页 SQL 中写连表。 -->
+    <select id="selectByIds" resultMap="CourseMap">
+        select <include refid="BaseColumns"/>
+        from sys_course
+        where id in
+        <foreach collection="ids" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <!-- 课程列表支持按课程名称和资料路径模糊搜索。 -->
+    <select id="selectPage" resultMap="CourseMap">
+        select <include refid="BaseColumns"/>
+        from sys_course
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (course_name like concat('%', #{keyword}, '%')
+                or material_path like concat('%', #{keyword}, '%'))
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <delete id="deleteById">
+        delete from sys_course where id = #{id}
+    </delete>
+</mapper>

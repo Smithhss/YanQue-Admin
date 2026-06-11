@@ -1,4 +1,4 @@
-package cn.yanque.models.users.pojo.vo.bo;
+package cn.yanque.models.users.pojo.bo;
 
 import lombok.Data;
 

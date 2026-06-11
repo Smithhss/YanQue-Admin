@@ -43,6 +43,16 @@
         select <include refid="BaseColumns"/> from sys_user where id = #{id}
     </select>
 
+    <select id="selectByIds" resultMap="SysUserMap">
+        <!-- 班级管理回填班主任名称时使用。 -->
+        select <include refid="BaseColumns"/>
+        from sys_user
+        where id in
+        <foreach collection="ids" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
     <select id="selectByUsername" resultMap="SysUserMap">
         select <include refid="BaseColumns"/> from sys_user where username = #{username}
     </select>
@@ -64,6 +74,7 @@
                 and status = #{status}
             </if>
             <if test="roleCode != null and roleCode != ''">
+                <!-- 按角色编码筛选用户，比如班主任列表只查 HEAD_TEACHER。 -->
                 and exists (
                     select 1
                     from sys_user_role ur
@@ -128,6 +139,7 @@
     </insert>
 
     <select id="selectRoleIdsByUserId" resultType="java.lang.Long">
+        <!-- 编辑或分配角色时回显当前用户已有的角色ID。 -->
         select role_id
         from sys_user_role
         where user_id = #{userId}
