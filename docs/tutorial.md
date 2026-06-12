@@ -1,0 +1,2476 @@
+# YanQue-Admin 后端教程
+
+> 本教程系统讲解 YanQue-Admin 项目的架构设计和实现原理，帮助你理解"为什么这样写"而不仅仅是"怎么写"。
+>
+> 共 9 章：前 8 章讲解基础架构，第 9 章深入分析最复杂的排课模块。
+>
+> 每个核心功能都附带流程图，便于理解整体逻辑。
+
+---
+
+## 目录
+
+- [第 1 章：项目概览与技术选型](#第-1-章项目概览与技术选型)
+- [第 2 章：分层架构与包结构设计](#第-2-章分层架构与包结构设计)
+- [第 3 章：统一响应与异常处理](#第-3-章统一响应与异常处理)
+- [第 4 章：认证体系 — JWT + 签名双重验证](#第-4-章认证体系--jwt--签名双重验证)
+- [第 5 章：RBAC 权限模型](#第-5-章rbac-权限模型)
+- [第 6 章：业务模块 CRUD 实现模式](#第-6-章业务模块-crud-实现模式)
+- [第 7 章：横切关注点 — AOP 日志与请求追踪](#第-7-章横切关注点--aop-日志与请求追踪)
+- [第 8 章：系统配置与本地缓存](#第-8-章系统配置与本地缓存)
+- [第 9 章：排课系统 — 算法驱动的业务模块](#第-9-章排课系统--算法驱动的业务模块)
+
+---
+
+## 第 1 章：项目概览与技术选型
+
+### 1.1 项目定位
+
+YanQue-Admin 是一个**教学管理系统**的后端 API 服务，主要管理：
+- **系统管理**：用户、角色、权限、系统配置
+- **教学管理**：校区、班级、课程（含课程明细/Excel 导入）
+
+### 1.2 技术栈总览
+
+| 技术 | 版本 | 作用 |
+|------|------|------|
+| Spring Boot | 3.2.0 | 应用框架，自动配置、依赖注入 |
+| Java | 17 | LTS 版本，支持 records、sealed classes 等新特性 |
+| MyBatis | 3.0.3 | ORM 框架，SQL 与 Java 解耦 |
+| MySQL | - | 关系型数据库 |
+| Redis | - | 缓存、签名密钥存储、nonce 去重 |
+| PageHelper | 2.0.0 | MyBatis 分页插件，自动追加 LIMIT/OFFSET |
+| EasyExcel | 3.3.2 | 阿里开源 Excel 读写库 |
+| Hutool | 5.8.23 | Java 工具库（JWT、集合、字符串等） |
+| Guava | 33.3.0 | Google 工具库（本地缓存 Cache） |
+| FastJSON2 | 2.0.43 | 阿里 JSON 序列化库 |
+| SpringDoc | 2.1.0 | Swagger/OpenAPI 3 文档自动生成 |
+| Lombok | - | 注解生成 getter/setter/构造器 |
+| Spring Validation | - | 请求参数校验（@Valid） |
+| Spring AOP | - | 面向切面编程（日志切面） |
+
+### 1.3 为什么选这些技术？
+
+**Spring Boot 3.2 而非 2.x：**
+- 使用 Jakarta EE 命名空间（`jakarta.servlet.*` 而非 `javax.servlet.*`），这是 Java 生态的未来方向
+- 原生支持 GraalVM Native Image（虽然本项目未使用）
+- 性能更好，启动更快
+
+**MyBatis 而非 JPA/Hibernate：**
+- SQL 完全可控，复杂查询（多表 JOIN、动态条件）写起来更直观
+- XML 映射文件与 Java 代码分离，SQL 集中管理
+- 学习曲线更平缓，适合初学者理解底层 SQL
+
+**PageHelper 而非手写分页：**
+- 自动拦截 SQL 并追加 `LIMIT ?, ?`，无需在每个 Mapper 方法里写分页逻辑
+- 配合 `PageInfo` 自动计算 total、pageNum、pageSize
+
+**Hutool 而非自己造轮子：**
+- `JWTUtil.createToken()` 一行代码生成 JWT
+- `CollectionUtil.isEmpty()` 判空更简洁
+- `StrUtil` 字符串工具减少 `StringUtils` 的依赖
+
+**Guava Cache 而非 Caffeine：**
+- Spring Boot 内置 Guava 依赖管理，无需额外引入
+- 10 秒过期 + 最大 10000 条，适合配置项这种读多写少的场景
+
+### 1.4 启动类分析
+
+```java
+@SpringBootApplication
+@MapperScans({
+    @MapperScan("cn.yanque.models.users.mapper"),
+    @MapperScan("cn.yanque.common.dataConfig.mapper"),
+    @MapperScan("cn.yanque.models.teaching.campus.mapper"),
+    @MapperScan("cn.yanque.models.teaching.course.mapper"),
+    @MapperScan("cn.yanque.models.teaching.clazz.mapper")
+})
+public class YanqueApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(YanqueApplication.class);
+    }
+}
+```
+
+**为什么用 `@MapperScans` 而非单个 `@MapperScan`？**
+- 因为 Mapper 接口分布在不同的包下（users、dataConfig、campus、course、clazz）
+- `@MapperScans` 允许声明多个 `@MapperScan`，每个指向一个 Mapper 包
+- 如果所有 Mapper 都在一个包下，单个 `@MapperScan("cn.yanque")` 就够了
+
+### 1.5 配置文件
+
+```yaml
+spring:
+  data:
+    redis:
+      host: redis-xxx.redis.volces.com
+      port: 6379
+      password: QWer1234!!!
+      database: 3
+  datasource:
+    url: jdbc:mysql://mysql-xxx.rds.volces.com:3306/yanque-shiyi?...
+    username: root
+    password: QWer1234!!!
+```
+
+**为什么 Redis 用 database 3 而非默认的 0？**
+- 同一个 Redis 实例可能被多个服务共享，用不同 database 隔离数据
+- database 0 通常留给开发调试，生产用 1/2/3 等
+
+---
+
+## 第 2 章：分层架构与包结构设计
+
+### 2.1 四层架构
+
+**系统整体架构图：**
+
+```mermaid
+graph TB
+    subgraph 前端
+        F[前端应用]
+    end
+
+    subgraph Spring Boot 应用
+        subgraph Filter 层
+            GF[RequestGuidFilter]
+        end
+
+        subgraph Interceptor 层
+            JI[JwtAuthInterceptor]
+            SI[SignInterceptor]
+            PI[PermissionInterceptor]
+        end
+
+        subgraph Controller 层
+            UC[UserController]
+            RC[RoleController]
+            PC[PermissionController]
+            CC[CampusController]
+            CLC[ClazzController]
+            CRC[CourseController]
+            SC[ScheduleController]
+        end
+
+        subgraph Service 层
+            US[UserService]
+            RS[RoleService]
+            PS[PermissionService]
+            CS[CampusService]
+            CLS[ClazzService]
+            CRS[CourseService]
+            SS[ScheduleService]
+        end
+
+        subgraph Mapper 层
+            UM[UserMapper]
+            RM[RoleMapper]
+            PM[PermissionMapper]
+            CM[CampusMapper]
+            CLM[ClazzMapper]
+            CRM[CourseMapper]
+            SM[ScheduleMapper]
+        end
+    end
+
+    subgraph 数据存储
+        DB[(MySQL)]
+        RD[(Redis)]
+    end
+
+    F --> GF
+    GF --> JI
+    JI --> SI
+    SI --> PI
+    PI --> UC & RC & PC & CC & CLC & CRC & SC
+
+    UC --> US
+    RC --> RS
+    PC --> PS
+    CC --> CS
+    CLC --> CLS
+    CRC --> CRS
+    SC --> SS
+
+    US --> UM
+    RS --> RM
+    PS --> PM
+    CS --> CM
+    CLS --> CLM
+    CRS --> CRM
+    SS --> SM
+
+    UM & RM & PM & CM & CLM & CRM & SM --> DB
+    JI & SI & SS --> RD
+```
+
+**文字架构图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         前端应用                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Filter 层                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  RequestGuidFilter — 分配请求唯一ID                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Interceptor 层                                │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐       │
+│  │ JwtAuth       │→│ Sign          │→│ Permission    │       │
+│  │ JWT 认证      │  │ 签名验证      │  │ 权限校验      │       │
+│  └───────────────┘  └───────────────┘  └───────────────┘       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Controller 层                                 │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ │
+│  │ User    │ │ Role    │ │Permission│ │ Campus  │ │ Clazz   │ │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ │
+│  ┌─────────┐ ┌─────────┐                                       │
+│  │ Course  │ │Schedule │                                       │
+│  └─────────┘ └─────────┘                                       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Service 层                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  业务逻辑、事务管理、Entity↔VO 转换                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Mapper 层                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  数据访问、SQL 执行                                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+    ┌─────────────────┐             ┌─────────────────┐
+    │     MySQL       │             │     Redis       │
+    │   数据持久化    │             │  缓存/签名密钥   │
+    └─────────────────┘             └─────────────────┘
+```
+
+```
+请求 → Controller → Service → Mapper → 数据库
+       (接收参数)   (业务逻辑)  (数据访问)
+```
+
+| 层 | 职责 | 示例 |
+|----|------|------|
+| Controller | 接收 HTTP 请求，参数校验，调用 Service，返回 ApiResponse | `CampusController.addCampus()` |
+| Service | 业务逻辑，事务管理，Entity↔VO 转换 | `CampusServiceImpl.addCampus()` |
+| Mapper | 数据访问，SQL 执行 | `CampusMapper.insert()` |
+| Entity | 数据库表映射，字段与列一一对应 | `CampusEntity` |
+
+### 2.2 包结构：按业务模块划分
+
+```
+cn.yanque
+├── common/                    ← 公共组件（所有模块共享）
+│   ├── annotations/           ← 自定义注解
+│   ├── api/                   ← ApiResponse、PageResult
+│   ├── aop/                   ← AOP 切面（日志）
+│   ├── dataConfig/            ← 系统配置模块
+│   ├── enums/                 ← 枚举类
+│   ├── exception/             ← 异常体系
+│   ├── filter/                ← Servlet 过滤器
+│   └── utils/                 ← 工具类
+├── config/                    ← Spring 配置（WebMvcConfig）
+└── models/                    ← 业务模块
+    ├── auth/                  ← 认证模块（拦截器）
+    ├── users/                 ← 用户模块
+    │   ├── controller/
+    │   ├── mapper/
+    │   ├── pojo/
+    │   │   ├── entity/        ← 数据库实体
+    │   │   ├── vo/req/        ← 请求 VO
+    │   │   ├── vo/res/        ← 响应 VO
+    │   │   ├── bo/            ← 业务对象（查询条件）
+    │   │   └── info/          ← 聚合信息
+    │   └── service/
+    │       └── impl/
+    └── teaching/              ← 教学模块
+        ├── campus/            ← 校区管理
+        ├── clazz/             ← 班级管理
+        └── course/            ← 课程管理
+```
+
+**为什么按业务模块分包而非按技术层分包？**
+
+按技术层分包（不推荐）：
+```
+controller/
+  CampusController.java
+  ClazzController.java
+  CourseController.java
+service/
+  CampusService.java
+  ...
+mapper/
+  CampusMapper.java
+  ...
+```
+
+按业务模块分包（本项目采用）：
+```
+campus/
+  controller/CampusController.java
+  mapper/CampusMapper.java
+  pojo/entity/CampusEntity.java
+  service/CampusServiceImpl.java
+```
+
+**优势：**
+- **高内聚**：一个模块的所有代码在同一目录下，新增功能时不用在多个目录间跳转
+- **独立性**：删除一个模块只需删除整个目录，不会影响其他模块
+- **团队协作**：不同人负责不同模块，代码冲突少
+
+### 2.3 VO 模式：为什么 Entity 和 VO 要分离？
+
+```
+前端请求 JSON → Request VO（@Valid 校验）→ Entity（数据库操作）→ Response VO → 前端响应 JSON
+```
+
+**Entity（实体类）：**
+```java
+@Data
+public class CampusEntity {
+    private Long id;
+    private String campusLocation;
+    private String managerName;
+    private String managerPhone;
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**Request VO（请求对象）：**
+```java
+@Data
+public class CampusCreateReq {
+    @NotBlank(message = "校区地点不能为空")
+    private String campusLocation;
+    @NotBlank(message = "负责人姓名不能为空")
+    private String managerName;
+    private String managerPhone;
+}
+```
+
+**Response VO（响应对象）：**
+```java
+@Data
+public class CampusDetailRes {
+    private Long id;
+    private String campusLocation;
+    private String managerName;
+    private String managerPhone;
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**为什么分离？**
+
+1. **安全性**：Entity 可能包含 `password`、`salt` 等敏感字段，直接返回给前端会泄露
+2. **灵活性**：新增接口可能只返回部分字段，修改接口可能只接收部分字段
+3. **校验**：Request VO 可以加 `@NotBlank`、`@Size` 等校验注解，Entity 不需要
+4. **文档**：Swagger 根据 VO 生成接口文档，字段更精确
+
+**为什么每个操作一个 VO？**
+
+```
+CampusCreateReq    ← 新增校区的入参
+CampusUpdateReq    ← 修改校区的入参
+CampusPageReq      ← 分页查询的入参
+CampusCreateRes    ← 新增校区的返回
+CampusPageRes      ← 分页查询的返回
+CampusDetailRes    ← 详情查询的返回
+```
+
+虽然类多，但好处是：
+- 每个 VO 只包含该操作需要的字段，职责单一
+- 新增操作不会影响已有 VO
+- 接口文档更清晰（每个接口的参数和返回值一目了然）
+
+### 2.4 VO 转换方式
+
+```java
+// 方式 1：手动 set（本项目的 add/update 方法）
+CampusEntity campus = new CampusEntity();
+campus.setCampusLocation(req.getCampusLocation());
+campus.setManagerName(req.getManagerName());
+
+// 方式 2：BeanUtils.copyProperties（本项目的 detail/page 方法）
+CampusDetailRes res = new CampusDetailRes();
+BeanUtils.copyProperties(campus, res);
+```
+
+**为什么新增/修改用手动 set，查询用 BeanUtils？**
+
+- 新增时需要额外设 `createdAt`、`updatedAt`，手动 set 更清晰
+- 查询时字段基本一致，`BeanUtils.copyProperties` 减少样板代码
+- `BeanUtils.copyProperties` 是浅拷贝，性能可接受，复杂场景可换 MapStruct
+
+---
+
+## 第 3 章：统一响应与异常处理
+
+### 3.1 ApiResponse 统一响应格式
+
+```java
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ApiResponse<T> {
+    private Integer code;
+    private String message;
+    private T data;
+
+    public static <T> ApiResponse<T> success(T data) {
+        return new ApiResponse<>(200, "success", data);
+    }
+
+    public static <T> ApiResponse<T> fail(Integer code, String message) {
+        return new ApiResponse<>(code, message, null);
+    }
+}
+```
+
+**前端收到的 JSON：**
+```json
+// 成功
+{"code": 200, "message": "success", data: {...}}
+
+// 失败
+{"code": 10002, "message": "用户不存在", data: null}
+```
+
+**为什么这样设计？**
+- 前端只需判断 `code === 200` 就知道请求是否成功
+- `message` 给用户看的提示，`code` 给程序判断的标识
+- `data` 泛型支持任意返回类型
+
+### 3.2 PageResult 分页响应
+
+```java
+@Data
+public class PageResult<T> {
+    private Long total;
+    private Integer pageNum;
+    private Integer pageSize;
+    private List<T> records;
+}
+```
+
+**为什么不直接用 `ApiResponse<List<T>>`？**
+- 分页需要 `total`（总记录数）来计算总页数
+- 前端需要 `pageNum`、`pageSize` 来渲染分页组件
+- 单独封装分页结果，语义更清晰
+
+### 3.3 BusinessException 业务异常体系
+
+```java
+@Getter
+public class BusinessException extends RuntimeException {
+    private final Integer code;
+
+    // 预定义静态实例
+    public static final BusinessException UserExist = new BusinessException(10001, "用户已存在");
+    public static final BusinessException UserNotExist = new BusinessException(10002, "用户不存在");
+    public static final BusinessException CampusNotExist = new BusinessException(14001, "校区不存在");
+
+    // 复用错误码，自定义消息
+    public BusinessException newInstance(String message) {
+        return new BusinessException(this.getCode(), message);
+    }
+}
+```
+
+**错误码分段设计：**
+| 范围 | 模块 |
+|------|------|
+| 10xxx | 用户 |
+| 11xxx | 权限 |
+| 12xxx | 角色 |
+| 13xxx | 系统配置 |
+| 14xxx | 校区 |
+| 15xxx | 课程 |
+| 16xxx | 班级 |
+
+**为什么用静态实例而非每次 new？**
+- 错误码和消息是固定的，静态实例避免重复创建对象
+- 语义更清晰：`throw BusinessException.UserNotExist` 比 `throw new BusinessException(10002, "用户不存在")` 更易读
+- 错误码集中管理，不会出现散落的魔法数字
+
+**为什么需要 `newInstance()` 方法？**
+```java
+// 同一个错误码，不同场景需要不同消息
+throw BusinessException.DateError.newInstance("第3行数据有字段为空");
+throw BusinessException.DateError.newInstance("导入文件不能为空");
+```
+
+### 3.4 GlobalExceptionHandler 全局异常捕获
+
+**异常处理流程图：**
+
+```mermaid
+flowchart TD
+    A[Controller 抛出异常] --> B{异常类型?}
+
+    B -- BusinessException --> C[业务异常]
+    C --> D[返回 code + message]
+    D --> E["{code: 10002, message: '用户不存在'}"]
+
+    B -- MethodArgumentNotValidException --> F[参数校验失败]
+    F --> G[提取字段错误信息]
+    G --> H["{code: 400, message: 'xxx不能为空; yyy格式错误'}"]
+
+    B -- BindException --> I[参数绑定失败]
+    I --> J["{code: 400, message: '请求参数格式不正确'}"]
+
+    B -- ConstraintViolationException --> K[约束校验失败]
+    K --> L["{code: 400, message: '请求参数校验失败'}"]
+
+    B -- Exception --> M[未知异常]
+    M --> N["{code: 500, message: '系统开小差了'}"]
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      异常处理流程                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  Controller 抛异常  │
+                   └─────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────┴────────────────────┐
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  @RestControllerAdvice │                         │
+│  全局异常处理器      │                            │
+└─────────────────────┘                            │
+         │                                         │
+         ▼                                         │
+┌─────────────────────────────────────────────────────────────────┐
+│                      异常类型匹配                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐                    │
+│  │ BusinessException │    │ MethodArgument  │                    │
+│  │ 业务异常         │    │ NotValidException│                    │
+│  │                  │    │ 参数校验异常     │                    │
+│  └────────┬────────┘    └────────┬────────┘                    │
+│           │                      │                              │
+│           ▼                      ▼                              │
+│  ┌─────────────────┐    ┌─────────────────┐                    │
+│  │ code: 自定义    │    │ code: 400       │                    │
+│  │ message: 业务消息│    │ message: 字段错误│                    │
+│  └─────────────────┘    └─────────────────┘                    │
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐                    │
+│  │ BindException   │    │ Constraint      │                    │
+│  │ 参数绑定异常     │    │ Violation       │                    │
+│  │                  │    │ 约束校验异常     │                    │
+│  └────────┬────────┘    └────────┬────────┘                    │
+│           │                      │                              │
+│           ▼                      ▼                              │
+│  ┌─────────────────┐    ┌─────────────────┐                    │
+│  │ code: 400       │    │ code: 400       │                    │
+│  │ message: 格式错误│    │ message: 校验失败│                    │
+│  └─────────────────┘    └─────────────────┘                    │
+│                                                                 │
+│  ┌─────────────────┐                                           │
+│  │ Exception        │                                           │
+│  │ 兜底异常         │                                           │
+│  └────────┬────────┘                                           │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────┐                                           │
+│  │ code: 500       │                                           │
+│  │ message: 系统错误│                                           │
+│  └─────────────────┘                                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  返回 ApiResponse   │
+                   │  统一 JSON 格式     │
+                   └─────────────────────┘
+```
+
+```java
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(BusinessException.class)
+    public ApiResponse<Void> handleBusinessException(BusinessException ex) {
+        return ApiResponse.fail(ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ApiResponse<Void> handleValidation(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining("; "));
+        return ApiResponse.fail(400, message);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ApiResponse<Void> handleException(Exception ex) {
+        return ApiResponse.fail(500, "系统开小差了，请稍后重试");
+    }
+}
+```
+
+**异常处理优先级：**
+1. `BusinessException` → 返回业务错误码和消息
+2. `MethodArgumentNotValidException` → 参数校验失败，返回 400
+3. `BindException` → 参数绑定失败，返回 400
+4. `ConstraintViolationException` → 约束校验失败，返回 400
+5. `Exception` → 兜底，返回 500，不暴露内部错误
+
+**为什么最后要兜底 `Exception`？**
+- 防止未预期的异常导致前端收到 500 但没有 message
+- 兜底返回通用提示"系统开小差了"，用户体验更好
+- 生产环境不应该暴露堆栈信息给前端
+
+---
+
+## 第 4 章：认证体系 — JWT + 签名双重验证
+
+### 4.1 登录流程
+
+```mermaid
+sequenceDiagram
+    participant F as 前端
+    participant C as Controller
+    participant S as Service
+    participant DB as 数据库
+    participant R as Redis
+
+    F->>C: POST /api/sysUser/login {username, password}
+    C->>S: login(req)
+    S->>DB: selectByUsername(username)
+    DB-->>S: SysUserEntity
+
+    alt 用户不存在或已失效
+        S-->>C: throw UserNotExist
+        C-->>F: {code: 10002, message: "用户不存在"}
+    end
+
+    alt 密码错误
+        S-->>C: throw PasswordError
+        C-->>F: {code: 11003, message: "密码错误"}
+    end
+
+    S->>S: createToken() — 生成 JWT
+    S->>S: createSignSecret() — 生成签名密钥
+    S->>R: SET yanque:sign:secret:{userId} signSecret EX 3600
+    S->>DB: 查询角色和权限
+    S-->>C: LoginRes {token, signSecret, userDetail, roles, permissions}
+    C-->>F: {code: 200, data: {...}}
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         登录流程                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  前端发送登录请求     │
+                   │  {username, password} │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询用户信息        │
+                   │  selectByUsername()  │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  校验用户状态和密码   │
+                   └─────────────────────┘
+                          │         │
+                      失败│         │成功
+                          ▼         ▼
+              ┌──────────────┐  ┌─────────────────────┐
+              │  返回错误     │  │  生成 JWT Token      │
+              │  BusinessException │  │  uid + expire_time │
+              └──────────────┘  └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  生成签名密钥        │
+                                │  SecureRandom 32字节 │
+                                └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  密钥写入 Redis      │
+                                │  TTL = 1小时         │
+                                └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  查询角色和权限      │
+                                └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  返回登录结果        │
+                                │  token + signSecret  │
+                                │  + userDetail        │
+                                │  + roles + perms     │
+                                └─────────────────────┘
+```
+
+**为什么登录返回这么多信息？**
+- `token`：后续请求的身份凭证
+- `signSecret`：后续请求的签名密钥
+- `userDetail`、`roles`、`permissions`：前端渲染页面需要的用户信息，避免登录后再查一次
+
+### 4.2 JwtAuthInterceptor — JWT 身份认证
+
+```java
+@Component
+public class JwtAuthInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, ...) {
+        // 1. 从 Header 取 token
+        String authorization = request.getHeader("Authorization");
+        String token = authorization.substring("Bearer ".length());
+
+        // 2. 验证 JWT 签名
+        JWT jwt = JWT.of(token).setKey(sysConfigService.get(SysConfig.jwtSecret).getBytes());
+        if (!jwt.verify()) throw new BusinessException(401, "Token无效");
+
+        // 3. 提取 userId 和过期时间
+        Object userId = jwt.getPayload("uid");
+        Object expireTime = jwt.getPayload("expire_time");
+
+        // 4. 检查是否过期
+        if (System.currentTimeMillis() > Long.parseLong(String.valueOf(expireTime))) {
+            throw new BusinessException(401, "Token已过期");
+        }
+
+        // 5. 把 userId 放到 request attribute，后续拦截器可以取
+        request.setAttribute("userId", Long.parseLong(String.valueOf(userId)));
+        return true;
+    }
+}
+```
+
+**为什么用 `Authorization: Bearer xxx` 格式？**
+- 这是 OAuth 2.0 标准格式，前端框架（如 Axios）普遍支持
+- `Bearer` 前缀表示"持有此 token 即可访问"
+
+**为什么 JWT 密钥从数据库读取？**
+- 密钥存数据库而非配置文件，运行时可通过管理后台修改
+- 修改密钥后所有现有 token 立即失效，安全性更高
+
+### 4.3 SignInterceptor — 请求签名验证
+
+**签名流程：**
+
+```mermaid
+sequenceDiagram
+    participant F as 前端
+    participant J as JwtAuthInterceptor
+    participant S as SignInterceptor
+    participant P as PermissionInterceptor
+    participant R as Redis
+
+    F->>J: 请求 /api/campus (Header: Authorization: Bearer xxx)
+    J->>J: 解析 JWT，验证签名和过期时间
+    J->>J: 提取 userId，写入 request attribute
+    J-->>F: 401 (如果 token 无效)
+
+    J->>S: 继续执行
+    S->>S: 读取 X-Timestamp, X-Nonce, X-Sign
+    S->>S: 检查时间戳是否在 1 小时内
+    S->>R: GET yanque:sign:secret:{userId}
+    R-->>S: signSecret
+    S->>R: SETNX yanque:sign:nonce:{userId}:{nonce} (防重放)
+    S->>S: 计算 HMAC-SHA256 签名并对比
+    S-->>F: 401 (如果签名无效)
+
+    S->>P: 继续执行
+    P->>P: 查询用户角色和权限
+    P->>P: 检查是否有 API 权限匹配当前路径
+    P-->>F: 403 (如果没有权限)
+    P->>P: 放行请求
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    请求签名验证流程                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  前端构建签名原文    │
+                   │  METHOD\nURI\n       │
+                   │  QUERY\nTIMESTAMP\n  │
+                   │  NONCE               │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  HMAC-SHA256 签名    │
+                   │  signSecret 为密钥   │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  发送请求            │
+                   │  Header:            │
+                   │  X-Timestamp        │
+                   │  X-Nonce            │
+                   │  X-Sign             │
+                   └─────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│ 1.时间戳校验   │   │ 2.Nonce 校验  │   │ 3.签名校验    │
+│ 检查是否过期   │   │ 检查是否重复  │   │ 对比签名值    │
+│ (1小时窗口)   │   │ (Redis去重)   │   │ (HMAC-SHA256) │
+└───────────────┘   └───────────────┘   └───────────────┘
+        │                     │                     │
+        └─────────────────────┼─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  全部通过 → 放行    │
+                   │  任一失败 → 401     │
+                   └─────────────────────┘
+```
+
+**为什么需要签名？JWT 不够吗？**
+
+JWT 只证明"这个用户已登录"，但不保证：
+- 请求内容没被篡改（中间人攻击）
+- 请求不是重放的（抓包后重新发送）
+
+签名解决了这两个问题：
+- **防篡改**：任何参数变化都会导致签名不匹配
+- **防重放**：nonce 一次性，用过就失效
+- **防过期**：时间戳窗口限制，旧请求自动失效
+
+**为什么签名密钥存 Redis 而非 JWT？**
+- 签名密钥需要随时失效（退出登录时删除 Redis key）
+- 如果放在 JWT payload 里，JWT 过期前无法使密钥失效
+- Redis 支持 TTL，密钥 1 小时后自动过期
+
+### 4.4 拦截器链注册顺序
+
+```java
+registry.addInterceptor(jwtAuthInterceptor)     // 1. 先解析 JWT，拿到 userId
+    .addPathPatterns("/api/**")
+    .excludePathPatterns("/api/sysUser/login", ...);
+
+registry.addInterceptor(signInterceptor)          // 2. 再验签（需要 userId）
+    .addPathPatterns("/api/**")
+    .excludePathPatterns("/api/sysUser/login", ...);
+
+registry.addInterceptor(permissionInterceptor)    // 3. 最后检查权限（需要 userId）
+    .addPathPatterns("/api/**")
+    .excludePathPatterns("/api/sysUser/login", ...);
+```
+
+**为什么登录接口要排除所有拦截器？**
+- 登录时还没有 token 和签名密钥
+- 登录是获取凭证的入口，不能用凭证来校验
+
+**为什么 Swagger 也要排除？**
+- 本地开发时需要直接访问 Swagger UI 测试接口
+- 生产环境可以通过 Nginx 或 Spring Security 限制 Swagger 访问
+
+---
+
+## 第 5 章：RBAC 权限模型
+
+### 5.1 五表设计
+
+```
+sys_user ──┐
+           ├── sys_user_role ──┐
+sys_role ──┘                   ├── sys_role_permission ──┐
+                               │                         │
+                               └── sys_permission ───────┘
+```
+
+| 表 | 作用 |
+|----|------|
+| sys_user | 用户表 |
+| sys_role | 角色表（如 SUPER_ADMIN、TEACHER） |
+| sys_permission | 权限表（树形结构，支持菜单/接口/按钮） |
+| sys_user_role | 用户-角色关联（多对多） |
+| sys_role_permission | 角色-权限关联（多对多） |
+
+### 5.2 权限类型
+
+```java
+public enum PermissionTypeEnum {
+    API("api"),       // 接口权限，后端校验
+    BUTTON("按钮"),    // 按钮权限，前端控制
+    MENU("菜单");      // 菜单权限，前端渲染菜单树
+}
+```
+
+**为什么分三种类型？**
+- **MENU**：前端根据 MENU 权限渲染侧边栏菜单，没有菜单权限的页面不显示
+- **API**：后端根据 API 权限校验接口访问，没有接口权限返回 403
+- **BUTTON**：前端根据 BUTTON 权限控制页面内按钮的显示/隐藏
+
+### 5.3 权限树结构
+
+```sql
+-- 权限表使用 parent_id 自引用，形成树形结构
+(0, 'system', '系统管理', 'MENU', null, 10, ...)
+  (1, 'system:user', '用户管理', 'MENU', null, 1010, ...)
+    (2, 'api:user:page', '分页查询用户', 'API', '/yq-admin/api/sysUser', 1111, ...)
+    (2, 'api:user:create', '新增用户', 'API', '/yq-admin/api/sysUser', 1113, ...)
+  (1, 'system:role', '角色管理', 'MENU', null, 1020, ...)
+```
+
+**为什么用树形结构？**
+- 前端菜单是树形的（一级菜单 → 二级菜单 → 页面）
+- 用 `parent_id` 自引用可以无限扩展层级
+- `sort_num` 控制同级节点的显示顺序
+
+### 5.4 PermissionInterceptor — 接口权限校验
+
+**权限校验流程图：**
+
+```mermaid
+flowchart TD
+    A[请求进入 PermissionInterceptor] --> B[获取 userId]
+    B --> C[查询用户信息: 角色 + 权限]
+    C --> D{是超级管理员?}
+    D -- 是 --> E[直接放行]
+    D -- 否 --> F{标了 @NoAuthCheck?}
+
+    F -- 是 --> E
+    F -- 否 --> G{有 API 权限?}
+
+    G -- 否 --> H[返回 403 无权限]
+    G -- 是 --> I[遍历 API 权限列表]
+
+    I --> J[用 AntPathMatcher 匹配路径]
+    J --> K{匹配成功?}
+    K -- 是 --> E
+    K -- 否 --> H
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      权限校验流程                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  获取 userId        │
+                   │  (从 request attr)  │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询用户信息        │
+                   │  - 角色列表         │
+                   │  - 权限列表         │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  是超级管理员?       │
+                   │  (SUPER_ADMIN)      │
+                   └─────────────────────┘
+                          │         │
+                       是 │         │否
+                          ▼         ▼
+              ┌──────────────┐  ┌─────────────────────┐
+              │  直接放行    │  │  标了 @NoAuthCheck?  │
+              └──────────────┘  └─────────────────────┘
+                                      │         │
+                                   是 │         │否
+                                      ▼         ▼
+                          ┌──────────────┐  ┌─────────────────────┐
+                          │  直接放行    │  │  有 API 类型权限?   │
+                          └──────────────┘  └─────────────────────┘
+                                                  │         │
+                                              无  │         │有
+                                                  ▼         ▼
+                                      ┌──────────────┐  ┌─────────────────────┐
+                                      │  返回 403    │  │  遍历权限列表       │
+                                      │  "暂无权限"  │  │  AntPathMatcher    │
+                                      └──────────────┘  │  匹配请求路径       │
+                                                        └─────────────────────┘
+                                                                  │
+                                                          ┌───────┴───────┐
+                                                          │               │
+                                                       匹配             不匹配
+                                                          │               │
+                                                          ▼               ▼
+                                              ┌──────────────┐  ┌──────────────┐
+                                              │  放行        │  │  返回 403    │
+                                              └──────────────┘  └──────────────┘
+```
+
+**为什么用 AntPathMatcher？**
+- 权限配置的是 `/api/sysUser/{id}`，实际请求是 `/api/sysUser/123`
+- `AntPathMatcher` 支持 `{id}` 占位符匹配，不需要为每个 ID 单独配置权限
+- 这是 Spring MVC 自带的路径匹配器，可靠且高效
+
+**为什么超级管理员要硬编码？**
+- 系统初始化时需要一个不受限的账号来创建其他用户和角色
+- 如果超级管理员也受权限控制，可能出现"没有任何权限的管理员"的死锁
+- `SUPER_ADMIN` 角色代码是约定，不会被删除
+
+---
+
+## 第 6 章：业务模块 CRUD 实现模式
+
+### 6.1 完整流程：以校区管理为例
+
+**CRUD 请求处理流程图：**
+
+```mermaid
+sequenceDiagram
+    participant F as 前端
+    participant C as Controller
+    participant V as Validation
+    participant S as Service
+    participant M as Mapper
+    participant DB as 数据库
+
+    F->>C: POST /api/campus {campusLocation, managerName}
+    C->>V: @Valid 参数校验
+
+    alt 校验失败
+        V-->>C: MethodArgumentNotValidException
+        C-->>F: {code: 400, message: "校区地点不能为空"}
+    end
+
+    V->>S: addCampus(req)
+    S->>S: new CampusEntity()
+    S->>S: set createdAt, updatedAt
+    S->>M: insert(entity)
+    M->>DB: INSERT INTO sys_campus
+    DB-->>M: 自动生成的 ID
+    M-->>S: ID 回填到 entity
+    S-->>C: CampusCreateRes {id}
+    C-->>F: {code: 200, data: {id: 1}}
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      CRUD 请求处理流程                            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  HTTP 请求进入       │
+                   │  POST /api/campus   │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  Filter 链          │
+                   │  RequestGuidFilter  │
+                   │  (分配请求ID)       │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  Interceptor 链     │
+                   │  1. JwtAuth         │
+                   │  2. Sign            │
+                   │  3. Permission      │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  DispatcherServlet  │
+                   │  路由到 Controller  │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  @Valid 参数校验    │
+                   └─────────────────────┘
+                          │         │
+                      失败│         │成功
+                          ▼         ▼
+              ┌──────────────┐  ┌─────────────────────┐
+              │  返回 400    │  │  调用 Service 方法   │
+              └──────────────┘  └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  Service 业务逻辑   │
+                                │  1. 构建 Entity     │
+                                │  2. 设置时间戳      │
+                                │  3. 调用 Mapper     │
+                                └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  Mapper 执行 SQL    │
+                                │  INSERT/UPDATE/DELETE│
+                                └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  返回结果            │
+                                │  ApiResponse.success │
+                                └─────────────────────┘
+```
+
+```
+1. 定义 Entity（数据库映射）
+2. 定义 Mapper 接口（数据访问方法）
+3. 编写 Mapper XML（SQL 语句）
+4. 定义 Service 接口（业务方法）
+5. 实现 ServiceImpl（业务逻辑）
+6. 编写 Controller（HTTP 接口）
+7. 定义 Request VO（入参校验）
+8. 定义 Response VO（出参控制）
+```
+
+### 6.2 Entity — 数据库映射
+
+```java
+@Data
+public class CampusEntity {
+    private Long id;
+    private String campusLocation;    // 数据库列: campus_location
+    private String managerName;       // 数据库列: manager_name
+    private String managerPhone;      // 数据库列: manager_phone
+    private Date createdAt;           // 数据库列: created_at
+    private Date updatedAt;           // 数据库列: updated_at
+}
+```
+
+**为什么字段用驼峰，数据库用下划线？**
+- MyBatis 默认开启 `mapUnderscoreToCamelCase`，自动转换
+- 或者在 Mapper XML 的 `<resultMap>` 里手动映射
+
+### 6.3 Mapper 接口 + XML
+
+**接口：**
+```java
+public interface CampusMapper {
+    void insert(CampusEntity campus);
+    int updateById(CampusEntity campus);
+    CampusEntity selectById(@Param("id") Long id);
+    List<CampusEntity> selectPage(@Param("keyword") String keyword);
+    int deleteById(@Param("id") Long id);
+}
+```
+
+**XML：**
+```xml
+<insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    insert into sys_campus (campus_location, manager_name, manager_phone, created_at, updated_at)
+    values (#{campusLocation}, #{managerName}, #{managerPhone}, #{createdAt}, #{updatedAt})
+</insert>
+
+<select id="selectPage" resultMap="CampusMap">
+    select <include refid="BaseColumns"/> from sys_campus
+    <where>
+        <if test="keyword != null and keyword != ''">
+            and (campus_location like concat('%', #{keyword}, '%')
+            or manager_name like concat('%', #{keyword}, '%'))
+        </if>
+    </where>
+    order by id desc
+</select>
+```
+
+**为什么用 XML 而非注解？**
+- XML 支持动态 SQL（`<if>`、`<where>`、`<foreach>`），注解做动态 SQL 很丑
+- SQL 集中在 XML 文件里，便于审查和优化
+- 复杂 SQL（多表 JOIN、子查询）在 XML 里更易读
+
+**为什么 `useGeneratedKeys="true"`？**
+- 插入后自动把数据库生成的主键 ID 回填到 Entity 的 `id` 字段
+- 这样插入后可以直接 `campus.getId()` 获取 ID，无需再查一次
+
+### 6.4 Service 实现 — 分页查询
+
+```java
+@Override
+public PageResult<CampusPageRes> pageCampus(CampusPageReq req) {
+    int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
+    int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
+
+    // 1. 开启分页（ThreadLocal，影响下一条 SQL）
+    PageHelper.startPage(pageNum, pageSize);
+
+    // 2. 执行查询（PageHelper 自动追加 LIMIT）
+    List<CampusEntity> list = campusMapper.selectPage(req.getKeyword());
+
+    // 3. 获取分页信息（total、pageNum、pageSize）
+    PageInfo<CampusEntity> pageInfo = new PageInfo<>(list);
+
+    // 4. Entity → VO 转换
+    List<CampusPageRes> records = list.stream().map(this::buildCampusPageRes).toList();
+
+    // 5. 封装返回
+    return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
+}
+```
+
+**为什么 `PageHelper.startPage()` 必须紧跟查询？**
+- PageHelper 通过 ThreadLocal 实现，`startPage()` 设置分页参数
+- 只影响**紧跟其后的第一条 SQL**
+- 如果中间有其他 SQL（如先查总数再查列表），分页会应用到错误的 SQL 上
+
+### 6.5 Service 实现 — 新增
+
+```java
+@Override
+@Transactional(rollbackFor = Exception.class)
+public CampusCreateRes addCampus(CampusCreateReq req) {
+    CampusEntity campus = new CampusEntity();
+    campus.setCampusLocation(req.getCampusLocation());
+    campus.setManagerName(req.getManagerName());
+    campus.setManagerPhone(req.getManagerPhone());
+    campus.setCreatedAt(new Date());      // 手动设时间戳
+    campus.setUpdatedAt(new Date());
+    campusMapper.insert(campus);
+
+    CampusCreateRes res = new CampusCreateRes();
+    res.setId(campus.getId());            // insert 后自动回填 ID
+    return res;
+}
+```
+
+**为什么手动设 `createdAt`/`updatedAt` 而非数据库 DEFAULT？**
+- 代码里看到时间赋值，逻辑更明确
+- 避免数据库 DEFAULT 和代码逻辑不一致（如数据库用 `CURRENT_TIMESTAMP`，代码用 `new Date()`）
+- 便于测试（可以 mock 时间）
+
+**为什么 `@Transactional(rollbackFor = Exception.class)`？**
+- 默认只对 `RuntimeException` 回滚
+- `rollbackFor = Exception.class` 让所有异常都回滚，更安全
+- 写操作（insert/update/delete）都应该加事务
+
+### 6.6 Service 实现 — 修改和删除
+
+```java
+// 修改：检查影响行数
+int rows = campusMapper.updateById(campus);
+if (rows == 0) {
+    throw BusinessException.CampusNotExist;
+}
+
+// 删除：检查影响行数
+int rows = campusMapper.deleteById(id);
+if (rows == 0) {
+    throw BusinessException.CampusNotExist;
+}
+```
+
+**为什么要检查 `rows == 0`？**
+- 如果不检查，操作不存在的数据会"静默成功"
+- 前端以为删除成功了，但数据本来就不在，可能导致业务逻辑错误
+- 检查后抛异常，前端可以明确知道"数据不存在"
+
+### 6.7 主从表级联：课程与课程详情
+
+```java
+// 删除课程时，先删课程详情
+@Override
+public CourseDeleteRes deleteCourse(Long id) {
+    courseDetailMapper.deleteByCourseId(id);  // 先删从表
+    int rows = courseMapper.deleteById(id);    // 再删主表
+    if (rows == 0) throw BusinessException.CourseNotExist;
+    ...
+}
+```
+
+**为什么先删从表再删主表？**
+- 如果先删主表，从表的 `course_id` 就成了孤立数据
+- 虽然数据库有外键约束可以自动级联删除，但本项目没有用外键（性能考虑）
+- 手动控制删除顺序，逻辑更清晰
+
+---
+
+## 第 7 章：横切关注点 — AOP 日志与请求追踪
+
+### 7.1 ControllerLogAspect — AOP 自动日志
+
+```java
+@Aspect
+@Component
+public class ControllerLogAspect {
+
+    @Around("execution(* cn.yanque..controller..*.*(..))")
+    public Object logController(ProceedingJoinPoint joinPoint) throws Throwable {
+        long start = System.currentTimeMillis();
+
+        // 记录入参
+        log.info("接口开始: uri={}, controller={}, args={}", ...);
+
+        // 执行目标方法
+        Object result = joinPoint.proceed();
+
+        // 记录出参和耗时
+        long cost = System.currentTimeMillis() - start;
+        log.info("接口结束: uri={}, controller={}, cost={}ms, result={}", ..., cost, ...);
+
+        return result;
+    }
+}
+```
+
+**为什么用 AOP 而非在每个 Controller 方法里写 log？**
+- 日志是横切关注点，与业务逻辑无关
+- AOP 统一处理，避免每个方法重复写 log.info
+- 新增接口自动有日志，无需额外代码
+
+**为什么用 `@Around` 而非 `@Before` + `@After`？**
+- `@Around` 可以计算耗时（`proceed()` 前后的时间差）
+- `@Around` 可以修改返回值（虽然这里没有）
+- `@Around` 是最灵活的通知类型
+
+### 7.2 敏感字段脱敏
+
+```java
+private boolean isSensitiveField(String fieldName) {
+    String lower = fieldName.toLowerCase();
+    return lower.contains("password")
+        || lower.contains("secret")
+        || lower.contains("token");
+}
+
+private String mask(String value) {
+    if (value.length() <= 6) return "****";
+    return value.substring(0, 2) + "****" + value.substring(value.length() - 2);
+}
+```
+
+**为什么用反射遍历字段而非手动标记？**
+- 通用性：任何对象都能脱敏，无需每个类都加注解
+- 维护成本低：新增字段自动被检查
+- 缺点是性能略差，但日志场景可以接受
+
+### 7.3 RequestGuidFilter — 请求追踪
+
+```java
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class RequestGuidFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, ...) {
+        // 优先用前端传的 GUID，没有则生成
+        String guid = request.getHeader("X-Request-Guid");
+        if (guid == null) guid = UUID.randomUUID().toString().replace("-", "");
+
+        // 写入 MDC（日志上下文）
+        MDC.put("guid", guid);
+
+        // 写入响应头（前端可以关联）
+        response.setHeader("X-Request-Guid", guid);
+
+        filterChain.doFilter(request, response);
+
+        MDC.remove("guid");  // 清理，防止线程复用导致污染
+    }
+}
+```
+
+**为什么用 MDC？**
+- MDC（Mapped Diagnostic Context）是 SLF4J 的线程级上下文
+- 在 logback 配置里用 `%X{guid}` 引用，自动出现在每条日志中
+- 无需手动传参，所有日志自动携带 GUID
+
+**为什么优先用前端传的 GUID？**
+- 前后端联调时，前端可以在控制台看到自己的请求 GUID
+- 后端日志搜索同一个 GUID，就能看到这个请求的完整链路
+- 如果前端没传，服务端生成一个，保证每个请求都有唯一标识
+
+### 7.4 logback 配置
+
+```xml
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{guid}] %-5level %logger{36} - %msg%n</pattern>
+```
+
+日志输出示例：
+```
+2024-06-10 14:30:00.123 [http-nio-8080-exec-1] [a1b2c3d4e5f6] INFO  c.y.c.aop.ControllerLogAspect - 接口开始: uri=/api/campus, ...
+```
+
+---
+
+## 第 8 章：系统配置与本地缓存
+
+### 8.1 类型安全的配置项定义
+
+```java
+// 配置项定义（静态常量）
+public class SysConfig {
+    public static final SystemConfigItem<String> jwtSecret =
+        new SystemConfigItem<>("jwt.secret", String.class, "defaultSecret");
+}
+
+// 配置项类（泛型）
+@Getter
+public class SystemConfigItem<T> {
+    private final String key;
+    private final Class<T> clazz;
+    private final Object defaultValue;
+}
+```
+
+**为什么用泛型而非直接返回 String？**
+- 编译期类型安全：`sysConfigService.get(SysConfig.jwtSecret)` 返回 String，不会拿到 Integer
+- 默认值类型与返回类型一致，避免类型转换错误
+- 新增配置项只需在 `SysConfig` 类里加一行
+
+### 8.2 SysConfigService — 配置 CRUD + 缓存
+
+```java
+@Component
+public class SysConfigService {
+
+    // Guava 本地缓存：10 秒过期，最大 10000 条
+    private final Cache<String, Object> cache = CacheBuilder.newBuilder()
+        .expireAfterAccess(10, TimeUnit.SECONDS)
+        .maximumSize(10000).build();
+
+    public <T> T get(SystemConfigItem<T> item) {
+        // 1. 先查本地缓存
+        Object value = cache.getIfPresent(item.getKey());
+        if (value != null) return Convert.convert(item.getClazz(), value);
+
+        // 2. 缓存没有，查数据库
+        SysConfigEntity entity = sysConfigMapper.selectByKey(item.getKey());
+        if (entity != null) {
+            T configValue = Convert.convert(item.getClazz(), entity.getV());
+            cache.put(item.getKey(), configValue);
+            return configValue;
+        }
+
+        // 3. 数据库也没有，返回默认值
+        return Convert.convert(item.getClazz(), item.getDefaultValue());
+    }
+}
+```
+
+**为什么用本地缓存而非每次都查 Redis/数据库？**
+- JWT 密钥每次请求都要读（验签用），频率极高
+- 本地缓存 10 秒过期，数据库查询减少 99%+
+- 配置项变更频率低，10 秒延迟可接受
+
+**为什么不用 Redis 做缓存？**
+- Redis 有网络开销，每次请求都要网络调用
+- 本地缓存是内存访问，纳秒级
+- 两级缓存（本地 + Redis）更复杂，本项目规模不需要
+
+### 8.3 配置变更时清缓存
+
+```java
+public SysConfigUpdateRes updateConfig(SysConfigUpdateReq req) {
+    SysConfigEntity oldConfig = sysConfigMapper.selectById(req.getId());
+    // ... 更新数据库 ...
+
+    // 清理旧 key 和新 key 的缓存
+    cache.invalidate(oldConfig.getK());
+    cache.invalidate(req.getK());
+}
+```
+
+**为什么要清理旧 key？**
+- 如果 key 从 "jwt.secret" 改成了 "jwt.key"，旧 key 的缓存还在
+- 不清理的话，旧 key 的缓存会一直占内存直到过期
+- 新 key 也要清理，确保下次读取时从数据库取最新值
+
+### 8.4 JWT 密钥的完整链路
+
+```
+登录时：
+  SysUserServiceImpl.login()
+    → createToken()
+    → sysConfigService.get(SysConfig.jwtSecret)  // 从配置读密钥
+    → JWTUtil.createToken(map, secret.getBytes())  // 生成 JWT
+
+请求时：
+  JwtAuthInterceptor.preHandle()
+    → sysConfigService.get(SysConfig.jwtSecret)  // 从配置读密钥（有缓存）
+    → JWT.of(token).setKey(secret).verify()       // 验证 JWT
+```
+
+**为什么 JWT 密钥不硬编码？**
+- 硬编码在代码里，泄露后无法快速更换
+- 存数据库可以通过管理后台修改，修改后所有 token 立即失效
+- 配合本地缓存，每次请求读密钥的性能开销几乎为零
+
+---
+
+## 第 9 章：排课系统 — 算法驱动的业务模块
+
+> 这是项目中最复杂的模块，展示了如何将业务规则抽象为配置、如何实现日期算法、如何集成外部服务。
+
+### 9.1 排课需求分析
+
+**核心需求：** 根据课程计划自动生成班级课表
+
+```
+输入：
+  - 班级（关联课程）
+  - 第一天上课日期
+  - 排课规则（上课日、自习日、休息日、是否跳过节假日）
+
+输出：
+  - 从第一天开始，按规则逐天排课
+  - 上课日消耗课程明细，自习日/休息日/节假日不消耗
+  - 直到课程明细用完为止
+```
+
+**业务规则示例：**
+```json
+{
+  "classDays": [1, 2, 3, 5, 6],    // 周一、二、三、五、六上课
+  "selfStudyDays": [4],             // 周四自习
+  "restDays": [7],                  // 周日休息
+  "holidayRest": true               // 法定节假日休息
+}
+```
+
+### 9.2 模块结构
+
+```
+schedule/
+├── controller/ClassScheduleController.java    ← HTTP 接口
+├── enums/ClassScheduleTypeEnum.java           ← 课表类型枚举
+├── mapper/ClassScheduleMapper.java            ← 数据访问
+├── pojo/
+│   ├── config/ScheduleRuleConfig.java         ← 排课规则配置
+│   ├── entity/ClassScheduleEntity.java        ← 数据库实体
+│   ├── info/AddCourseInfo.java                ← 补课信息
+│   ├── info/HolidayInfo.java                  ← 节假日信息
+│   ├── vo/req/
+│   │   ├── AddClassSchuleReq.java             ← 加课请求
+│   │   ├── ClassScheduleGenerateReq.java      ← 生成课表请求
+│   │   ├── ClassScheduleTeacherAssignReq.java ← 分配老师请求
+│   │   └── TeacherDetailReq.java              ← 老师详情查询请求
+│   └── vo/res/
+│       ├── ClassScheduleDateDetailRes.java    ← 当天课程详情
+│       ├── ClassScheduleGenerateRes.java      ← 生成课表响应
+│       ├── ClassScheduleItemRes.java          ← 课表列表项
+│       ├── ClassScheduleTeacherAssignRes.java ← 分配老师响应
+│       ├── ClassStageInfoRes.java             ← 阶段信息
+│       └── TeacherDetailRes.java              ← 老师上课详情
+└── service/
+    ├── ClassScheduleService.java              ← 业务接口
+    ├── HolidayService.java                    ← 节假日服务（外部 API）
+    ├── ScheduleRuleService.java               ← 规则配置服务
+    └── impl/ClassScheduleServiceImpl.java     ← 业务实现
+```
+
+**为什么排课模块比其他模块多这么多类？**
+- 排课涉及**日期计算**、**外部 API 调用**、**配置驱动**、**批量操作**
+- 每个职责独立成类，符合单一职责原则
+- HolidayService 和 ScheduleRuleService 可被其他模块复用
+
+### 9.3 配置驱动的排课规则
+
+```java
+// SysConfig 中定义配置项
+public static SystemConfigItem<String> teachingScheduleRule = new SystemConfigItem<>(
+    "teaching.schedule.rule",
+    "{\"classDays\":[1,2,3,5,6],\"selfStudyDays\":[4],\"restDays\":[7],\"holidayRest\":true}",
+    String.class);
+
+// ScheduleRuleService 读取并解析配置
+@Service
+public class ScheduleRuleService {
+    public ScheduleRuleConfig getScheduleRule() {
+        String ruleJson = sysConfigService.get(SysConfig.teachingScheduleRule);
+        ScheduleRuleConfig config = JSON.parseObject(ruleJson, ScheduleRuleConfig.class);
+        config.validate();  // 校验配置合法性
+        return config;
+    }
+}
+
+// ScheduleRuleConfig 配置实体
+@Data
+public class ScheduleRuleConfig {
+    private List<Integer> classDays;       // 上课日（1-7）
+    private List<Integer> selfStudyDays;   // 自习日
+    private List<Integer> restDays;        // 休息日
+    private Boolean holidayRest;           // 是否跳过节假日
+}
+```
+
+**为什么排课规则存数据库而非硬编码？**
+- 不同校区/班级可能有不同的排课规则
+- 通过管理后台修改配置，无需改代码重启
+- 配置变更后下次生成课表立即生效
+
+**为什么用 JSON 字符串存储而非单独建表？**
+- 规则结构简单，JSON 足够表达
+- 避免为配置建多张表（classDays 表、restDays 表...）
+- 读取一次后缓存在本地，性能无影响
+
+**为什么配置要 `validate()`？**
+- 用户可能通过管理后台手动修改 JSON，格式可能错误
+- 校验上课日/休息日不能重复（同一天不能既是上课日又是休息日）
+- 校验日期范围（1-7 代表周一到周日）
+
+### 9.4 核心算法：课表生成
+
+**课表生成流程图：**
+
+```mermaid
+flowchart TD
+    A[开始生成课表] --> B[查询班级信息]
+    B --> C[获取排课规则配置]
+    C --> D[校验第一天上课日期]
+    D --> E[查询课程明细列表]
+    E --> F[初始化: currentDate=第一天, courseIndex=0]
+
+    F --> G{courseIndex < 课程总数?}
+    G -- 否 --> H[返回课表列表]
+    G -- 是 --> I[获取当前日期的星期]
+
+    I --> J{是节假日?}
+    J -- 是 --> K[添加节假日记录]
+    K --> L[currentDate + 1天]
+    L --> G
+
+    J -- 否 --> M{是休息日?}
+    M -- 是 --> N[添加休息记录]
+    N --> L
+
+    M -- 否 --> O{是自习日?}
+    O -- 是 --> P[添加自习记录]
+    P --> L
+
+    O -- 否 --> Q{是上课日?}
+    Q -- 是 --> R[添加上课记录]
+    R --> S[courseIndex + 1]
+    S --> L
+
+    Q -- 否 --> L
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       课表生成流程                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询班级信息        │
+                   │  获取 courseId       │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  获取排课规则配置    │
+                   │  classDays/restDays  │
+                   │  selfStudyDays       │
+                   │  holidayRest         │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  校验第一天上课日期  │
+                   │  必须是上课日        │
+                   │  不能是节假日        │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询课程明细列表    │
+                   │  courseIndex = 0     │
+                   └─────────────────────┘
+                              │
+                              ▼
+              ┌───────────────┴───────────────┐
+              │                               │
+              ▼                               │
+   ┌─────────────────────┐                    │
+   │  courseIndex < 总数? │──── 否 ───────────┼──▶ 返回课表
+   └─────────────────────┘                    │
+              │是                             │
+              ▼                               │
+   ┌─────────────────────┐                    │
+   │  获取当前日期星期    │                    │
+   │  weekValue = 1-7    │                    │
+   └─────────────────────┘                    │
+              │                               │
+              ▼                               │
+   ┌─────────────────────┐                    │
+   │  是节假日?           │── 是 ──▶ 添加HOLIDAY记录 ──▶ currentDate+1 ─┐
+   └─────────────────────┘                    │                       │
+              │否                             │                       │
+              ▼                               │                       │
+   ┌─────────────────────┐                    │                       │
+   │  是休息日?           │── 是 ──▶ 添加REST记录 ──▶ currentDate+1 ──┐│
+   └─────────────────────┘                    │                      ││
+              │否                             │                      ││
+              ▼                               │                      ││
+   ┌─────────────────────┐                    │                      ││
+   │  是自习日?           │── 是 ──▶ 添加SELF_STUDY记录 ──▶ currentDate+1 ┐││
+   └─────────────────────┘                    │                     │││
+              │否                             │                     │││
+              ▼                               │                     │││
+   ┌─────────────────────┐                    │                     │││
+   │  是上课日?           │── 是 ──▶ 添加CLASS记录 ──▶ courseIndex++ ─┼┼┼┘
+   └─────────────────────┘                    │                     │││
+              │否                             │                     │││
+              ▼                               │                     │││
+   ┌─────────────────────┐                    │                     │││
+   │  跳过（非配置日）    │────────────────────┼─────────────────────┘││
+   └─────────────────────┘                    │                      ││
+                                              │◀─────────────────────┘│
+                                              │◀──────────────────────┘
+                                              │
+                                              ▼
+                                    继续循环处理下一天
+```
+
+**算法核心思想：**
+1. 从第一天上课日期开始，逐天遍历
+2. 每天先判断是节假日/休息日/自习日/上课日
+3. 只有上课日才消耗课程明细（`courseIndex++`）
+4. 当 `courseIndex >= courseDetails.size()` 时，所有课程排完，循环结束
+
+**为什么用 `while` 而非 `for`？**
+- 循环次数不确定（取决于有多少非上课日）
+- 游标 `courseIndex` 只在上课日才前进
+- `while` 更直观地表达"直到课程排完"
+
+**为什么 `continue` 而非嵌套 `if-else`？**
+- 每种情况处理完后都要 `currentDate = addDays(currentDate, 1)`
+- 用 `continue` 跳过后续逻辑，减少嵌套层级
+- 代码更扁平，可读性更好
+
+### 9.5 外部服务集成：HolidayService
+
+```java
+@Service
+public class HolidayService {
+
+    private static final String HOLIDAY_YEAR_URL = "https://timor.tech/api/holiday/year/";
+
+    // 年度节假日缓存（1天过期，最多缓存20年）
+    private final Cache<Integer, Map<String, HolidayInfo>> cache = CacheBuilder.newBuilder()
+        .expireAfterWrite(1, TimeUnit.DAYS)
+        .maximumSize(20)
+        .build();
+
+    public HolidayInfo getHolidayInfo(Date date) {
+        Integer year = getYear(date);
+        Map<String, HolidayInfo> yearHolidayMap = cache.getIfPresent(year);
+        if (yearHolidayMap == null) {
+            yearHolidayMap = loadYearHoliday(year);  // 调用外部 API
+            cache.put(year, yearHolidayMap);
+        }
+        return yearHolidayMap.get(formatDate(date));
+    }
+}
+```
+
+**为什么按年缓存而非按天？**
+- 节假日数据按年返回（一次 API 调用获取全年数据）
+- 一年内节假日数据不会变化，缓存 1 天足够
+- 最多缓存 20 年，内存占用很小
+
+**为什么用 `HttpClient` 而非 `RestTemplate`？**
+- Java 11+ 内置 `HttpClient`，无需额外依赖
+- 支持异步调用（虽然这里用了同步）
+- `connectTimeout` 控制连接超时，避免外部服务慢导致线程阻塞
+
+**外部 API 调用的异常处理：**
+```java
+try {
+    // 调用外部 API
+} catch (BusinessException e) {
+    throw e;  // 业务异常直接抛出
+} catch (Exception e) {
+    throw BusinessException.DateError.newInstance("节假日信息获取失败");
+}
+```
+- 区分业务异常和系统异常
+- 外部服务不可用时，返回明确的错误信息
+- 不暴露外部服务的内部错误给前端
+
+### 9.6 跨模块数据聚合：阶段信息查询
+
+```java
+public List<ClassStageInfoRes> classStageInfo(Long classId) {
+    // 1. 查班级 → 获取课程ID
+    ClazzEntity clazz = clazzMapper.selectById(classId);
+
+    // 2. 查课程明细 → 按阶段分组
+    List<CourseDetailEntity> courseDetails = courseDetailMapper.selectByCourseId(clazz.getCourseId());
+    Map<String, List<CourseDetailEntity>> courseDetailGroup = groupCourseDetailsByStage(courseDetails);
+
+    // 3. 遍历每个阶段
+    for (Map.Entry<String, List<CourseDetailEntity>> entry : courseDetailGroup.entrySet()) {
+        // 4. 查该阶段的课表 → 获取日期范围
+        List<ClassScheduleEntity> schedules = classScheduleMapper.selectByCourseIds(courseIds, classId);
+        Date stageStartDate = schedules.get(0).getScheduleDate();
+        Date stageEndDate = schedules.get(schedules.size() - 1).getScheduleDate();
+
+        // 5. 查该时间段内已排课的老师
+        List<Long> teacherIds = classScheduleMapper.selectTeacheringUserId(stageStartDate, stageEndDate, classId);
+
+        // 6. 查所有老师 → 排除已排课的 → 得到空闲老师
+        List<SysUserEntity> teacher = sysUserService.getUserByRoleCode("TEACHER");
+        teacher.removeIf(next -> teacherIds.contains(next.getId()));
+    }
+}
+```
+
+**为什么需要跨模块查询？**
+- 排课涉及：班级 → 课程 → 课表 → 用户（老师）
+- 每个数据在不同模块，需要跨 Mapper 查询
+- Service 层负责组装数据，Controller 层只做参数校验
+
+**为什么在 Service 层做聚合而非 SQL JOIN？**
+- 各模块独立演进，JOIN 会增加耦合
+- 单表查询更简单，便于优化和缓存
+- Service 层用 Java 代码组装，逻辑更清晰
+
+### 9.7 批量操作
+
+```java
+// Mapper XML — 批量插入
+<insert id="batchInsert">
+    insert into sys_class_schedule
+    (class_id, teacher_id, schedule_date, course_detail_id, course_content, class_type)
+    values
+    <foreach collection="list" item="item" separator=",">
+        (#{item.classId}, #{item.teacherId}, #{item.scheduleDate},
+         #{item.courseDetailId}, #{item.courseContent}, #{item.classType})
+    </foreach>
+</insert>
+```
+
+**为什么用批量插入而非逐条插入？**
+- 一个班级的课表可能有 60-100 条记录
+- 逐条插入 = 100 次数据库往返
+- 批量插入 = 1 次数据库往返，性能提升 100 倍
+
+**为什么用 `<foreach>` 而非 `VALUES (), (), ()` 拼接？**
+- MyBatis 的 `<foreach>` 自动处理参数绑定，防止 SQL 注入
+- 拼接字符串容易出错（逗号、引号）
+- `<foreach>` 代码更清晰，MyBatis 自动优化
+
+### 9.8 课表重新生成
+
+```java
+@Override
+@Transactional(rollbackFor = Exception.class)
+public ClassScheduleGenerateRes generateSchedule(ClassScheduleGenerateReq req) {
+    // ... 校验、构建课表 ...
+
+    // 先删旧课表，再插新课表
+    classScheduleMapper.deleteByClassId(req.getClassId());
+    classScheduleMapper.batchInsert(schedules);
+}
+```
+
+**为什么用"先删后插"而非"逐条对比更新"？**
+- 课表是整体生成的，部分更新没有意义
+- 先删后插逻辑简单，只需两条 SQL
+- 在事务中执行，删除失败不会插入，保证一致性
+
+**为什么删除和插入要在同一个事务？**
+- 如果删除成功但插入失败，班级就没有课表了
+- 事务回滚保证要么全部成功，要么全部失败
+- `@Transactional(rollbackFor = Exception.class)` 确保任何异常都回滚
+
+### 9.9 老师分配与冲突检测
+
+**老师分配流程图：**
+
+```mermaid
+flowchart TD
+    A[开始分配老师] --> B[查询班级信息]
+    B --> C[查询课程明细]
+    C --> D[按阶段分组课程]
+    D --> E[查询所有老师ID]
+
+    E --> F[遍历每个阶段分配]
+    F --> G{阶段老师存在?}
+    G -- 否 --> H[抛异常: 老师不存在]
+    G -- 是 --> I[查询该阶段课程信息]
+
+    I --> J[获取阶段日期范围]
+    J --> K[查询该时间段已排课老师]
+    K --> L{老师时间冲突?}
+    L -- 是 --> M[抛异常: 老师已有课程]
+    L -- 否 --> N[更新课表老师]
+
+    N --> O{还有阶段?}
+    O -- 是 --> F
+    O -- 否 --> P[分配完成]
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      老师分配流程                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询班级和课程信息  │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  课程按阶段分组      │
+                   │  Stage1: [day1-5]   │
+                   │  Stage2: [day6-10]  │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  遍历每个阶段        │
+                   └─────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────┴────────────────────┐
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  检查老师是否存在    │── 不存在 ──▶ 抛异常        │
+└─────────────────────┘                            │
+         │存在                                     │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  获取阶段日期范围    │                            │
+│  startDate ~ endDate │                            │
+└─────────────────────┘                            │
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  查询该时间段内      │                            │
+│  已排课的老师ID      │                            │
+│  (排除当前班级)      │                            │
+└─────────────────────┘                            │
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  老师时间冲突?       │                            │
+└─────────────────────┘                            │
+         │         │                               │
+     有冲突        │无冲突                          │
+         ▼         ▼                               │
+┌────────────┐ ┌─────────────┐                     │
+│  抛异常    │ │  更新课表    │                     │
+│ "已有课程" │ │  的老师ID   │                     │
+└────────────┘ └─────────────┘                     │
+                           │                       │
+                           ▼                       │
+                  ┌─────────────────┐              │
+                  │  还有阶段?      │── 是 ────────┘
+                  └─────────────────┘
+                           │否
+                           ▼
+                  ┌─────────────────┐
+                  │  分配完成        │
+                  │  返回更新数量    │
+                  └─────────────────┘
+```
+
+**为什么老师冲突检测按时间段而非按天？**
+- 一个阶段可能跨多天（如 5 天课程）
+- 只要老师在这 5 天内有任何一天有课，就不能分配
+- `selectTeacheringUserId` 查询的是时间段内的所有已排课老师
+
+**SQL 实现：**
+```xml
+<select id="selectTeacheringUserId" resultType="java.lang.Long">
+    select distinct teacher_id
+    from sys_class_schedule
+    where schedule_date >= #{stageStartDate}
+    and schedule_date <= #{stageEndDate}
+    and class_id != #{classId}        -- 排除当前班级
+    and teacher_id is not null
+</select>
+```
+
+**为什么排除当前班级（`class_id != #{classId}`）？**
+- 重新分配老师时，当前班级的旧数据还没删除
+- 如果不排除，会检测到自己班的旧老师，导致误判冲突
+
+### 9.10 加课功能：插入临时课程并重排后续课表
+
+**加课流程图：**
+
+```mermaid
+flowchart TD
+    A[开始加课] --> B[查询班级信息]
+    B --> C[校验加课日期]
+    C --> D[查询加课日期后的所有课表]
+    D --> E{课表是否为空?}
+    E -- 是 --> F[抛异常: 没有课表数据]
+    E -- 否 --> G[构建新课表列表]
+
+    G --> H[遍历旧课表]
+    H --> I{是加课日期?}
+    I -- 否 --> J[复制旧记录到新列表]
+    I -- 是 --> K{当天是上课日?}
+
+    K -- 是 --> L[插入新课程记录]
+    K -- 否 --> M[替换为新课程]
+
+    L --> N[继续重排后续课表]
+    M --> N
+
+    N --> O[删除旧课表数据]
+    O --> P[批量插入新课表]
+    P --> Q[冲突检测: 老师同一天重复?]
+    Q --> R{有冲突?}
+    R -- 是 --> S[抛异常: 老师重复课表]
+    R -- 否 --> T[加课成功]
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         加课流程                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询班级信息        │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  校验加课日期        │
+                   │  不能为空            │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询该日期后的      │
+                   │  所有课表            │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  遍历旧课表          │
+                   │  构建新课表列表      │
+                   └─────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+              ▼               ▼               ▼
+      ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+      │ 加课日期之前  │ │  加课日期    │ │ 加课日期之后  │
+      │ 直接复制     │ │  插入新课程  │ │ 重新排课     │
+      └──────────────┘ └──────────────┘ └──────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  删除旧课表          │
+                   │  (该日期及之后)      │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  批量插入新课表      │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  冲突检测            │
+                   │  老师同一天重复?     │
+                   └─────────────────────┘
+                          │         │
+                      有冲突        │无冲突
+                          ▼         ▼
+              ┌──────────────┐  ┌──────────────┐
+              │  抛异常      │  │  加课成功    │
+              │  回滚事务    │  │              │
+              └──────────────┘  └──────────────┘
+```
+
+**业务场景：** 某天需要临时加一节课（如补课、调课），加课后后续课表需要顺延。
+
+**接口定义：**
+```java
+@PutMapping("{classId}/addClassSchule")
+public ApiResponse<Void> addClassSchule(@PathVariable Long classId,
+                                        @Valid @RequestBody AddClassSchuleReq req)
+```
+
+**请求参数：**
+```java
+@Data
+public class AddClassSchuleReq {
+    private String courseContent;    // 加课内容
+    private Date scheduleDate;       // 加课日期
+    private Long teacherId;          // 上课老师
+}
+```
+
+**核心实现逻辑：**
+```java
+public void addClassSchule(Long classId, AddClassSchuleReq req) {
+    // 1. 校验参数
+    Date scheduleDate = truncateDate(req.getScheduleDate());
+
+    // 2. 查询加课日期后面的所有课表
+    List<ClassScheduleEntity> oldList = classScheduleMapper
+        .selectByClassIdAndAfterScheduleDate(classId, scheduleDate);
+
+    // 3. 构建新课表（插入加课 + 重排后续）
+    List<ClassScheduleEntity> newList = buildAddClassSchuleList(oldList, addCourseInfo);
+
+    // 4. 删除旧数据，插入新数据
+    classScheduleMapper.deleteByClassIdAndAfterScheduleDate(classId, scheduleDate);
+    classScheduleMapper.batchInsert(newList);
+
+    // 5. 冲突检测：检查老师同一天是否有重复课
+    int duplicateCount = classScheduleMapper.countDuplicateTeacherSchedule();
+    if (duplicateCount > 0) {
+        throw BusinessException.DateError.newInstance("老师同一天存在重复课表");
+    }
+}
+```
+
+**为什么用"先删后插"而非"逐条更新"？**
+- 加课会导致后续所有课表日期顺延，相当于重新排课
+- 逐条更新需要计算每条记录的新日期，逻辑复杂且容易出错
+- 先删后插逻辑清晰，事务保证一致性
+
+**为什么冲突检测在插入之后？**
+- 插入后才能检测到完整的课表数据
+- 如果在插入前检测，无法发现与新插入数据的冲突
+- 事务保证：检测到冲突后抛异常，整个操作回滚
+
+### 9.11 冲突检测：老师同一天重复上课
+
+**检测场景：** 老师在同一天被分配到多个班级上课。
+
+**SQL 实现：**
+```xml
+<select id="countDuplicateTeacherSchedule" resultType="java.lang.Integer">
+    select count(1)
+    from (
+        select teacher_id, schedule_date, count(*) cnt
+        from sys_class_schedule
+        where teacher_id is not null
+        group by teacher_id, schedule_date
+        having cnt > 1
+    ) t
+</select>
+```
+
+**SQL 解析：**
+1. 按 `teacher_id` + `schedule_date` 分组
+2. 统计每个分组的记录数 `cnt`
+3. 过滤 `cnt > 1`（同一天有多条记录）
+4. 统计有多少个这样的分组
+
+**为什么用子查询而非直接 COUNT？**
+- 需要先分组再过滤，不能直接 COUNT
+- 子查询先找出"有问题的分组"，外层 COUNT 统计数量
+- 返回 0 表示无冲突，>0 表示有冲突
+
+**为什么在插入后检测而非插入前？**
+- 插入前无法知道新数据是否会导致冲突
+- 可能新数据本身就有重复（如同一天加了两节课）
+- 事务保证：检测到冲突后回滚，数据不会不一致
+
+### 9.12 老师上课详情查询
+
+**老师详情查询流程图：**
+
+```mermaid
+flowchart TD
+    A[查询老师详情] --> B[查询时间段内所有课表]
+    B --> C[过滤: teacherId 不为空]
+    C --> D[按 teacherId 分组]
+
+    D --> E[批量查询老师信息]
+    E --> F[构建老师信息 Map]
+
+    F --> G[遍历每个老师]
+    G --> H[遍历该老师的课表]
+    H --> I[查询班级信息]
+    I --> J{班级信息已缓存?}
+    J -- 是 --> K[从缓存获取]
+    J -- 否 --> L[查询数据库并缓存]
+
+    K --> M[组装 TeacherDetail]
+    L --> M
+
+    M --> N{还有课表?}
+    N -- 是 --> H
+    N -- 否 --> O[组装 TeacherDetailRes]
+
+    O --> P{还有老师?}
+    P -- 是 --> G
+    P -- 否 --> Q[返回结果列表]
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    老师上课详情查询流程                            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询时间段内        │
+                   │  所有班级的课表      │
+                   │  (classId = null)   │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  过滤有老师的记录    │
+                   │  按 teacherId 分组   │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  批量查询老师信息    │
+                   │  selectByIds()      │
+                   │  (避免 N+1 查询)    │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  遍历每个老师        │
+                   └─────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────┴────────────────────┐
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  遍历该老师的课表    │                            │
+└─────────────────────┘                            │
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  查询班级信息        │                            │
+│  (带缓存优化)        │                            │
+└─────────────────────┘                            │
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  组装 TeacherDetail │                            │
+│  classId + date     │                            │
+│  + classPeriod      │                            │
+└─────────────────────┘                            │
+         │                                         │
+         ▼                                         │
+┌─────────────────────┐                            │
+│  还有课表?           │── 是 ──▶ 继续遍历 ─────────┘
+└─────────────────────┘
+         │否
+         ▼
+┌─────────────────────┐
+│  组装 TeacherDetailRes │
+│  teacherId + name   │
+│  + detailList       │
+└─────────────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  还有老师?           │── 是 ──▶ 继续遍历老师
+└─────────────────────┘
+         │否
+         ▼
+┌─────────────────────┐
+│  返回结果列表        │
+└─────────────────────┘
+```
+
+**业务场景：** 查询指定时间段内所有老师的上课安排，用于排课时避免冲突。
+
+**接口定义：**
+```java
+@PostMapping("/teacher-detail")
+public ApiResponse<List<TeacherDetailRes>> teacherDetail(@RequestBody TeacherDetailReq req)
+```
+
+**请求参数：**
+```java
+@Data
+public class TeacherDetailReq {
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
+    private Date startTime;
+
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
+    private Date endTime;
+}
+```
+
+**响应参数：**
+```java
+@Data
+public class TeacherDetailRes {
+    private Long teacherId;
+    private String teacherName;
+    private List<TeacherDetail> teacherDetailList;
+
+    @Data
+    public static class TeacherDetail {
+        private Date teacheringDate;   // 上课日期
+        private Long classId;          // 班级ID
+        private String classPeriod;    // 班期
+    }
+}
+```
+
+**核心实现逻辑：**
+```java
+public List<TeacherDetailRes> teacherDetail(TeacherDetailReq req) {
+    // 1. 查询时间段内所有课表（不限班级）
+    List<ClassScheduleEntity> classScheduleEntityList = classScheduleMapper
+        .selectByClassIdAndDate(null, req.getStartTime(), req.getEndTime());
+
+    // 2. 按老师ID分组
+    Map<Long, List<ClassScheduleEntity>> teacherGroup = classScheduleEntityList.stream()
+        .filter(e -> e.getTeacherId() != null)
+        .collect(Collectors.groupingBy(ClassScheduleEntity::getTeacherId));
+
+    // 3. 批量查询老师信息（避免 N+1 查询）
+    List<SysUserEntity> teacherList = sysUserMapper.selectByIds(new ArrayList<>(teacherIds));
+    Map<Long, SysUserEntity> teacherEntityGroup = teacherList.stream()
+        .collect(Collectors.toMap(SysUserEntity::getId, Function.identity()));
+
+    // 4. 遍历组装结果（带班级信息缓存）
+    Map<Long, ClazzEntity> clazzEntityMap = new HashMap<>();  // 缓存班级信息
+    for (Map.Entry<Long, List<ClassScheduleEntity>> entry : teacherGroup.entrySet()) {
+        // ... 组装 TeacherDetailRes
+    }
+}
+```
+
+**为什么 Mapper 的 `selectByClassIdAndDate` 支持 `classId` 为 null？**
+```xml
+<select id="selectByClassIdAndDate" resultMap="ClassScheduleMap">
+    select <include refid="BaseColumns"/>
+    from sys_class_schedule
+    where schedule_date >= #{startDate}
+    and schedule_date <= #{endDate}
+    <if test="classId != null">and class_id = #{classId}</if>
+    order by id asc
+</select>
+```
+- `classId` 为 null 时不加班级过滤，查询所有班级的课表
+- 这样一个方法可以同时支持"查班级课表"和"查老师课表"两个场景
+
+**为什么用 `Map<Long, ClazzEntity>` 缓存班级信息？**
+- 同一个班级的多条课表记录会重复查询班级表
+- 用 Map 缓存后，每个班级只查一次数据库
+- 这是经典的 **N+1 查询优化** 模式
+
+**为什么批量查询老师而非逐个查询？**
+```java
+List<SysUserEntity> teacherList = sysUserMapper.selectByIds(new ArrayList<>(teacherIds));
+Map<Long, SysUserEntity> teacherEntityGroup = teacherList.stream()
+    .collect(Collectors.toMap(SysUserEntity::getId, Function.identity()));
+```
+- 10 个老师逐个查询 = 10 次数据库往返
+- 批量查询 = 1 次数据库往返
+- 用 Map 组装后，查找复杂度 O(1)
+
+### 9.13 Mapper 方法汇总
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `batchInsert` | 批量插入课表 | 生成课表、加课 |
+| `selectByClassId` | 查询班级全部课表 | 查看课表 |
+| `selectByClassIdAndDate` | 按日期范围查询 | 查看当天详情、老师详情 |
+| `deleteByClassId` | 删除班级全部课表 | 重新生成课表 |
+| `selectByCourseIds` | 按课程详情ID查询 | 阶段信息、老师分配 |
+| `selectTeacheringUserId` | 查询时间段内已排课老师 | 老师冲突检测 |
+| `updateTeacherByCourseDetailIds` | 批量更新课表老师 | 分配老师 |
+| `selectByClassIdAndAfterScheduleDate` | 查询指定日期后的课表 | 加课 |
+| `deleteByClassIdAndAfterScheduleDate` | 删除指定日期后的课表 | 加课 |
+| `countDuplicateTeacherSchedule` | 统计老师同一天重复上课数 | 冲突检测 |
+
+---
+
+## 附录：动手练习
+
+### 练习 1：新增教师管理模块（基础）
+
+按照第 6 章的 CRUD 模式，独立新增一个**教师管理**模块：
+
+1. 创建 `TeacherEntity`（id, name, phone, campus_id, created_at, updated_at）
+2. 创建 `TeacherMapper` 接口 + XML
+3. 创建 `TeacherService` 接口 + `TeacherServiceImpl`
+4. 创建 `TeacherController`（标准 CRUD）
+5. 创建 Request/Response VO
+6. 在 `all_api_permissions.sql` 中添加教师管理的权限数据
+7. 在 `YanqueApplication` 中添加 `@MapperScan`
+8. 通过 Swagger 测试所有接口
+
+**检查点：**
+- [ ] 新增教师返回 ID
+- [ ] 修改不存在的教师返回错误
+- [ ] 分页查询支持关键字搜索
+- [ ] 删除教师检查影响行数
+- [ ] 未登录访问返回 401
+- [ ] 无权限访问返回 403
+- [ ] Swagger 文档自动生成
+
+### 练习 2：扩展排课功能（进阶）
+
+基于第 9 章的排课模块，尝试添加以下功能：
+
+1. **课表导出 Excel**：使用 EasyExcel 将班级课表导出为 Excel 文件
+2. **班级日期冲突检测**：同一个班级同一天不能有两条上课记录（参考 9.11 的老师冲突检测实现）
+3. **课表统计报表**：统计每个班级的上课天数、休息天数、自习天数
+
+**检查点：**
+- [ ] 导出的 Excel 包含日期、课程内容、老师、课表类型
+- [ ] 重复生成课表时旧数据被正确替换
+- [ ] 统计报表数据准确

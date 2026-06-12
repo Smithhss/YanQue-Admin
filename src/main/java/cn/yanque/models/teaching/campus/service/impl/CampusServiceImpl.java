@@ -33,11 +33,13 @@ public class CampusServiceImpl implements CampusService {
     @Transactional(rollbackFor = Exception.class)
     public CampusCreateRes addCampus(CampusCreateReq req) {
         CampusEntity campus = new CampusEntity();
+
         campus.setCampusLocation(req.getCampusLocation());
         campus.setManagerName(req.getManagerName());
         campus.setManagerPhone(req.getManagerPhone());
         campus.setCreatedAt(new Date());
         campus.setUpdatedAt(new Date());
+
         campusMapper.insert(campus);
 
         CampusCreateRes res = new CampusCreateRes();
@@ -49,6 +51,7 @@ public class CampusServiceImpl implements CampusService {
     @Transactional(rollbackFor = Exception.class)
     public CampusUpdateRes updateCampus(CampusUpdateReq req) {
         CampusEntity campus = new CampusEntity();
+
         campus.setId(req.getId());
         campus.setCampusLocation(req.getCampusLocation());
         campus.setManagerName(req.getManagerName());
@@ -91,8 +94,10 @@ public class CampusServiceImpl implements CampusService {
     public PageResult<CampusPageRes> pageCampus(CampusPageReq req) {
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
+
         PageHelper.startPage(pageNum, pageSize);
         List<CampusEntity> list = campusMapper.selectPage(req.getKeyword());
+
         PageInfo<CampusEntity> pageInfo = new PageInfo<>(list);
         List<CampusPageRes> records = list.stream().map(this::buildCampusPageRes).toList();
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);

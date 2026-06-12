@@ -3,7 +3,7 @@ spring:
     redis:
       host: redis-shzl6tz4l7lst4rga.redis.volces.com
       port: 6379
-      password: QWer1234!!!   # 没密码可不写
+      password: QWer1234!!!
       database: 3
 
   datasource:
@@ -13,4 +13,4 @@ spring:
 
 logging:
   level:
-    cn.yqnaue: INFO
+    cn.yanque: INFO

@@ -34,10 +34,10 @@ public class UserDetailRes {
     @Schema(description = "飞书 union_id")
     private String unionId;
 
-    @Schema(description = "状态", allowableValues = {"ACTIVE", "INACTIVE"})
+    @Schema(description = "状态，ACTIVE启用，INACTIVE禁用")
     private String status;
 
-    /** 状态中文描述，由 status 自动转换 */
+    /** 状态中文描述 */
     private String statusDesc;
 
     @Schema(description = "创建时间")
