@@ -75,7 +75,7 @@ public class ClassScheduleController {
         return ApiResponse.success();
     }
 
-    @GetMapping("/teacher-detail")
+    @PostMapping("/teacher-detail")
     @Operation(description = "查询老师上课详情")
     public ApiResponse<List<TeacherDetailRes>> teacherDetail(@RequestBody TeacherDetailReq req) {
         return ApiResponse.success(classScheduleService.teacherDetail(req));

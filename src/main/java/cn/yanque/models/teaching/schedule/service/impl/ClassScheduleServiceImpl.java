@@ -304,6 +304,10 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
                 .filter(classScheduleEntity -> classScheduleEntity.getTeacherId() != null)
                 .collect(Collectors.groupingBy(ClassScheduleEntity::getTeacherId));
 
+        if (teacherGroup.isEmpty()) {
+            return new ArrayList<>();
+        }
+
         // 组装信息 返回
         List<TeacherDetailRes> list = new ArrayList<>();
 
