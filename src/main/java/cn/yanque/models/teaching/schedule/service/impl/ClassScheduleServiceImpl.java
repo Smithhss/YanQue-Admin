@@ -13,19 +13,21 @@ import cn.yanque.models.teaching.schedule.pojo.info.HolidayInfo;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleGenerateReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleGenerateRes;
 import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleItemRes;
+import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassStageInfoRes;
 import cn.yanque.models.teaching.schedule.service.ClassScheduleService;
 import cn.yanque.models.teaching.schedule.service.HolidayService;
 import cn.yanque.models.teaching.schedule.service.ScheduleRuleService;
 import cn.yanque.models.teaching.course.mapper.CourseDetailMapper;
 import cn.yanque.models.teaching.course.pojo.entity.CourseDetailEntity;
+import cn.yanque.models.users.pojo.entity.SysUserEntity;
+import cn.yanque.models.users.service.SysUserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ClassScheduleServiceImpl implements ClassScheduleService {
@@ -44,6 +46,9 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
 
     @Autowired
     private HolidayService holidayService;
+
+    @Autowired
+    private SysUserService sysUserService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -85,6 +90,57 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
             throw BusinessException.ClazzNotExist;
         }
         return classScheduleMapper.selectByClassId(classId).stream().map(this::buildItemRes).toList();
+    }
+
+    @Override
+    public List<ClassStageInfoRes> classStageInfo(Long classId) {
+        ClazzEntity clazz = clazzMapper.selectById(classId);
+        if (clazz == null) {
+            throw BusinessException.ClazzNotExist;
+        }
+
+        // 查看每个阶段上课时间范围 以及天数
+        // 查询课程id
+        List<CourseDetailEntity> courseDetails = courseDetailMapper.selectByCourseId(clazz.getCourseId());
+        if (courseDetails.isEmpty()) {
+            throw BusinessException.CourseDetailNotExist;
+        }
+
+        // key 阶段名称  value 阶段对应课程信息
+        Map<String, List<CourseDetailEntity>> courseDetailGroup = courseDetails.stream().collect(Collectors.groupingBy(CourseDetailEntity::getStageName));
+
+
+        List<ClassStageInfoRes> classStageInfoResList = new ArrayList<>();
+        for (Map.Entry<String, List<CourseDetailEntity>> courseDetail : courseDetailGroup.entrySet()) {
+
+            ClassStageInfoRes stageInfo = new ClassStageInfoRes();
+            stageInfo.setStageName(courseDetail.getKey());
+            stageInfo.setStageNumber(courseDetail.getValue().size());
+
+            // 该阶段所有课程id
+            List<Long> courseIds = courseDetail.getValue().stream().map(CourseDetailEntity::getId).toList();
+
+            // 该阶段次班级上课信息
+            List<ClassScheduleEntity> list = classScheduleMapper.selectByCourseIds(courseIds, classId);
+
+            //得到阶段开始 结束时间
+            Date stageStartDate = list.get(0).getScheduleDate();
+            Date stageEndDate = list.get(list.size()-1).getScheduleDate();
+
+            // 先查询上课老师
+            List<Long> teacherIds = classScheduleMapper.selectTeacheringUserId(stageStartDate, stageEndDate);
+
+            // 查询所有老师
+            List<SysUserEntity> teacher = sysUserService.getUserByRoleCode("TEACHER");
+
+            teacher.removeIf(next -> teacherIds.contains(next.getId()));
+
+            stageInfo.setFreeTeacherName(teacher.stream().collect(Collectors.toMap(SysUserEntity::getId, SysUserEntity::getRealName)));
+            classStageInfoResList.add(stageInfo);
+        }
+
+        // 查看每个阶段上课时间范围的空闲老师
+        return classStageInfoResList;
     }
 
     private void validateFirstClassDate(Date firstClassDate, ScheduleRuleConfig rule) {

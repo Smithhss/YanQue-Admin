@@ -93,4 +93,9 @@ public interface SysUserMapper {
      * @return 角色ID集合
      */
     List<Long> selectRoleIdsByUserId(@Param("userId") Long userId);
+
+    /**
+     * 根据角色id查询用户信息
+     */
+    List<SysUserEntity> selectByRoleId(Long roleId);
 }

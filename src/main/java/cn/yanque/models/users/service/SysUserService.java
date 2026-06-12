@@ -1,9 +1,12 @@
 package cn.yanque.models.users.service;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.models.users.pojo.entity.SysUserEntity;
 import cn.yanque.models.users.pojo.info.UserInfo;
 import cn.yanque.models.users.pojo.vo.req.*;
 import cn.yanque.models.users.pojo.vo.res.*;
+
+import java.util.List;
 
 /**
  * 用户管理业务接口。
@@ -80,4 +83,9 @@ public interface SysUserService {
      * @return 用户聚合信息
      */
     UserInfo getUserInfo(Long id);
+
+    /**
+     * 根据角色查询用户信息
+     */
+    List<SysUserEntity> getUserByRoleCode(String roleCode);
 }

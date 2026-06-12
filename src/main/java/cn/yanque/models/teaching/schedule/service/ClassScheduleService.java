@@ -3,6 +3,7 @@ package cn.yanque.models.teaching.schedule.service;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleGenerateReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleGenerateRes;
 import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleItemRes;
+import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassStageInfoRes;
 
 import java.util.List;
 
@@ -26,4 +27,9 @@ public interface ClassScheduleService {
      * @return 班级课表列表
      */
     List<ClassScheduleItemRes> listSchedule(Long classId);
+
+    /**
+     * 查询班级阶段信息
+     */
+    List<ClassStageInfoRes> classStageInfo(Long classId);
 }

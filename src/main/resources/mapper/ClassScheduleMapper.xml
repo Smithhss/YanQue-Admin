@@ -37,4 +37,21 @@
     <delete id="deleteByClassId">
         delete from sys_class_schedule where class_id = #{classId}
     </delete>
+
+
+    <select id="selectByCourseIds" resultMap="ClassScheduleMap">
+        select <include refid="BaseColumns"/>
+        from sys_class_schedule
+        where class_id = #{classId} and course_detail_id in
+        <foreach collection="ids" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="selectByCourseIds" resultMap="ClassScheduleMap">
+        select distinct teacher_id
+        from sys_class_schedule
+        where schedule_date <![CDATA[>=]]> #{stageStartDate}
+        and schedule_date <![CDATA[<=]]> #{stageEndDate}
+    </select>
 </mapper>

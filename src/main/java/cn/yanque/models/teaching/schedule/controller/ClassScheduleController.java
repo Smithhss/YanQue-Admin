@@ -4,6 +4,7 @@ import cn.yanque.common.api.ApiResponse;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleGenerateReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleGenerateRes;
 import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleItemRes;
+import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassStageInfoRes;
 import cn.yanque.models.teaching.schedule.service.ClassScheduleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -37,5 +38,11 @@ public class ClassScheduleController {
     @Operation(description = "查询班级课表")
     public ApiResponse<List<ClassScheduleItemRes>> listSchedule(@Parameter(description = "班级ID") @PathVariable Long classId) {
         return ApiResponse.success(classScheduleService.listSchedule(classId));
+    }
+
+    @GetMapping("{classId}/classStageInfo")
+    @Operation(description = "查询班级阶段信息")
+    public ApiResponse<List<ClassStageInfoRes>> classStageInfo(@Parameter(description = "班级ID") @PathVariable Long classId) {
+        return ApiResponse.success(classScheduleService.classStageInfo(classId));
     }
 }

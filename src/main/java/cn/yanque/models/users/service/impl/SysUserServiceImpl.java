@@ -253,6 +253,16 @@ public class SysUserServiceImpl implements SysUserService {
         return userInfo;
     }
 
+    @Override
+    public List<SysUserEntity> getUserByRoleCode(String roleCode) {
+
+        SysRoleEntity sysRoleEntity = sysRoleMapper.selectByRoleCode(roleCode);
+
+        return sysUserMapper.selectByRoleId(sysRoleEntity.getId());
+
+
+    }
+
     private String createToken(SysUserEntity sysUserEntity) {
         Map<String, Object> map = new HashMap<>();
         map.put("uid", sysUserEntity.getId());

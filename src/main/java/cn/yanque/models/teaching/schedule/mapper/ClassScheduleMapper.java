@@ -3,6 +3,7 @@ package cn.yanque.models.teaching.schedule.mapper;
 import cn.yanque.models.teaching.schedule.pojo.entity.ClassScheduleEntity;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -32,4 +33,9 @@ public interface ClassScheduleMapper {
      * @return 影响行数
      */
     int deleteByClassId(@Param("classId") Long classId);
+
+
+    List<ClassScheduleEntity> selectByCourseIds(@Param("ids") List<Long> courseIds, @Param("classId") Long classId);
+
+    List<Long> selectTeacheringUserId(@Param("stageStartDate") Date stageStartDate, @Param("stageEndDate") Date stageEndDate);
 }

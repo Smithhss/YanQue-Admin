@@ -145,4 +145,12 @@
         where user_id = #{userId}
         order by role_id asc
     </select>
+
+
+    <select id="selectRolesByUserId" resultType="cn.yanque.models.users.pojo.entity.SysRoleEntity">
+        select s.*
+        from sys_user s
+        left join sys_user_role ur on ur.user_id = s.id
+        where ur.role_id = #{roleId}
+    </select>
 </mapper>
