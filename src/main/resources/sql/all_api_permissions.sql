@@ -99,7 +99,9 @@ values
     (@class_menu_id, 'api:class:detail', '查询班级详情', 'API', '/yq-admin/api/classes/{id}', 2142, '根据ID查询班级接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class:create', '新增班级', 'API', '/yq-admin/api/classes', 2143, '新增班级接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class:update', '修改班级', 'API', '/yq-admin/api/classes/{id}', 2144, '修改班级接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class:delete', '删除班级', 'API', '/yq-admin/api/classes/{id}', 2145, '删除班级接口', 'ACTIVE', now(), now())
+    (@class_menu_id, 'api:class:delete', '删除班级', 'API', '/yq-admin/api/classes/{id}', 2145, '删除班级接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class-schedule:generate', '生成班级课表', 'API', '/yq-admin/api/classes/schedules/generate', 2146, '生成班级课表接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class-schedule:list', '查询班级课表', 'API', '/yq-admin/api/classes/schedules/{classId}', 2147, '查询班级课表接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

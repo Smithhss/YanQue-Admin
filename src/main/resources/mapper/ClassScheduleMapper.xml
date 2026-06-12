@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.teaching.schedule.mapper.ClassScheduleMapper">
+
+    <resultMap id="ClassScheduleMap" type="cn.yanque.models.teaching.schedule.pojo.entity.ClassScheduleEntity">
+        <id property="id" column="id"/>
+        <result property="classId" column="class_id"/>
+        <result property="teacherId" column="teacher_id"/>
+        <result property="scheduleDate" column="schedule_date"/>
+        <result property="courseDetailId" column="course_detail_id"/>
+        <result property="courseContent" column="course_content"/>
+        <result property="classType" column="class_type"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, class_id, teacher_id, schedule_date, course_detail_id, course_content, class_type, created_at, updated_at
+    </sql>
+
+    <insert id="batchInsert">
+        insert into sys_class_schedule
+        (class_id, teacher_id, schedule_date, course_detail_id, course_content, class_type)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.classId}, #{item.teacherId}, #{item.scheduleDate}, #{item.courseDetailId}, #{item.courseContent}, #{item.classType})
+        </foreach>
+    </insert>
+
+    <select id="selectByClassId" resultMap="ClassScheduleMap">
+        select <include refid="BaseColumns"/>
+        from sys_class_schedule
+        where class_id = #{classId}
+        order by schedule_date asc, id asc
+    </select>
+
+    <delete id="deleteByClassId">
+        delete from sys_class_schedule where class_id = #{classId}
+    </delete>
+</mapper>

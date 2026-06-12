@@ -11,7 +11,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         @MapperScan("cn.yanque.common.dataConfig.mapper"),
         @MapperScan("cn.yanque.models.teaching.campus.mapper"),
         @MapperScan("cn.yanque.models.teaching.course.mapper"),
-        @MapperScan("cn.yanque.models.teaching.clazz.mapper")
+        @MapperScan("cn.yanque.models.teaching.clazz.mapper"),
+        @MapperScan("cn.yanque.models.teaching.schedule.mapper")
 })
 public class YanqueApplication {
 
