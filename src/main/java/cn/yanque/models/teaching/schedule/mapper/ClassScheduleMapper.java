@@ -34,7 +34,7 @@ public interface ClassScheduleMapper {
      * @param endDate   日期结束时间
      * @return 课表记录
      */
-    ClassScheduleEntity selectByClassIdAndDate(@Param("classId") Long classId,
+    List<ClassScheduleEntity> selectByClassIdAndDate(@Param("classId") Long classId,
                                                @Param("startDate") Date startDate,
                                                @Param("endDate") Date endDate);
 

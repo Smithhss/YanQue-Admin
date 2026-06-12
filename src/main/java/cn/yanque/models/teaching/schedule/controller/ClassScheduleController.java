@@ -4,11 +4,8 @@ import cn.yanque.common.api.ApiResponse;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.AddClassSchuleReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleGenerateReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleTeacherAssignReq;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleGenerateRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleItemRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleDateDetailRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleTeacherAssignRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassStageInfoRes;
+import cn.yanque.models.teaching.schedule.pojo.vo.req.TeacherDetailReq;
+import cn.yanque.models.teaching.schedule.pojo.vo.res.*;
 import cn.yanque.models.teaching.schedule.service.ClassScheduleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -77,4 +74,11 @@ public class ClassScheduleController {
         classScheduleService.addClassSchule(classId, req);
         return ApiResponse.success();
     }
+
+    @GetMapping("/teacher-detail")
+    @Operation(description = "查询老师上课详情")
+    public ApiResponse<List<TeacherDetailRes>> teacherDetail(@RequestBody TeacherDetailReq req) {
+        return ApiResponse.success(classScheduleService.teacherDetail(req));
+    }
+
 }

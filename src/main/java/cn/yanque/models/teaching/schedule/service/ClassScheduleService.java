@@ -3,11 +3,8 @@ package cn.yanque.models.teaching.schedule.service;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.AddClassSchuleReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleGenerateReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleTeacherAssignReq;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleGenerateRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleItemRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleDateDetailRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleTeacherAssignRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassStageInfoRes;
+import cn.yanque.models.teaching.schedule.pojo.vo.req.TeacherDetailReq;
+import cn.yanque.models.teaching.schedule.pojo.vo.res.*;
 import jakarta.validation.Valid;
 
 import java.util.List;
@@ -61,4 +58,9 @@ public interface ClassScheduleService {
      * 添加课程
      */
     void addClassSchule(Long classId, AddClassSchuleReq req);
+
+    /**
+     * 老师上课排班详情
+     */
+    List<TeacherDetailRes> teacherDetail(TeacherDetailReq req);
 }

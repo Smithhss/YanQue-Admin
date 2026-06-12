@@ -1,10 +1,13 @@
 package cn.yanque.models.teaching.schedule.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.date.DateField;
 import cn.hutool.core.date.DateUtil;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.teaching.clazz.mapper.ClazzMapper;
 import cn.yanque.models.teaching.clazz.pojo.entity.ClazzEntity;
+import cn.yanque.models.teaching.course.mapper.CourseDetailMapper;
+import cn.yanque.models.teaching.course.pojo.entity.CourseDetailEntity;
 import cn.yanque.models.teaching.schedule.enums.ClassScheduleTypeEnum;
 import cn.yanque.models.teaching.schedule.mapper.ClassScheduleMapper;
 import cn.yanque.models.teaching.schedule.pojo.config.ScheduleRuleConfig;
@@ -14,16 +17,12 @@ import cn.yanque.models.teaching.schedule.pojo.info.HolidayInfo;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.AddClassSchuleReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleGenerateReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.ClassScheduleTeacherAssignReq;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleDateDetailRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleGenerateRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleItemRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassScheduleTeacherAssignRes;
-import cn.yanque.models.teaching.schedule.pojo.vo.res.ClassStageInfoRes;
+import cn.yanque.models.teaching.schedule.pojo.vo.req.TeacherDetailReq;
+import cn.yanque.models.teaching.schedule.pojo.vo.res.*;
 import cn.yanque.models.teaching.schedule.service.ClassScheduleService;
 import cn.yanque.models.teaching.schedule.service.HolidayService;
 import cn.yanque.models.teaching.schedule.service.ScheduleRuleService;
-import cn.yanque.models.teaching.course.mapper.CourseDetailMapper;
-import cn.yanque.models.teaching.course.pojo.entity.CourseDetailEntity;
+import cn.yanque.models.users.mapper.SysUserMapper;
 import cn.yanque.models.users.pojo.entity.SysUserEntity;
 import cn.yanque.models.users.pojo.vo.res.UserDetailRes;
 import cn.yanque.models.users.service.SysUserService;
@@ -33,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -55,6 +55,10 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
 
     @Autowired
     private SysUserService sysUserService;
+
+    @Autowired
+    private SysUserMapper sysUserMapper;
+
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -156,13 +160,13 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
             throw BusinessException.ClazzNotExist;
         }
 
-        Date startDate = truncateDate(scheduleDate);
-        Date endDate = addDays(startDate, 1);
-        ClassScheduleEntity schedule = classScheduleMapper.selectByClassIdAndDate(classId, startDate, endDate);
-        if (schedule == null) {
+        Date startDate = DateUtil.beginOfDay(scheduleDate);
+        Date endDate = DateUtil.endOfDay(scheduleDate);
+        List<ClassScheduleEntity> scheduleEntityList = classScheduleMapper.selectByClassIdAndDate(classId, startDate, endDate);
+        if (CollectionUtil.isEmpty(scheduleEntityList)) {
             throw BusinessException.DateError.newInstance("当天没有课表");
         }
-
+        ClassScheduleEntity schedule = scheduleEntityList.get(0);
         ClassScheduleDateDetailRes res = new ClassScheduleDateDetailRes();
         BeanUtils.copyProperties(schedule, res);
 
@@ -286,6 +290,63 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
             throw BusinessException.DateError.newInstance("老师同一天存在重复课表");
         }
 
+    }
+
+    @Override
+    public List<TeacherDetailRes> teacherDetail(TeacherDetailReq req) {
+
+        // 查询该时间断 所有的课表信息
+
+        List<ClassScheduleEntity> classScheduleEntityList = classScheduleMapper.selectByClassIdAndDate(null, req.getStartTime(), req.getEndTime());
+
+        // 按teacherId分组
+        Map<Long, List<ClassScheduleEntity>> teacherGroup = classScheduleEntityList.stream()
+                .filter(classScheduleEntity -> classScheduleEntity.getTeacherId() != null)
+                .collect(Collectors.groupingBy(ClassScheduleEntity::getTeacherId));
+
+        // 组装信息 返回
+        List<TeacherDetailRes> list = new ArrayList<>();
+
+        Set<Long> teacherIds = teacherGroup.keySet();
+
+        List<SysUserEntity> teacherList = sysUserMapper.selectByIds(new ArrayList<>(teacherIds));
+        Map<Long, SysUserEntity> teacherEntityGroup = teacherList.stream().collect(Collectors.toMap(SysUserEntity::getId, Function.identity()));
+
+        Map<Long, ClazzEntity> clazzEntityMap = new HashMap<>();
+        for (Map.Entry<Long, List<ClassScheduleEntity>> teacherInfo : teacherGroup.entrySet()) {
+            List<TeacherDetailRes.TeacherDetail> teacherDetailList = new ArrayList<>();
+            Long teacherId = teacherInfo.getKey();
+            List<ClassScheduleEntity> value = teacherInfo.getValue();
+
+            TeacherDetailRes teacherDetailRes = new TeacherDetailRes();
+
+            SysUserEntity sysUserEntity = teacherEntityGroup.get(teacherId);
+
+            teacherDetailRes.setTeacherId(teacherId);
+            teacherDetailRes.setTeacherName(sysUserEntity.getRealName());
+
+            for (ClassScheduleEntity classScheduleEntity : value) {
+
+
+                TeacherDetailRes.TeacherDetail teacherDetail = new TeacherDetailRes.TeacherDetail();
+                teacherDetail.setClassId(classScheduleEntity.getClassId());
+                teacherDetail.setTeacheringDate(classScheduleEntity.getScheduleDate());
+
+                if (clazzEntityMap.containsKey(classScheduleEntity.getClassId())) {
+                    teacherDetail.setClassPeriod(clazzEntityMap.get(classScheduleEntity.getClassId()).getClassPeriod());
+                } else {
+                    ClazzEntity clazzEntity = clazzMapper.selectById(classScheduleEntity.getClassId());
+                    clazzEntityMap.put(clazzEntity.getId(), clazzEntity);
+                    teacherDetail.setClassPeriod(clazzEntity.getClassPeriod());
+                }
+                teacherDetailList.add(teacherDetail);
+            }
+            teacherDetailRes.setTeacherDetailList(teacherDetailList);
+
+            list.add(teacherDetailRes);
+
+        }
+        return list;
     }
 
     private List<ClassScheduleEntity> buildAddClassSchuleList(List<ClassScheduleEntity> oldList, AddCourseInfo addCourseInfo) {

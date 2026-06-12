@@ -37,11 +37,10 @@
     <select id="selectByClassIdAndDate" resultMap="ClassScheduleMap">
         select <include refid="BaseColumns"/>
         from sys_class_schedule
-        where class_id = #{classId}
-        and schedule_date <![CDATA[>=]]> #{startDate}
-        and schedule_date <![CDATA[<]]> #{endDate}
+        where schedule_date <![CDATA[>=]]> #{startDate}
+        and schedule_date <![CDATA[<=]]> #{endDate}
+        <if test="classId != null">class_id = #{classId} </if>
         order by id asc
-        limit 1
     </select>
 
     <delete id="deleteByClassId">
