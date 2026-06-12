@@ -34,6 +34,16 @@
         order by schedule_date asc, id asc
     </select>
 
+    <select id="selectByClassIdAndDate" resultMap="ClassScheduleMap">
+        select <include refid="BaseColumns"/>
+        from sys_class_schedule
+        where class_id = #{classId}
+        and schedule_date <![CDATA[>=]]> #{startDate}
+        and schedule_date <![CDATA[<]]> #{endDate}
+        order by id asc
+        limit 1
+    </select>
+
     <delete id="deleteByClassId">
         delete from sys_class_schedule where class_id = #{classId}
     </delete>
@@ -46,12 +56,26 @@
         <foreach collection="ids" item="item" open="(" separator="," close=")">
             #{item}
         </foreach>
+        order by schedule_date asc, id asc
     </select>
 
-    <select id="selectByCourseIds" resultMap="ClassScheduleMap">
+    <select id="selectTeacheringUserId" resultType="java.lang.Long">
         select distinct teacher_id
         from sys_class_schedule
         where schedule_date <![CDATA[>=]]> #{stageStartDate}
         and schedule_date <![CDATA[<=]]> #{stageEndDate}
+        and class_id != #{classId}
+        and teacher_id is not null
     </select>
+
+    <update id="updateTeacherByCourseDetailIds">
+        update sys_class_schedule
+        set teacher_id = #{teacherId}
+        where class_id = #{classId}
+        and class_type = 'CLASS'
+        and course_detail_id in
+        <foreach collection="courseDetailIds" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </update>
 </mapper>

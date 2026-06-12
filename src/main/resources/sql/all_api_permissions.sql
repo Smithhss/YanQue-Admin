@@ -101,7 +101,10 @@ values
     (@class_menu_id, 'api:class:update', '修改班级', 'API', '/yq-admin/api/classes/{id}', 2144, '修改班级接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class:delete', '删除班级', 'API', '/yq-admin/api/classes/{id}', 2145, '删除班级接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:generate', '生成班级课表', 'API', '/yq-admin/api/classes/schedules/generate', 2146, '生成班级课表接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class-schedule:list', '查询班级课表', 'API', '/yq-admin/api/classes/schedules/{classId}', 2147, '查询班级课表接口', 'ACTIVE', now(), now())
+    (@class_menu_id, 'api:class-schedule:list', '查询班级课表', 'API', '/yq-admin/api/classes/schedules/{classId}', 2147, '查询班级课表接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class-schedule:stage-info', '查询班级阶段信息', 'API', '/yq-admin/api/classes/schedules/{classId}/classStageInfo', 2148, '查询班级阶段信息接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class-schedule:assign-teacher', '分配课表老师', 'API', '/yq-admin/api/classes/schedules/{classId}/teachers', 2149, '按阶段分配课表老师接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class-schedule:date-detail', '查询当天课程详情', 'API', '/yq-admin/api/classes/schedules/{classId}/date-detail', 2150, '查询班级当天课程详情接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

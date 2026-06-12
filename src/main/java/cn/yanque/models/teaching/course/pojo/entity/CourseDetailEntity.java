@@ -2,6 +2,7 @@ package cn.yanque.models.teaching.course.pojo.entity;
 
 import lombok.Data;
 
+import java.io.Serializable;
 import java.util.Date;
 
 /**

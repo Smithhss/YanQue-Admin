@@ -147,7 +147,7 @@
     </select>
 
 
-    <select id="selectRolesByUserId" resultType="cn.yanque.models.users.pojo.entity.SysRoleEntity">
+    <select id="selectByRoleId"  resultMap="SysUserMap">
         select s.*
         from sys_user s
         left join sys_user_role ur on ur.user_id = s.id
