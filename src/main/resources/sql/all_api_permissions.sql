@@ -104,7 +104,8 @@ values
     (@class_menu_id, 'api:class-schedule:list', '查询班级课表', 'API', '/yq-admin/api/classes/schedules/{classId}', 2147, '查询班级课表接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:stage-info', '查询班级阶段信息', 'API', '/yq-admin/api/classes/schedules/{classId}/classStageInfo', 2148, '查询班级阶段信息接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:assign-teacher', '分配课表老师', 'API', '/yq-admin/api/classes/schedules/{classId}/teachers', 2149, '按阶段分配课表老师接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class-schedule:date-detail', '查询当天课程详情', 'API', '/yq-admin/api/classes/schedules/{classId}/date-detail', 2150, '查询班级当天课程详情接口', 'ACTIVE', now(), now())
+    (@class_menu_id, 'api:class-schedule:date-detail', '查询当天课程详情', 'API', '/yq-admin/api/classes/schedules/{classId}/date-detail', 2150, '查询班级当天课程详情接口', 'ACTIVE', now(), now()),
+    (@class_menu_id, 'api:class-schedule:add-course', '新增临时课程', 'API', '/yq-admin/api/classes/schedules/{classId}/addClassSchule', 2151, '新增临时课程接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

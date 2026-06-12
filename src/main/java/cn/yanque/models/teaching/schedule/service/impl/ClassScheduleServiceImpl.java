@@ -77,7 +77,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
         }
 
         // 构建课表信息
-        List<ClassScheduleEntity> schedules = buildSchedules(req.getClassId(), req.getFirstClassDate(), courseDetails, rule, null);
+        List<ClassScheduleEntity> schedules = buildSchedules(req.getClassId(), req.getFirstClassDate(), courseDetails, rule);
 
         // 删除之前的课表信息/ 批量插入信息
         classScheduleMapper.deleteByClassId(req.getClassId());
@@ -113,7 +113,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
         }
 
         // key 阶段名称  value 阶段对应课程信息
-        Map<String, List<CourseDetailEntity>> courseDetailGroup = groupCourseDetailsByStage(courseDetails);
+        Map<String, List<CourseDetailEntity>> courseDetailGroup = courseDetails.stream().collect(Collectors.groupingBy(CourseDetailEntity::getStageName));
 
 
         List<ClassStageInfoRes> classStageInfoResList = new ArrayList<>();
@@ -131,7 +131,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
 
             //得到阶段开始 结束时间
             Date stageStartDate = list.get(0).getScheduleDate();
-            Date stageEndDate = list.get(list.size() - 1).getScheduleDate();
+            Date stageEndDate = list.get(list.size()-1).getScheduleDate();
 
             // 先查询上课老师
             List<Long> teacherIds = classScheduleMapper.selectTeacheringUserId(stageStartDate, stageEndDate, classId);
@@ -141,7 +141,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
 
             teacher.removeIf(next -> teacherIds.contains(next.getId()));
 
-            stageInfo.setFreeTeacherName(teacher.stream().collect(Collectors.toMap(SysUserEntity::getId, this::getUserShowName)));
+            stageInfo.setFreeTeacherName(teacher.stream().collect(Collectors.toMap(SysUserEntity::getId, SysUserEntity::getRealName)));
             classStageInfoResList.add(stageInfo);
         }
 
@@ -243,42 +243,148 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
     }
 
     @Override
-    public String addClassSchule(Long classId, AddClassSchuleReq req) {
+    @Transactional(rollbackFor = Exception.class)
+    public void addClassSchule(Long classId, AddClassSchuleReq req) {
 
         // 查询班级信息
         ClazzEntity clazz = clazzMapper.selectById(classId);
         if (clazz == null) {
             throw BusinessException.ClazzNotExist;
         }
-
-        // 查询课程信息
-
-        List<CourseDetailEntity> courseDetails = courseDetailMapper.selectByCourseId(clazz.getCourseId());
-        if (courseDetails.isEmpty()) {
-            throw BusinessException.CourseDetailNotExist;
+        if (req.getScheduleDate() == null) {
+            throw BusinessException.DateError.newInstance("加课日期不能为空");
         }
 
-        // 查看第一天课表时间
-        ClassScheduleEntity classScheduleEntity = classScheduleMapper.selectByClassId(classId).get(0);
+        Date scheduleDate = truncateDate(req.getScheduleDate());
 
-        // 组装课表信息
-        // 构建课表信息
-        // 获取上课规则配置
-        ScheduleRuleConfig rule = scheduleRuleService.getScheduleRule();
+       // 查询加课日期后面的课表信息
+        List<ClassScheduleEntity> oldList = classScheduleMapper.selectByClassIdAndAfterScheduleDate(classId, scheduleDate);
+        if (oldList.isEmpty()) {
+            throw BusinessException.DateError.newInstance("加课日期后没有课表数据");
+        }
 
         AddCourseInfo addCourseInfo = new AddCourseInfo();
         BeanUtils.copyProperties(req, addCourseInfo);
-        List<ClassScheduleEntity> schedules = buildSchedules(classId, classScheduleEntity.getScheduleDate(), courseDetails, rule, addCourseInfo);
+        addCourseInfo.setScheduleDate(scheduleDate);
+        List<ClassScheduleEntity> newList = buildAddClassSchuleList(oldList, addCourseInfo);
+        if (newList.isEmpty()) {
+            throw BusinessException.DateError.newInstance("新课表数据不能为空");
+        }
 
-        // 删除之前的课表
+        // 删除之前课表的数据
+        classScheduleMapper.deleteByClassIdAndAfterScheduleDate(classId, scheduleDate);
 
-        // 新增课表
+        // 新增新数据
+        classScheduleMapper.batchInsert(newList);
 
         // 判断是否有重复
+        // select teacher_id,schedule_date,count(*) cnt from sys_class_schedule where teacher_id IS NOT NULL group by teacher_id,schedule_date having  cnt > 1
+        int duplicateCount = classScheduleMapper.countDuplicateTeacherSchedule();
 
         // 有重复抛异常
+        if (duplicateCount > 0) {
+            throw BusinessException.DateError.newInstance("老师同一天存在重复课表");
+        }
 
-        return "";
+    }
+
+    private List<ClassScheduleEntity> buildAddClassSchuleList(List<ClassScheduleEntity> oldList, AddCourseInfo addCourseInfo) {
+
+        List<ClassScheduleEntity> newList = new ArrayList<>();
+        List<ClassScheduleEntity> removedList = new ArrayList<>(oldList);
+        Date curDate = null;
+
+        for (ClassScheduleEntity classScheduleEntity : oldList) {
+
+            if (DateUtil.isSameDay(classScheduleEntity.getScheduleDate(), addCourseInfo.getScheduleDate())) {
+
+                // 新增加进去
+                // 是否不是上课
+                // 如果不是上课直接修改当前数据
+                // 如果是上课加一条新数据
+                if (!classScheduleEntity.getClassType().equals(ClassScheduleTypeEnum.CLASS.name())) {
+                    ClassScheduleEntity newEntity = new ClassScheduleEntity();
+                    BeanUtils.copyProperties(classScheduleEntity, newEntity);
+                    newEntity.setTeacherId(addCourseInfo.getTeacherId());
+                    newEntity.setCourseContent(addCourseInfo.getCourseContent());
+                    newEntity.setCourseDetailId(null);
+                    newEntity.setClassType(ClassScheduleTypeEnum.CLASS.name());
+                    newList.add(newEntity);
+                    removedList.remove(classScheduleEntity);
+                }  else {
+                    ClassScheduleEntity newEntity = new ClassScheduleEntity();
+                    newEntity.setClassType(ClassScheduleTypeEnum.CLASS.name());
+                    newEntity.setScheduleDate(addCourseInfo.getScheduleDate());
+                    newEntity.setTeacherId(addCourseInfo.getTeacherId());
+                    newEntity.setCourseContent(addCourseInfo.getCourseContent());
+                    newEntity.setClassId(classScheduleEntity.getClassId());
+                    newList.add(newEntity);
+                }
+                curDate = DateUtil.offsetDay(addCourseInfo.getScheduleDate(), 1);
+                break;
+
+            } else {
+                // 老数据
+                ClassScheduleEntity newEntity = new ClassScheduleEntity();
+                BeanUtils.copyProperties(classScheduleEntity, newEntity);
+                newList.add(newEntity);
+                removedList.remove(classScheduleEntity);
+            }
+
+        }
+        if (curDate == null) {
+            throw BusinessException.DateError.newInstance("加课日期不在当前课表范围内");
+        }
+
+        // 获取上课规则配置
+        ScheduleRuleConfig rule = scheduleRuleService.getScheduleRule();
+        // 只要对removeList重新排课
+        int courseIndex = 0;
+        removedList.removeIf(classScheduleEntity -> !classScheduleEntity.getClassType().equals(ClassScheduleTypeEnum.CLASS.name()));
+        while (courseIndex < removedList.size()) {
+            int weekValue = getWeekValue(curDate);
+
+            if (Boolean.TRUE.equals(rule.getHolidayRest())) {
+                HolidayInfo holidayInfo = holidayService.getHolidayInfo(curDate);
+                if (holidayInfo != null
+                        && Boolean.TRUE.equals(holidayInfo.getHoliday())) {
+                    newList.add(buildSchedule(oldList.get(0).getClassId(), curDate, null, holidayInfo.getName(), ClassScheduleTypeEnum.HOLIDAY));
+                    curDate = addDays(curDate, 1);
+                    continue;
+                }
+            }
+
+            if (rule.getRestDays() != null && rule.getRestDays().contains(weekValue)) {
+                newList.add(buildSchedule(oldList.get(0).getClassId(), curDate, null, "休息", ClassScheduleTypeEnum.REST));
+                curDate = addDays(curDate, 1);
+                continue;
+            }
+
+            if (rule.getSelfStudyDays() != null && rule.getSelfStudyDays().contains(weekValue)) {
+                newList.add(buildSchedule(oldList.get(0).getClassId(), curDate, null, "自习", ClassScheduleTypeEnum.SELF_STUDY));
+                curDate = addDays(curDate, 1);
+                continue;
+            }
+
+            if (rule.getClassDays().contains(weekValue)) {
+                ClassScheduleEntity detail = removedList.get(courseIndex);
+                ClassScheduleEntity schedule = new ClassScheduleEntity();
+                schedule.setClassId(oldList.get(0).getClassId());
+                schedule.setTeacherId(detail.getTeacherId());
+                schedule.setScheduleDate(truncateDate(curDate));
+                schedule.setCourseDetailId(detail.getCourseDetailId());
+                schedule.setCourseContent(detail.getCourseContent());
+                schedule.setClassType(detail.getClassType());
+                newList.add(schedule);
+                courseIndex++;
+            }
+
+            curDate = addDays(curDate, 1);
+        }
+
+
+
+        return newList;
     }
 
     private void validateFirstClassDate(Date firstClassDate, ScheduleRuleConfig rule) {
@@ -298,8 +404,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
     private List<ClassScheduleEntity> buildSchedules(Long classId,
                                                      Date firstClassDate,
                                                      List<CourseDetailEntity> courseDetails,
-                                                     ScheduleRuleConfig rule,
-                                                     AddCourseInfo addCourseInfo) {
+                                                     ScheduleRuleConfig rule) {
         List<ClassScheduleEntity> schedules = new ArrayList<>();
         Date currentDate = truncateDate(firstClassDate);
         int courseIndex = 0;
@@ -311,45 +416,28 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
                 HolidayInfo holidayInfo = holidayService.getHolidayInfo(currentDate);
                 if (holidayInfo != null
                     && Boolean.TRUE.equals(holidayInfo.getHoliday())) {
+                    schedules.add(buildSchedule(classId, currentDate, null, holidayInfo.getName(), ClassScheduleTypeEnum.HOLIDAY));
                     currentDate = addDays(currentDate, 1);
-                    if (addCourseInfo != null && DateUtil.isSameDay(addCourseInfo.getScheduleDate(), currentDate) ) {
-                        schedules.add(buildSchedule(classId, currentDate, null, addCourseInfo.getCourseContent(), ClassScheduleTypeEnum.CLASS));
-                    } else {
-                        schedules.add(buildSchedule(classId, currentDate, null, holidayInfo.getName(), ClassScheduleTypeEnum.HOLIDAY));
-                    }
                     continue;
                 }
             }
 
             if (rule.getRestDays() != null && rule.getRestDays().contains(weekValue)) {
-
-                if (addCourseInfo != null && DateUtil.isSameDay(addCourseInfo.getScheduleDate(), currentDate) )  {
-                    schedules.add(buildSchedule(classId, currentDate, null, addCourseInfo.getCourseContent(), ClassScheduleTypeEnum.CLASS));
-                } else {
-                    schedules.add(buildSchedule(classId, currentDate, null, "休息", ClassScheduleTypeEnum.REST));
-                }
+                schedules.add(buildSchedule(classId, currentDate, null, "休息", ClassScheduleTypeEnum.REST));
                 currentDate = addDays(currentDate, 1);
                 continue;
             }
 
             if (rule.getSelfStudyDays() != null && rule.getSelfStudyDays().contains(weekValue)) {
-                if (addCourseInfo != null && DateUtil.isSameDay(addCourseInfo.getScheduleDate(), currentDate) ) {
-                    schedules.add(buildSchedule(classId, currentDate, null, addCourseInfo.getCourseContent(), ClassScheduleTypeEnum.CLASS));
-                } else {
-                    schedules.add(buildSchedule(classId, currentDate, null, "自习", ClassScheduleTypeEnum.SELF_STUDY));
-                }
+                schedules.add(buildSchedule(classId, currentDate, null, "自习", ClassScheduleTypeEnum.SELF_STUDY));
                 currentDate = addDays(currentDate, 1);
                 continue;
             }
 
             if (rule.getClassDays().contains(weekValue)) {
                 CourseDetailEntity detail = courseDetails.get(courseIndex);
-                if (addCourseInfo == null || !DateUtil.isSameDay(addCourseInfo.getScheduleDate(), currentDate) ) {
-                    schedules.add(buildSchedule(classId, currentDate, detail, detail.getClassContent(), ClassScheduleTypeEnum.CLASS));
-                    courseIndex++;
-                } else {
-                    schedules.add(buildSchedule(classId, currentDate, detail, addCourseInfo.getCourseContent(), ClassScheduleTypeEnum.CLASS));
-                }
+                schedules.add(buildSchedule(classId, currentDate, detail, detail.getClassContent(), ClassScheduleTypeEnum.CLASS));
+                courseIndex++;
             }
 
             currentDate = addDays(currentDate, 1);

@@ -72,4 +72,25 @@ public interface ClassScheduleMapper {
     int updateTeacherByCourseDetailIds(@Param("classId") Long classId,
                                         @Param("courseDetailIds") List<Long> courseDetailIds,
                                         @Param("teacherId") Long teacherId);
+
+    /**
+     * 查询当前日期后面所有的课表
+     */
+    List<ClassScheduleEntity> selectByClassIdAndAfterScheduleDate(@Param("classId") Long classId, @Param("date")Date date);
+
+    /**
+     * 删除当前日期后面所有的课表。
+     *
+     * @param classId 班级ID
+     * @param date    开始日期
+     * @return 影响行数
+     */
+    int deleteByClassIdAndAfterScheduleDate(@Param("classId") Long classId, @Param("date") Date date);
+
+    /**
+     * 查询老师同一天重复上课的分组数量。
+     *
+     * @return 重复分组数量
+     */
+    int countDuplicateTeacherSchedule();
 }

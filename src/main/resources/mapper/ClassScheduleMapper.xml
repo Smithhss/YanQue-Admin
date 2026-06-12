@@ -78,4 +78,29 @@
             #{item}
         </foreach>
     </update>
+
+    <select id="selectByClassIdAndAfterScheduleDate" resultMap="ClassScheduleMap">
+        select *
+        from sys_class_schedule
+        where schedule_date <![CDATA[>=]]> #{date}
+        and class_id = #{classId}
+        order by schedule_date asc, id asc
+    </select>
+
+    <delete id="deleteByClassIdAndAfterScheduleDate">
+        delete from sys_class_schedule
+        where schedule_date <![CDATA[>=]]> #{date}
+        and class_id = #{classId}
+    </delete>
+
+    <select id="countDuplicateTeacherSchedule" resultType="java.lang.Integer">
+        select count(1)
+        from (
+            select teacher_id, schedule_date, count(*) cnt
+            from sys_class_schedule
+            where teacher_id is not null
+            group by teacher_id, schedule_date
+            having cnt > 1
+        ) t
+    </select>
 </mapper>

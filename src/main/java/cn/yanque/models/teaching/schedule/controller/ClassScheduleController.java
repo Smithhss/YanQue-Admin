@@ -71,9 +71,10 @@ public class ClassScheduleController {
 
 
     @PutMapping("{classId}/addClassSchule")
-    @Operation(description = "按阶段分配老师")
+    @Operation(description = "新增临时课程")
     public ApiResponse<Void> addClassSchule(@Parameter(description = "班级ID") @PathVariable Long classId,
                                                                      @Valid @RequestBody AddClassSchuleReq req) {
-        return ApiResponse.success(classScheduleService.addClassSchule(classId, req));
+        classScheduleService.addClassSchule(classId, req);
+        return ApiResponse.success();
     }
 }

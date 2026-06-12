@@ -11,5 +11,5 @@ public class AddCourseInfo {
 
     private Date scheduleDate;
 
-    private String teacherId;
+    private Long teacherId;
 }

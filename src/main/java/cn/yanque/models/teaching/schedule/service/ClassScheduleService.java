@@ -60,5 +60,5 @@ public interface ClassScheduleService {
     /**
      * 添加课程
      */
-    String addClassSchule(Long classId, AddClassSchuleReq req);
+    void addClassSchule(Long classId, AddClassSchuleReq req);
 }

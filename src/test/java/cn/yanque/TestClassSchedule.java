@@ -17,7 +17,7 @@ public class TestClassSchedule {
     public void test1() {
         AddClassSchuleReq addClassSchuleReq = new AddClassSchuleReq();
 
-        addClassSchuleReq.setScheduleDate(DateUtil.parse("2026-06-25", "yyyy-MM-dd"));
+        addClassSchuleReq.setScheduleDate(DateUtil.parse("2026-06-24", "yyyy-MM-dd"));
         addClassSchuleReq.setCourseContent("xxxxx");
         addClassSchuleReq.setTeacherId(10L);
         classScheduleService.addClassSchule(1L, addClassSchuleReq);
