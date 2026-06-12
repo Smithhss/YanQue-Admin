@@ -39,7 +39,7 @@
         from sys_class_schedule
         where schedule_date <![CDATA[>=]]> #{startDate}
         and schedule_date <![CDATA[<=]]> #{endDate}
-        <if test="classId != null">class_id = #{classId} </if>
+        <if test="classId != null">and class_id = #{classId} </if>
         order by id asc
     </select>
 
