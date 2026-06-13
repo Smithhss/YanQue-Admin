@@ -429,6 +429,90 @@ BeanUtils.copyProperties(campus, res);
 - 查询时字段基本一致，`BeanUtils.copyProperties` 减少样板代码
 - `BeanUtils.copyProperties` 是浅拷贝，性能可接受，复杂场景可换 MapStruct
 
+### 2.5 聚合对象 vs 响应对象：以登录为例
+
+登录接口返回的数据最多，涉及三种不同层级的对象：
+
+```
+SysUserEntity（数据库实体）
+    ├── id, username, password, nickname, phone, email, status, ...
+
+UserInfo（聚合对象 — Service 层内部使用）
+    ├── SysUserEntity          ← 用户实体（含 password）
+    ├── List<SysRoleEntity>    ← 角色列表
+    └── List<SysPermissionEntity> ← 权限列表
+
+LoginRes（响应对象 — 返回给前端）
+    ├── token                  ← JWT 令牌
+    ├── signSecret             ← 签名密钥
+    ├── UserDetailRes          ← 用户详情（脱敏）
+    ├── List<RoleDetailRes>    ← 角色列表
+    └── List<PermissionDetailRes> ← 权限列表
+```
+
+**UserInfo — 聚合对象，只在 Service 内部使用：**
+```java
+@Data
+public class UserInfo {
+    private SysUserEntity sysUserEntity;
+    private List<SysRoleEntity> sysRoleEntityList;
+    private List<SysPermissionEntity> sysPermissionEntityList;
+}
+```
+- 聚合了用户 + 角色 + 权限三张表的数据
+- 包含 `password` 等敏感字段
+- **永远不会直接返回给前端**，只在 `getUserInfo()` 方法中构建，登录方法中消费
+
+**UserDetailRes — 响应 VO，安全地返回给前端：**
+```java
+@Data
+@Schema(description = "用户详情响应")
+public class UserDetailRes {
+    private Long id;
+    private String username;
+    private String nickname;
+    private String realName;
+    private String phone;
+    private String email;
+    private String status;
+    private String statusDesc;
+    // ... 没有 password
+}
+```
+- 只包含前端需要的字段
+- 通过 `BeanUtils.copyProperties(entity, vo)` 从 Entity 复制
+- `password`、`salt` 等敏感字段不会被复制（VO 中没有对应字段）
+
+**转换过程：**
+```java
+// 1. 获取完整用户信息（含敏感字段）
+UserInfo userInfo = getUserInfo(sysUserEntity.getId());
+
+// 2. 转换为安全的响应对象（过滤敏感字段）
+UserDetailRes userDetailRes = new UserDetailRes();
+BeanUtils.copyProperties(userInfo.getSysUserEntity(), userDetailRes);
+
+// 3. 角色和权限也单独转换
+List<RoleDetailRes> roleDetailResList = userInfo.getSysRoleEntityList().stream()
+    .map(entity -> {
+        RoleDetailRes res = new RoleDetailRes();
+        BeanUtils.copyProperties(entity, res);
+        return res;
+    }).toList();
+```
+
+**为什么要这样分层？**
+
+| 对象 | 包含敏感字段 | 返回给前端 | 使用场景 |
+|------|-------------|-----------|----------|
+| SysUserEntity | 是（password） | 否 | 数据库操作 |
+| UserInfo | 是（password） | 否 | Service 内部组装 |
+| UserDetailRes | 否 | 是 | API 响应 |
+
+- **安全性**：Entity → VO 的转换天然过滤了敏感字段
+- **灵活性**：UserInfo 可以聚合任意多的表数据，不影响 VO 结构
+- **职责清晰**：Entity 负责持久化，聚合对象负责组装，VO 负责传输
+
 ---
 
 ## 第 3 章：统一响应与异常处理
