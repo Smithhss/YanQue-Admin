@@ -29,7 +29,8 @@ values
     (@system_id, 'system:config', '参数配置', 'MENU', null, 1040, '系统参数配置页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:campus', '校区管理', 'MENU', null, 2010, '校区管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:course', '课程管理', 'MENU', null, 2020, '课程管理页面', 'ACTIVE', now(), now()),
-    (@teaching_id, 'teaching:class', '班级管理', 'MENU', null, 2030, '班级管理页面', 'ACTIVE', now(), now())
+    (@teaching_id, 'teaching:class', '班级管理', 'MENU', null, 2030, '班级管理页面', 'ACTIVE', now(), now()),
+    (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2040, '值班管理页面', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),
@@ -47,6 +48,7 @@ set @config_menu_id := (select id from sys_permission where permission_code = 's
 set @campus_menu_id := (select id from sys_permission where permission_code = 'teaching:campus' limit 1);
 set @course_menu_id := (select id from sys_permission where permission_code = 'teaching:course' limit 1);
 set @class_menu_id := (select id from sys_permission where permission_code = 'teaching:class' limit 1);
+set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
 
 insert into sys_permission
     (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
@@ -106,7 +108,15 @@ values
     (@class_menu_id, 'api:class-schedule:assign-teacher', '分配课表老师', 'API', '/yq-admin/api/classes/schedules/{classId}/teachers', 2149, '按阶段分配课表老师接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:date-detail', '查询当天课程详情', 'API', '/yq-admin/api/classes/schedules/{classId}/date-detail', 2150, '查询班级当天课程详情接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:add-course', '新增临时课程', 'API', '/yq-admin/api/classes/schedules/{classId}/addClassSchule', 2151, '新增临时课程接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class-schedule:teacher-detail', '查询老师课表', 'API', '/yq-admin/api/classes/schedules/teacher-detail', 2152, '查询老师上课详情接口', 'ACTIVE', now(), now())
+    (@class_menu_id, 'api:class-schedule:teacher-detail', '查询老师课表', 'API', '/yq-admin/api/classes/schedules/teacher-detail', 2152, '查询老师上课详情接口', 'ACTIVE', now(), now()),
+
+    (@duty_menu_id, 'api:class-duty:page', '分页查询值班', 'API', '/yq-admin/api/classDuties', 2161, '分页查询值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:detail', '查询值班详情', 'API', '/yq-admin/api/classDuties/{id}', 2162, '查询值班详情接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:create', '新增值班', 'API', '/yq-admin/api/classDuties', 2163, '新增值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:update', '修改值班', 'API', '/yq-admin/api/classDuties/{id}', 2164, '修改值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:delete', '删除值班', 'API', '/yq-admin/api/classDuties/{id}', 2165, '删除值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:date', '按日期查询值班', 'API', '/yq-admin/api/classDuties/date', 2166, '按日期查询值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:date-save', '按日期保存值班', 'API', '/yq-admin/api/classDuties/date', 2167, '按日期保存值班接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

@@ -34,6 +34,14 @@ public interface ClazzMapper {
     ClazzEntity selectById(@Param("id") Long id);
 
     /**
+     * 按ID集合批量查询班级。
+     *
+     * @param ids 班级ID集合
+     * @return 班级列表
+     */
+    List<ClazzEntity> selectByIds(@Param("ids") List<Long> ids);
+
+    /**
      * 查询班级列表，分页由PageHelper在Service层控制。
      *
      * @param keyword       班级期数关键字
