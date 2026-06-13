@@ -6,7 +6,8 @@ insert into sys_permission
     (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
 values
     (0, 'system', '系统管理', 'MENU', null, 10, '系统管理根节点', 'ACTIVE', now(), now()),
-    (0, 'teaching', '教学管理', 'MENU', null, 20, '教学管理根节点', 'ACTIVE', now(), now())
+    (0, 'teaching', '教学管理', 'MENU', null, 20, '教学管理根节点', 'ACTIVE', now(), now()),
+    (0, 'order', '订单管理', 'MENU', null, 30, '订单管理根节点', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),
@@ -19,6 +20,7 @@ on duplicate key update
 
 set @system_id := (select id from sys_permission where permission_code = 'system' limit 1);
 set @teaching_id := (select id from sys_permission where permission_code = 'teaching' limit 1);
+set @order_id := (select id from sys_permission where permission_code = 'order' limit 1);
 
 insert into sys_permission
     (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
@@ -29,7 +31,10 @@ values
     (@system_id, 'system:config', '参数配置', 'MENU', null, 1040, '系统参数配置页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:campus', '校区管理', 'MENU', null, 2010, '校区管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:course', '课程管理', 'MENU', null, 2020, '课程管理页面', 'ACTIVE', now(), now()),
-    (@teaching_id, 'teaching:class', '班级管理', 'MENU', null, 2030, '班级管理页面', 'ACTIVE', now(), now())
+    (@teaching_id, 'teaching:class', '班级管理', 'MENU', null, 2030, '班级管理页面', 'ACTIVE', now(), now()),
+    (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2040, '值班管理页面', 'ACTIVE', now(), now()),
+    (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
+    (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),
@@ -47,6 +52,9 @@ set @config_menu_id := (select id from sys_permission where permission_code = 's
 set @campus_menu_id := (select id from sys_permission where permission_code = 'teaching:campus' limit 1);
 set @course_menu_id := (select id from sys_permission where permission_code = 'teaching:course' limit 1);
 set @class_menu_id := (select id from sys_permission where permission_code = 'teaching:class' limit 1);
+set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
+set @product_menu_id := (select id from sys_permission where permission_code = 'order:product' limit 1);
+set @prepay_order_menu_id := (select id from sys_permission where permission_code = 'order:prepay' limit 1);
 
 insert into sys_permission
     (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
@@ -106,7 +114,27 @@ values
     (@class_menu_id, 'api:class-schedule:assign-teacher', '分配课表老师', 'API', '/yq-admin/api/classes/schedules/{classId}/teachers', 2149, '按阶段分配课表老师接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:date-detail', '查询当天课程详情', 'API', '/yq-admin/api/classes/schedules/{classId}/date-detail', 2150, '查询班级当天课程详情接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:add-course', '新增临时课程', 'API', '/yq-admin/api/classes/schedules/{classId}/addClassSchule', 2151, '新增临时课程接口', 'ACTIVE', now(), now()),
-    (@class_menu_id, 'api:class-schedule:teacher-detail', '查询老师课表', 'API', '/yq-admin/api/classes/schedules/teacher-detail', 2152, '查询老师上课详情接口', 'ACTIVE', now(), now())
+    (@class_menu_id, 'api:class-schedule:teacher-detail', '查询老师课表', 'API', '/yq-admin/api/classes/schedules/teacher-detail', 2152, '查询老师上课详情接口', 'ACTIVE', now(), now()),
+
+    (@duty_menu_id, 'api:class-duty:page', '分页查询值班', 'API', '/yq-admin/api/classDuties', 2161, '分页查询值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:detail', '查询值班详情', 'API', '/yq-admin/api/classDuties/{id}', 2162, '查询值班详情接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:create', '新增值班', 'API', '/yq-admin/api/classDuties', 2163, '新增值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:update', '修改值班', 'API', '/yq-admin/api/classDuties/{id}', 2164, '修改值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:delete', '删除值班', 'API', '/yq-admin/api/classDuties/{id}', 2165, '删除值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:date', '按日期查询值班', 'API', '/yq-admin/api/classDuties/date', 2166, '按日期查询值班接口', 'ACTIVE', now(), now()),
+    (@duty_menu_id, 'api:class-duty:date-save', '按日期保存值班', 'API', '/yq-admin/api/classDuties/date', 2167, '按日期保存值班接口', 'ACTIVE', now(), now()),
+
+    (@product_menu_id, 'api:product:page', '分页查询产品', 'API', '/yq-admin/api/products', 3111, '分页查询产品接口', 'ACTIVE', now(), now()),
+    (@product_menu_id, 'api:product:detail', '查询产品详情', 'API', '/yq-admin/api/products/{id}', 3112, '根据ID查询产品接口', 'ACTIVE', now(), now()),
+    (@product_menu_id, 'api:product:create', '新增产品', 'API', '/yq-admin/api/products', 3113, '新增产品接口', 'ACTIVE', now(), now()),
+    (@product_menu_id, 'api:product:update', '修改产品', 'API', '/yq-admin/api/products/{id}', 3114, '修改产品接口', 'ACTIVE', now(), now()),
+    (@product_menu_id, 'api:product:delete', '删除产品', 'API', '/yq-admin/api/products/{id}', 3115, '删除产品接口', 'ACTIVE', now(), now()),
+
+    (@prepay_order_menu_id, 'api:prepay-order:page', '分页查询预支付订单', 'API', '/yq-admin/api/prepayOrders', 3121, '分页查询预支付订单接口', 'ACTIVE', now(), now()),
+    (@prepay_order_menu_id, 'api:prepay-order:detail', '查询预支付订单详情', 'API', '/yq-admin/api/prepayOrders/{id}', 3122, '根据ID查询预支付订单接口', 'ACTIVE', now(), now()),
+    (@prepay_order_menu_id, 'api:prepay-order:create', '新增预支付订单', 'API', '/yq-admin/api/prepayOrders', 3123, '新增预支付订单接口', 'ACTIVE', now(), now()),
+    (@prepay_order_menu_id, 'api:prepay-order:update', '修改预支付订单', 'API', '/yq-admin/api/prepayOrders/{id}', 3124, '修改预支付订单接口', 'ACTIVE', now(), now()),
+    (@prepay_order_menu_id, 'api:prepay-order:delete', '删除预支付订单', 'API', '/yq-admin/api/prepayOrders/{id}', 3125, '删除预支付订单接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

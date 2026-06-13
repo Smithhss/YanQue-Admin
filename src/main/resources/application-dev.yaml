@@ -14,3 +14,7 @@ spring:
 logging:
   level:
     cn.yanque: INFO
+
+yeepay:
+  pay-success-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
+  pay-success-return-url: "http://127.0.0.1:5174/payment-return"

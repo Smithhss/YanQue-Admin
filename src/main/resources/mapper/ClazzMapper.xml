@@ -38,6 +38,15 @@
         where id = #{id}
     </select>
 
+    <select id="selectByIds" resultMap="ClazzMap">
+        select <include refid="BaseColumns"/>
+        from sys_class
+        where id in
+        <foreach collection="ids" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
     <!-- 班级分页查询保持单表查询，筛选条件也都来自班级表字段。 -->
     <select id="selectPage" resultMap="ClazzMap">
         select <include refid="BaseColumns"/>

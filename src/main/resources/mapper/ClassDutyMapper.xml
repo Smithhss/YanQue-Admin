@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.teaching.duty.mapper.ClassDutyMapper">
+
+    <resultMap id="ClassDutyMap" type="cn.yanque.models.teaching.duty.pojo.entity.ClassDutyEntity">
+        <id property="id" column="id"/>
+        <result property="classId" column="class_id"/>
+        <result property="campusId" column="campus_id"/>
+        <result property="teacherId" column="teacher_id"/>
+        <result property="dutyDate" column="duty_date"/>
+        <result property="dutyType" column="duty_type"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="remark" column="remark"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, class_id, campus_id, teacher_id, duty_date, duty_type, start_time, end_time, remark, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_class_duty
+        (class_id, campus_id, teacher_id, duty_date, duty_type, start_time, end_time, remark)
+        values
+        (#{classId}, #{campusId}, #{teacherId}, #{dutyDate}, #{dutyType}, #{startTime}, #{endTime}, #{remark})
+    </insert>
+
+    <update id="updateById">
+        update sys_class_duty
+        set class_id = #{classId},
+            campus_id = #{campusId},
+            teacher_id = #{teacherId},
+            duty_date = #{dutyDate},
+            duty_type = #{dutyType},
+            start_time = #{startTime},
+            end_time = #{endTime},
+            remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="ClassDutyMap">
+        select <include refid="BaseColumns"/>
+        from sys_class_duty
+        where id = #{id}
+    </select>
+
+    <select id="selectByDutyDate" resultMap="ClassDutyMap">
+        select <include refid="BaseColumns"/>
+        from sys_class_duty
+        where duty_date = #{dutyDate}
+        order by duty_type asc, campus_id asc, class_id asc, id asc
+    </select>
+
+    <select id="selectPage" resultMap="ClassDutyMap">
+        select <include refid="BaseColumns"/>
+        from sys_class_duty
+        <where>
+            <if test="classId != null">
+                and class_id = #{classId}
+            </if>
+            <if test="campusId != null">
+                and campus_id = #{campusId}
+            </if>
+            <if test="teacherId != null">
+                and teacher_id = #{teacherId}
+            </if>
+            <if test="dutyType != null and dutyType != ''">
+                and duty_type = #{dutyType}
+            </if>
+            <if test="startDate != null">
+                and duty_date <![CDATA[>=]]> #{startDate}
+            </if>
+            <if test="endDate != null">
+                and duty_date <![CDATA[<=]]> #{endDate}
+            </if>
+        </where>
+        order by duty_date desc, id desc
+    </select>
+
+    <delete id="deleteById">
+        delete from sys_class_duty where id = #{id}
+    </delete>
+
+    <delete id="deleteByDutyDate">
+        delete from sys_class_duty where duty_date = #{dutyDate}
+    </delete>
+
+    <select id="countClassDuty" resultType="java.lang.Integer">
+        select count(1)
+        from sys_class_duty
+        where class_id = #{classId}
+        and duty_date = #{dutyDate}
+        and duty_type = #{dutyType}
+        <if test="id != null">and id != #{id}</if>
+    </select>
+
+    <select id="countCampusDuty" resultType="java.lang.Integer">
+        select count(1)
+        from sys_class_duty
+        where campus_id = #{campusId}
+        and duty_date = #{dutyDate}
+        and duty_type = #{dutyType}
+        <if test="id != null">and id != #{id}</if>
+    </select>
+
+    <select id="countTeacherTimeConflict" resultType="java.lang.Integer">
+        select count(1)
+        from sys_class_duty
+        where teacher_id = #{teacherId}
+        and duty_date = #{dutyDate}
+        and start_time <![CDATA[<]]> #{endTime}
+        and end_time <![CDATA[>]]> #{startTime}
+        <if test="id != null">and id != #{id}</if>
+    </select>
+</mapper>

@@ -22,3 +22,9 @@ mybatis:
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
     map-underscore-to-camel-case: true
   mapper-locations: classpath*:/mapper/**/*.xml
+
+yeepay:
+  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:10093003553}
+  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:10093003553}
+  pay-success-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
+  pay-success-return-url: "xxxxx"

@@ -12,7 +12,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         @MapperScan("cn.yanque.models.teaching.campus.mapper"),
         @MapperScan("cn.yanque.models.teaching.course.mapper"),
         @MapperScan("cn.yanque.models.teaching.clazz.mapper"),
-        @MapperScan("cn.yanque.models.teaching.schedule.mapper")
+        @MapperScan("cn.yanque.models.teaching.schedule.mapper"),
+        @MapperScan("cn.yanque.models.teaching.duty.mapper"),
+        @MapperScan("cn.yanque.models.order.prepay.mapper"),
+        @MapperScan("cn.yanque.models.order.product.mapper")
 })
 public class YanqueApplication {
 
