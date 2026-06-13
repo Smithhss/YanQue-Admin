@@ -2,7 +2,7 @@
 
 > 本教程系统讲解 YanQue-Admin 项目的架构设计和实现原理，帮助你理解"为什么这样写"而不仅仅是"怎么写"。
 >
-> 共 9 章：前 8 章讲解基础架构，第 9 章深入分析最复杂的排课模块。
+> 共 11 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理。
 >
 > 每个核心功能都附带流程图，便于理解整体逻辑。
 
@@ -19,6 +19,8 @@
 - [第 7 章：横切关注点 — AOP 日志与请求追踪](#第-7-章横切关注点--aop-日志与请求追踪)
 - [第 8 章：系统配置与本地缓存](#第-8-章系统配置与本地缓存)
 - [第 9 章：排课系统 — 算法驱动的业务模块](#第-9-章排课系统--算法驱动的业务模块)
+- [第 10 章：订单与支付 — 第三方支付集成](#第-10-章订单与支付--第三方支付集成)
+- [第 11 章：值班管理 — 教师排班系统](#第-11-章值班管理--教师排班系统)
 
 ---
 
@@ -29,6 +31,9 @@
 YanQue-Admin 是一个**教学管理系统**的后端 API 服务，主要管理：
 - **系统管理**：用户、角色、权限、系统配置
 - **教学管理**：校区、班级、课程（含课程明细/Excel 导入）
+- **排课管理**：课表生成、老师分配、加课、冲突检测
+- **订单管理**：产品管理、预支付订单、支付订单、易宝支付回调
+- **值班管理**：晚自习值班、自习日值班、校区统一值班
 
 ### 1.2 技术栈总览
 
@@ -2474,3 +2479,777 @@ Map<Long, SysUserEntity> teacherEntityGroup = teacherList.stream()
 - [ ] 导出的 Excel 包含日期、课程内容、老师、课表类型
 - [ ] 重复生成课表时旧数据被正确替换
 - [ ] 统计报表数据准确
+
+---
+
+## 第 10 章：订单与支付 — 第三方支付集成
+
+> 本章讲解订单系统的设计和易宝支付的集成方式，展示如何安全地处理第三方支付回调。
+
+### 10.1 订单系统架构
+
+**订单流程图：**
+
+```mermaid
+sequenceDiagram
+    participant F as 前端
+    participant P as ProductController
+    participant PO as PrepayOrderController
+    participant OC as OrderController
+    participant Y as 易宝支付
+    participant CB as CallbackServlet
+
+    F->>P: 查询产品列表
+    P-->>F: 产品信息（价格、课程内容）
+
+    F->>PO: 创建预支付订单
+    PO->>PO: 生成订单号 YQ+时间戳+随机数
+    PO-->>F: 预支付订单信息
+
+    F->>OC: 创建支付订单
+    OC->>OC: 调用易宝统一下单接口
+    Y-->>OC: 收银台地址
+    OC-->>F: 支付页面 URL
+
+    F->>Y: 用户完成支付
+    Y->>CB: 支付成功回调通知
+    CB->>CB: 验签 + 解析回调数据
+    CB->>OC: 更新订单状态为 SUCCESS
+    CB->>PO: 更新预支付订单状态为已支付
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        订单支付流程                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  1. 查询产品信息     │
+                   │  ProductController  │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  2. 创建预支付订单   │
+                   │  PrepayOrderService │
+                   │  - 生成唯一订单号   │
+                   │  - 记录学生信息     │
+                   │  - 状态: PENDING    │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  3. 创建支付订单     │
+                   │  调用易宝统一下单    │
+                   │  YeepayCashierService│
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  4. 用户跳转支付页   │
+                   │  易宝收银台         │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  5. 支付成功回调     │
+                   │  YeepayCallback     │
+                   │  Servlet → Handle   │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  6. 更新订单状态     │
+                   │  Order: SUCCESS     │
+                   │  Prepay: PAID       │
+                   └─────────────────────┘
+```
+
+### 10.2 三层订单设计
+
+**为什么分 Product、PrepayOrder、Order 三层？**
+
+| 层级 | 实体 | 作用 | 生命周期 |
+|------|------|------|----------|
+| 产品 | ProductEntity | 定义可售卖的课程产品 | 长期存在 |
+| 预支付订单 | PrepayOrderEntity | 学生下单前的意向记录 | 创建 → 支付/取消 |
+| 支付订单 | OrderEntity | 实际支付记录 | 创建 → 支付中 → 成功/失败 |
+
+**ProductEntity（产品表）：**
+```java
+@Data
+public class ProductEntity {
+    private Long id;
+    private String courseContent;    // 课程内容
+    private String teachingMode;     // 上课方式：ONLINE/OFFLINE
+    private BigDecimal price;        // 产品价格
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**PrepayOrderEntity（预支付订单表）：**
+```java
+@Data
+public class PrepayOrderEntity {
+    private Long id;
+    private String orderNo;           // 订单号：YQ + 时间戳 + 随机数
+    private String studentName;       // 学生姓名
+    private String studentPhone;      // 学生手机号
+    private Long productId;           // 关联产品
+    private BigDecimal productAmount; // 产品金额
+    private BigDecimal discountAmount;// 优惠金额
+    private String orderStatus;       // PENDING_PAYMENT / PAID / CANCELED
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**OrderEntity（支付订单表）：**
+```java
+@Data
+public class OrderEntity {
+    private Long id;
+    private String orderNo;           // 支付订单号
+    private String studentPhone;      // 学生手机号
+    private String studentName;       // 学生姓名
+    private String productId;         // 产品ID
+    private BigDecimal orderAmount;   // 支付金额
+    private String prepayOrderNo;     // 关联预支付订单号
+    private String status;            // INIT / PROCESSING / SUCCESS / FAIL / TIMEOUT
+    private String uniqueOrderNo;     // 支付渠道唯一订单号
+    private Date paySuccessTime;      // 支付成功时间
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**为什么预支付订单和支付订单分开？**
+- **预支付订单**：学生填完信息就创建，还没真正付款，可能取消
+- **支付订单**：调用支付接口时创建，有真实的支付状态
+- 一个预支付订单可以对应多次支付尝试（如第一次失败后重试）
+- 解耦业务逻辑和支付逻辑，预支付订单不关心支付渠道
+
+### 10.3 订单号生成策略
+
+```java
+private String createOrderNo() {
+    String timestamp = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
+    int random = SECURE_RANDOM.nextInt(900000) + 100000;  // 6位随机数
+    return "YQ" + timestamp + random;
+}
+```
+
+**订单号格式：** `YQ20260613143025123456789`
+
+| 部分 | 说明 |
+|------|------|
+| YQ | 业务前缀（燕雀） |
+| 20260613143025123 | 时间戳（精确到毫秒） |
+| 456789 | 6位随机数 |
+
+**为什么用时间戳+随机数而非数据库自增ID？**
+- 自增ID可预测，存在安全风险（遍历ID获取所有订单）
+- 时间戳保证全局递增，方便排序
+- 随机数防止同一毫秒内多个订单号冲突
+- `SecureRandom` 比 `Random` 更安全
+
+### 10.4 易宝支付集成
+
+**YeepayCashierService — 统一下单：**
+
+```java
+public YeepayUnifiedOrderRes unifiedOrder(YeepayUnifiedOrderReq req) {
+    YopRequest request = new YopRequest("/rest/v1.0/cashier/unified/order", "POST");
+    request.addParameter("parentMerchantNo", yeepayProperties.getParentMerchantNo());
+    request.addParameter("merchantNo", yeepayProperties.getMerchantNo());
+    request.addParameter("orderId", req.getOrderNo());
+    request.addParameter("orderAmount", req.getOrderAmount());
+    request.addParameter("goodsName", sysConfigService.get(SysConfig.createOrderGoodsName));
+    request.addParameter("notifyUrl", yeepayProperties.getPaySuccessNotifyUrl());
+    request.addParameter("expiredTime", ...);  // 订单过期时间
+    request.addParameter("returnUrl", yeepayProperties.getPaySuccessReturnUrl());
+
+    JSONObject result = yeepayGatewayService.request(request);
+    return JSONObject.parseObject(result.toJSONString(), YeepayUnifiedOrderRes.class);
+}
+```
+
+**为什么用配置类 `YeepayProperties` 而非直接读配置文件？**
+```java
+@ConfigurationProperties(prefix = "yeepay")
+public class YeepayProperties {
+    private String parentMerchantNo;
+    private String merchantNo;
+    private String paySuccessNotifyUrl;
+    private String paySuccessReturnUrl;
+}
+```
+- 类型安全：配置项有明确的类型和字段名
+- IDE 支持：自动提示、校验
+- 集中管理：所有易宝相关配置在一个类里
+
+### 10.5 支付回调处理
+
+**回调流程图：**
+
+```mermaid
+flowchart TD
+    A[易宝发送支付成功通知] --> B[YeepayCallbackServlet]
+    B --> C[解析请求: Headers + Params + Body]
+    C --> D[YopCallbackEngine.handle]
+    D --> E[YeepayPaySuccessHandle.handle]
+
+    E --> F[解析回调数据 YeepayPaySuccessInfo]
+    F --> G[查询订单 orderService.selectByOrderNo]
+
+    G --> H{订单存在?}
+    H -- 否 --> I[记录错误日志, 返回]
+    H -- 是 --> J[更新订单状态: PROCESSING → SUCCESS]
+
+    J --> K[更新预支付订单状态: PAID]
+    K --> L[回调处理完成]
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      支付回调处理流程                               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  易宝发送 POST 请求  │
+                   │  /yop-callback/     │
+                   │  paySuccess         │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  YeepayCallback     │
+                   │  Servlet 解析请求    │
+                   │  - Headers          │
+                   │  - Params           │
+                   │  - Body (JSON)      │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  YopCallbackEngine  │
+                   │  路由到对应 Handler  │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  YeepayPaySuccess   │
+                   │  Handle 处理        │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  解析回调 JSON       │
+                   │  - orderId          │
+                   │  - paySuccessDate   │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询订单            │
+                   │  orderService       │
+                   │  .selectByOrderNo() │
+                   └─────────────────────┘
+                          │         │
+                      不存在        存在
+                          ▼         ▼
+              ┌──────────────┐  ┌─────────────────────┐
+              │  记录错误日志 │  │  更新订单状态        │
+              │  返回         │  │  PROCESSING→SUCCESS │
+              └──────────────┘  └─────────────────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────────┐
+                                │  更新预支付订单状态   │
+                                │  → PAID             │
+                                └─────────────────────┘
+```
+
+**为什么用 Servlet 处理回调而非 Controller？**
+- 易宝支付 SDK 要求使用 `YopCallbackEngine` 处理回调
+- `YopCallbackEngine` 需要注册 `YopCallbackHandler`
+- Servlet 更底层，可以直接处理请求头和请求体
+
+**为什么回调处理要更新两个表？**
+- 支付订单（Order）：记录支付状态，后续用于对账
+- 预支付订单（PrepayOrder）：业务层关心的订单状态，前端展示用
+
+### 10.6 订单状态机
+
+```
+预支付订单状态：
+  PENDING_PAYMENT（待支付）→ PAID（已支付）
+  PENDING_PAYMENT（待支付）→ CANCELED（已取消）
+
+支付订单状态：
+  INIT（初始化）→ PROCESSING（支付中）→ SUCCESS（支付成功）
+  INIT（初始化）→ PROCESSING（支付中）→ FAIL（支付失败）
+  INIT（初始化）→ PROCESSING（支付中）→ TIMEOUT（超时）
+```
+
+**OrderStatusEnum 枚举：**
+```java
+public enum OrderStatusEnum {
+    INIT("初始化"),
+    FAIL("失败"),
+    PROCESSING("支付中"),
+    SUCCESS("支付成功"),
+    TIMEOUT("超时");
+}
+```
+
+**为什么更新状态时要带上旧状态？**
+```java
+orderService.updateOrderStatus(new UpdateOrderStatusInfo(
+    orderId, OrderStatusEnum.SUCCESS.name(), OrderStatusEnum.PROCESSING.name(), ...));
+```
+- 乐观锁：只有当前状态是 PROCESSING 时才能更新为 SUCCESS
+- 防止重复回调导致状态错误（如回调被触发两次）
+- SQL 中用 `WHERE status = #{oldStatus}` 保证原子性
+
+---
+
+## 第 11 章：值班管理 — 教师排班系统
+
+> 本章讲解值班管理模块的设计，展示如何处理复杂的业务规则校验和数据聚合。
+
+### 11.1 值班类型设计
+
+**DutyTypeEnum — 三种值班类型：**
+
+```java
+@Getter
+@AllArgsConstructor
+public enum DutyTypeEnum {
+    EVENING_STUDY_CLASS("晚自习值班", "19:00", "21:00", true, false),
+    EVENING_STUDY_CAMPUS("晚自习统一值班", "21:00", "22:30", false, true),
+    SELF_STUDY_CLASS("自习日值班", "09:00", "18:00", true, false);
+
+    private final String desc;
+    private final String startTime;
+    private final String endTime;
+    private final boolean classRequired;   // 是否需要班级
+    private final boolean campusRequired;  // 是否需要校区
+}
+```
+
+| 类型 | 说明 | 粒度 | 时间段 |
+|------|------|------|--------|
+| EVENING_STUDY_CLASS | 晚自习值班 | 每班一个老师 | 19:00-21:00 |
+| EVENING_STUDY_CAMPUS | 晚自习统一值班 | 每校区一个老师 | 21:00-22:30 |
+| SELF_STUDY_CLASS | 自习日值班 | 每班一个老师 | 09:00-18:00 |
+
+**为什么用枚举而非数据库配置？**
+- 值班类型固定，不会频繁变更
+- 枚举可以在编译期校验，避免运行时错误
+- 每种类型有不同的业务规则（classRequired/campusRequired），枚举便于封装
+
+### 11.2 值班实体设计
+
+```java
+@Data
+public class ClassDutyEntity {
+    private Long id;
+    private Long classId;      // 班级ID（校区统一值班时可为空）
+    private Long campusId;     // 校区ID
+    private Long teacherId;    // 老师ID
+    private Date dutyDate;     // 值班日期
+    private String dutyType;   // 值班类型（枚举名）
+    private String startTime;  // 开始时间
+    private String endTime;    // 结束时间
+    private String remark;     // 备注
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**为什么同时有 classId 和 campusId？**
+- 班级值班（EVENING_STUDY_CLASS/SELF_STUDY_CLASS）：classId 必填，campusId 从班级自动获取
+- 校区统一值班（EVENING_STUDY_CAMPUS）：campusId 必填，classId 为空
+- 两个字段互斥，通过 `dutyType.isClassRequired()` 控制
+
+### 11.3 业务规则校验
+
+**校验流程图：**
+
+```mermaid
+flowchart TD
+    A[新增/修改值班] --> B[解析值班类型]
+    B --> C[校验老师是否为教师角色]
+    C --> D{是教师角色?}
+    D -- 否 --> E[抛异常: 请选择老师角色的用户]
+    D -- 是 --> F{需要班级?}
+
+    F -- 是 --> G[校验班级是否存在]
+    G --> H[自动获取校区ID]
+    F -- 否 --> I[校验校区是否存在]
+    I --> J[classId 设为 null]
+
+    H --> K[校验业务规则]
+    J --> K
+
+    K --> L{班级值班?}
+    L -- 是 --> M[检查同班同类型值班是否重复]
+    M --> N{重复?}
+    N -- 是 --> O[抛异常: 该班级当天已存在同类型值班]
+    N -- 否 --> P[继续]
+
+    L -- 否 --> Q{校区统一值班?}
+    Q -- 是 --> R[检查同校区统一值班是否重复]
+    R --> S{重复?}
+    S -- 是 --> T[抛异常: 该校区当天已存在统一值班]
+    S -- 否 --> P
+
+    Q --> P
+    P --> U[检查老师时间段冲突]
+    U --> V{冲突?}
+    V -- 是 --> W[抛异常: 该老师在当前时间段已有值班]
+    V -- 否 --> X{自习日值班?}
+
+    X -- 是 --> Y[检查该班当天是否为自习日]
+    Y --> Z{是自习日?}
+    Z -- 否 --> AA[抛异常: 该班当天不是自习日]
+    Z -- 是 --> BB[校验通过]
+
+    X -- 否 --> BB
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      值班业务规则校验                               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  1. 校验老师角色     │
+                   │  必须是 TEACHER 角色 │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  2. 校验班级/校区    │
+                   │  根据 dutyType 判断  │
+                   └─────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────┴────────────────────┐
+         │                                         │
+         ▼                                         ▼
+┌─────────────────────┐                ┌─────────────────────┐
+│  班级值班           │                │  校区统一值班       │
+│  检查同班同类型重复  │                │  检查同校区重复     │
+└─────────────────────┘                └─────────────────────┘
+         │                                         │
+         └────────────────────┬────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  3. 老师时间段冲突   │
+                   │  同一老师同一时间段  │
+                   │  不能有多个值班     │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  4. 自习日校验       │
+                   │  自习日值班只能排在  │
+                   │  课表标记为自习的天  │
+                   └─────────────────────┘
+```
+
+**为什么自习日值班要检查课表？**
+- 自习日值班的前提是"该班当天确实是自习日"
+- 课表中标记了每天的类型（CLASS/SELF_STUDY/REST/HOLIDAY）
+- 如果课表显示当天是上课日，就不能安排自习日值班
+
+**SQL — 老师时间段冲突检测：**
+```xml
+<select id="countTeacherTimeConflict" resultType="java.lang.Integer">
+    select count(1) from sys_class_duty
+    where teacher_id = #{teacherId}
+    and duty_date = #{dutyDate}
+    and start_time &lt; #{endTime}
+    and end_time &gt; #{startTime}
+    <if test="id != null">and id != #{id}</if>
+</select>
+```
+
+**为什么用时间范围重叠检测而非精确匹配？**
+- 老师可能安排 19:00-21:00 的晚自习值班
+- 同一天又安排 21:00-22:30 的统一值班
+- 两个时间段刚好相邻（21:00），不算冲突
+- 时间重叠条件：`start_time < endTime AND end_time > startTime`
+
+### 11.4 按日期查询值班（getDateDuty）
+
+**这是值班模块最复杂的查询，需要聚合多个数据源。**
+
+**查询流程图：**
+
+```mermaid
+flowchart TD
+    A[查询指定日期值班] --> B[查询当天所有课表]
+    B --> C[过滤: 只保留上课日和自习日]
+    C --> D[查询当天已有值班记录]
+
+    D --> E[构建班级值班 Map]
+    D --> F[构建校区值班 Map]
+
+    E --> G[查询班级信息]
+    F --> H[查询校区信息]
+    G --> H
+
+    H --> I[查询老师信息]
+    I --> J[组装班级值班列表]
+
+    J --> K[遍历课表]
+    K --> L[判断课表类型: 上课日→晚自习值班, 自习日→自习日值班]
+    L --> M[从 Map 中查找已有值班]
+    M --> N[组装 ClassDutyClassItemRes]
+
+    N --> O[组装校区值班列表]
+    O --> P[遍历所有校区]
+    P --> Q[从 Map 中查找已有值班]
+    Q --> R[组装 ClassDutyCampusItemRes]
+
+    R --> S[返回 ClassDutyDateRes]
+```
+
+**文字流程图：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    按日期查询值班流程                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询当天所有课表    │
+                   │  classSchedule      │
+                   │  Mapper.selectBy... │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  过滤课表类型        │
+                   │  只保留:             │
+                   │  CLASS + SELF_STUDY │
+                   └─────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │  查询当天值班记录    │
+                   │  classDutyMapper    │
+                   │  .selectByDutyDate  │
+                   └─────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+   ┌─────────────────────┐        ┌─────────────────────┐
+   │  班级值班 Map        │        │  校区值班 Map        │
+   │  key=classId:dutyType│        │  key=campusId       │
+   └─────────────────────┘        └─────────────────────┘
+              │                               │
+              ▼                               ▼
+   ┌─────────────────────┐        ┌─────────────────────┐
+   │  批量查询班级信息    │        │  批量查询校区信息    │
+   │  clazzMapper        │        │  campusMapper       │
+   │  .selectByIds()     │        │  .selectByIds()     │
+   └─────────────────────┘        └─────────────────────┘
+              │                               │
+              ▼                               ▼
+   ┌─────────────────────┐        ┌─────────────────────┐
+   │  组装班级值班列表    │        │  组装校区值班列表    │
+   │  ClassDutyClassItem │        │  ClassDutyCampusItem│
+   └─────────────────────┘        └─────────────────────┘
+              │                               │
+              └───────────────┬───────────────┘
+                              ▼
+                   ┌─────────────────────┐
+                   │  返回 ClassDutyDateRes│
+                   │  - dutyDate         │
+                   │  - classDutyList    │
+                   │  - campusDutyList   │
+                   └─────────────────────┘
+```
+
+**为什么用 Map 缓存值班记录而非逐条查询？**
+```java
+Map<String, ClassDutyEntity> classDutyMap = duties.stream()
+    .filter(item -> item.getClassId() != null)
+    .collect(Collectors.toMap(
+        item -> buildClassDutyKey(item.getClassId(), item.getDutyType()),
+        Function.identity(), (a, b) -> b));
+```
+- 一个班级可能有多种值班类型（晚自习 + 自习日）
+- 用 `classId:dutyType` 作为 key，精确定位
+- 一次查询所有值班，用 Map 做内存关联，避免 N+1 查询
+
+### 11.5 按日期保存值班（saveDateDuty）
+
+**保存策略：先删后插，覆盖式保存。**
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public ClassDutyDateSaveRes saveDateDuty(ClassDutyDateSaveReq req) {
+    Date day = DateUtil.beginOfDay(req.getDutyDate());
+
+    // 1. 删除当天所有值班
+    classDutyMapper.deleteByDutyDate(day);
+
+    // 2. 重新插入班级值班
+    for (ClassDutyItem item : req.getClassDutyList()) {
+        ClassDutyEntity duty = buildDutyEntity(null, item.getClassId(), null,
+            item.getTeacherId(), day, item.getDutyType(), null);
+        classDutyMapper.insert(duty);
+    }
+
+    // 3. 重新插入校区值班
+    for (CampusDutyItem item : req.getCampusDutyList()) {
+        ClassDutyEntity duty = buildDutyEntity(null, null, item.getCampusId(),
+            item.getTeacherId(), day, item.getDutyType(), null);
+        classDutyMapper.insert(duty);
+    }
+}
+```
+
+**为什么用"先删后插"而非"逐条对比更新"？**
+- 值班是按天管理的，一天的值班是一个整体
+- 前端传的是当天的完整值班列表，不是增量
+- 先删后插逻辑简单，事务保证一致性
+- 如果用对比更新，需要处理"删除的值班"、"新增的值班"、"修改的值班"三种情况
+
+**为什么校区统一值班要校验类型？**
+```java
+if (!DutyTypeEnum.EVENING_STUDY_CAMPUS.name().equals(item.getDutyType())) {
+    throw BusinessException.DateError.newInstance("校区统一值班类型错误");
+}
+```
+- 校区统一值班只能是 `EVENING_STUDY_CAMPUS` 类型
+- 防止前端传错类型导致数据混乱
+- 业务规则：校区级别只管晚自习统一值班，其他值班都是班级级别的
+
+### 11.6 数据聚合：fillDutyPageNames
+
+```java
+private void fillDutyPageNames(List<ClassDutyPageRes> records) {
+    // 批量查询班级、校区、老师信息
+    Map<Long, ClazzEntity> clazzMap = ...;
+    Map<Long, CampusEntity> campusMap = ...;
+    Map<Long, SysUserEntity> userMap = ...;
+
+    // 填充名称字段
+    records.forEach(record -> {
+        ClazzEntity clazz = clazzMap.get(record.getClassId());
+        if (clazz != null) {
+            record.setClassPeriod(clazz.getClassPeriod());
+        }
+        CampusEntity campus = campusMap.get(record.getCampusId());
+        if (campus != null) {
+            record.setCampusName(campus.getCampusLocation());
+        }
+        SysUserEntity user = userMap.get(record.getTeacherId());
+        if (user != null) {
+            record.setTeacherName(user.getNickname() != null ? user.getNickname() : user.getUsername());
+        }
+    });
+}
+```
+
+**为什么不在 SQL 里 JOIN？**
+- 各模块独立演进，JOIN 会增加模块间耦合
+- 单表查询更简单，便于优化和缓存
+- Service 层用 Java 代码组装，逻辑更清晰
+- 批量查询 + Map 组装，性能与 JOIN 相当
+
+**为什么老师名称优先用 realName？**
+```java
+user.getRealName() != null ? user.getRealName() : user.getUsername()
+```
+- 值班表是管理用途，显示真实姓名更便于识别
+- 如果没有真实姓名，降级用昵称，再降级用用户名
+- 这是 `getUserShowName()` 方法的通用逻辑
+
+---
+
+## 附录 B：新模块 Mapper 方法汇总
+
+### 订单模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `PrepayOrderMapper.insert` | 插入预支付订单 | 创建订单 |
+| `PrepayOrderMapper.updateById` | 更新预支付订单 | 修改订单 |
+| `PrepayOrderMapper.selectPage` | 分页查询 | 订单列表 |
+| `PrepayOrderMapper.updatePrepayOrderSuccess` | 更新为已支付 | 支付回调 |
+| `OrderMapper.insert` | 插入支付订单 | 调用支付接口 |
+| `OrderMapper.updateOrderStatus` | 更新支付状态 | 支付回调 |
+| `OrderMapper.selectByOrderNo` | 按订单号查询 | 回调处理 |
+| `ProductMapper.insert` | 插入产品 | 产品管理 |
+| `ProductMapper.selectPage` | 分页查询 | 产品列表 |
+
+### 值班模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `ClassDutyMapper.insert` | 插入值班记录 | 新增值班 |
+| `ClassDutyMapper.updateById` | 更新值班 | 修改值班 |
+| `ClassDutyMapper.deleteById` | 删除值班 | 删除值班 |
+| `ClassDutyMapper.selectById` | 查询详情 | 值班详情 |
+| `ClassDutyMapper.selectPage` | 分页查询 | 值班列表 |
+| `ClassDutyMapper.selectByDutyDate` | 按日期查询 | 按日期排班 |
+| `ClassDutyMapper.deleteByDutyDate` | 按日期删除 | 覆盖保存 |
+| `ClassDutyMapper.countClassDuty` | 统计班级值班数 | 重复校验 |
+| `ClassDutyMapper.countCampusDuty` | 统计校区值班数 | 重复校验 |
+| `ClassDutyMapper.countTeacherTimeConflict` | 老师时间冲突检测 | 冲突校验 |
+
+---
+
+## 附录 C：项目完整模块结构
+
+```
+cn.yanque
+├── common/                         ← 公共组件
+│   ├── annotations/                ← @NoAuthCheck 等自定义注解
+│   ├── api/                        ← ApiResponse、PageResult
+│   ├── aop/                        ← ControllerLogAspect 日志切面
+│   ├── dataConfig/                 ← 系统配置（Guava 缓存）
+│   ├── enums/                      ← ActiveEnum、OrderStatusEnum 等
+│   ├── exception/                  ← BusinessException 异常体系
+│   ├── filter/                     ← RequestGuidFilter 请求追踪
+│   └── utils/                      ← RedisUtil 工具类
+├── config/                         ← Spring 配置
+│   ├── WebMvcConfig.java           ← 拦截器注册
+│   └── YeepayProperties.java       ← 易宝支付配置
+├── integration/                    ← 第三方集成
+│   └── yeepay/                     ← 易宝支付
+│       ├── callback/               ← 回调 Servlet
+│       ├── handle/                 ← 回调处理器
+│       ├── pojo/                   ← 请求/响应对象
+│       └── service/                ← 支付服务
+└── models/                         ← 业务模块
+    ├── auth/                       ← 认证拦截器
+    ├── order/                      ← 订单模块
+    │   ├── prepay/                 ← 预支付订单 + 支付订单
+    │   └── product/                ← 产品管理
+    ├── teaching/                   ← 教学模块
+    │   ├── campus/                 ← 校区管理
+    │   ├── clazz/                  ← 班级管理
+    │   ├── course/                 ← 课程管理
+    │   ├── duty/                   ← 值班管理
+    │   └── schedule/               ← 排课管理
+    └── users/                      ← 用户模块
