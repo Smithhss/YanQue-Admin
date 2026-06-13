@@ -16,7 +16,7 @@ import cn.yanque.studentFront.biz.StudentOrderBiz;
 import cn.yanque.studentFront.pojo.req.CreatePaymentOrderReq;
 import cn.yanque.studentFront.pojo.res.CreateOrderNoRes;
 import cn.yanque.studentFront.pojo.res.CreatePaymentOrderRes;
-import cn.yanque.studentFront.pojo.res.StudentLoginRes;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -25,6 +25,7 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 @Service
+@Slf4j
 public class StudentOrderBizImpl implements StudentOrderBiz {
 
     @Autowired
@@ -68,19 +69,24 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
         // 更新订单状态为支付中
         orderService.updateOrderStatus(new UpdateOrderStatusInfo(orderEntity.getOrderNo(), OrderStatusEnum.PROCESSING.name(), OrderStatusEnum.INIT.name(), res.getUniqueOrderNo(), null));
 
-
-        ThreadPoolConfig.getScheduledPool().schedule(new Runnable() {
-            @Override
-            public void run() {
-                // 判断订单是否超时，如果超时，订单状态改为 订单超时
-
-
-
-            }
-        }, 15, TimeUnit.MINUTES);
+        scheduleOrderTimeoutCheck(orderEntity.getOrderNo());
         CreatePaymentOrderRes createPaymentOrderRes = new CreatePaymentOrderRes();
         BeanUtils.copyProperties(res, createPaymentOrderRes);
         return createPaymentOrderRes;
+    }
+
+    private void scheduleOrderTimeoutCheck(String orderNo) {
+        ThreadPoolConfig.getScheduledPool().schedule(() -> {
+            try {
+                OrderEntity latestOrder = orderService.selectByOrderNo(orderNo);
+                if (latestOrder == null || !OrderStatusEnum.PROCESSING.name().equals(latestOrder.getStatus())) {
+                    return;
+                }
+                orderService.updateOrderStatus(new UpdateOrderStatusInfo(orderNo, OrderStatusEnum.TIMEOUT.name(), OrderStatusEnum.PROCESSING.name(), null, null));
+            } catch (Exception e) {
+                log.error("支付订单超时检查失败, orderNo={}", orderNo, e);
+            }
+        }, 15, TimeUnit.MINUTES);
     }
 
 

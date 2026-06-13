@@ -56,6 +56,9 @@
             <if test="uniqueOrderNo != null and uniqueOrderNo != ''">
                 unique_order_no = #{uniqueOrderNo},
             </if>
+            <if test="paySuccessTime != null">
+                pay_success_time = #{paySuccessTime},
+            </if>
             updated_at = now()
         where order_no = #{orderNo}
           and status = #{oldStatus}
