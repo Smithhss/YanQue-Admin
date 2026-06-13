@@ -1356,7 +1356,46 @@ if (rows == 0) {
 - 前端以为删除成功了，但数据本来就不在，可能导致业务逻辑错误
 - 检查后抛异常，前端可以明确知道"数据不存在"
 
-### 6.7 主从表级联：课程与课程详情
+### 6.7 唯一约束与 DuplicateKeyException
+
+```java
+try {
+    sysRoleMapper.insert(role);
+} catch (DuplicateKeyException e) {
+    throw BusinessException.RoleExist;
+}
+```
+
+数据库对 `role_code` 字段加了唯一索引（UNIQUE），插入重复值时 MySQL 抛异常，Spring 包装为 `DuplicateKeyException`。
+
+**为什么不先查再插？**
+- 先查再插有并发问题：两个请求同时查到"不存在"，都去插入，第二个会失败
+- 直接插入 + 捕获异常更简洁，数据库唯一索引是最终保障
+- 这叫**乐观策略**：先做，失败了再处理
+
+### 6.8 先删后插：角色权限分配
+
+```java
+public void resetRolePermissions(Long roleId, List<Long> permissionIds) {
+    sysRoleMapper.deleteRolePermissions(roleId);              // 删掉该角色的所有权限
+    if (permissionIds != null && !permissionIds.isEmpty()) {
+        sysRoleMapper.insertRolePermissions(roleId, permissionIds); // 插入新权限
+    }
+}
+```
+
+**为什么用"先删后插"而不是"对比差异更新"？**
+- 前端传的是完整的权限ID列表，代表"这个角色应该有哪些权限"
+- 对比差异需要计算"新增了哪些、删除了哪些"，逻辑复杂
+- 先删后插两条 SQL 搞定，在事务里保证一致性
+
+**这个模式在项目中多次出现：**
+- 角色分配权限（`resetRolePermissions`）
+- 用户分配角色（`assignUserRoles`）
+- 重新生成课表（`deleteByClassId` + `batchInsert`）
+- 值班按日期保存（`deleteByDutyDate` + 逐条 insert）
+
+### 6.9 主从表级联：课程与课程详情
 
 ```java
 // 删除课程时，先删课程详情
