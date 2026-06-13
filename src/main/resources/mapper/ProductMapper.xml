@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.order.product.mapper.ProductMapper">
+
+    <resultMap id="ProductMap" type="cn.yanque.models.order.product.pojo.entity.ProductEntity">
+        <id property="id" column="id"/>
+        <result property="courseContent" column="course_content"/>
+        <result property="teachingMode" column="teaching_mode"/>
+        <result property="price" column="price"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, course_content, teaching_mode, price, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into order_product (course_content, teaching_mode, price, created_at, updated_at)
+        values (#{courseContent}, #{teachingMode}, #{price}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updateById">
+        update order_product
+        set course_content = #{courseContent},
+            teaching_mode = #{teachingMode},
+            price = #{price},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="ProductMap">
+        select <include refid="BaseColumns"/>
+        from order_product
+        where id = #{id}
+    </select>
+
+    <select id="selectPage" resultMap="ProductMap">
+        select <include refid="BaseColumns"/>
+        from order_product
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and course_content like concat('%', #{keyword}, '%')
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <delete id="deleteById">
+        delete from order_product where id = #{id}
+    </delete>
+</mapper>

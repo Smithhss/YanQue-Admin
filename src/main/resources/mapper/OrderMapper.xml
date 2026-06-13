@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.order.prepay.mapper.OrderMapper">
+
+    <resultMap id="OrderMap" type="cn.yanque.models.order.prepay.pojo.entity.OrderEntity">
+        <id property="id" column="id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="studentPhone" column="student_phone"/>
+        <result property="studentName" column="student_name"/>
+        <result property="productId" column="product_id"/>
+        <result property="orderAmount" column="order_amount"/>
+        <result property="prepayOrderNo" column="prepay_order_no"/>
+        <result property="status" column="status"/>
+        <result property="uniqueOrderNo" column="unique_order_no"/>
+        <result property="paySuccessTime" column="pay_success_time"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, order_no, student_phone, student_name, product_id, order_amount, prepay_order_no, status, unique_order_no, pay_success_time, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into order_payment (
+            order_no,
+            student_phone,
+            student_name,
+            product_id,
+            order_amount,
+            prepay_order_no,
+            status,
+            unique_order_no,
+            pay_success_time,
+            created_at,
+            updated_at
+        )
+        values (
+            #{orderNo},
+            #{studentPhone},
+            #{studentName},
+            #{productId},
+            #{orderAmount},
+            #{prepayOrderNo},
+            #{status},
+            #{uniqueOrderNo},
+            #{paySuccessTime},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateOrderStatus">
+        update order_payment
+        set status = #{status},
+            <if test="uniqueOrderNo != null and uniqueOrderNo != ''">
+                unique_order_no = #{uniqueOrderNo},
+            </if>
+            updated_at = now()
+        where order_no = #{orderNo}
+          and status = #{oldStatus}
+    </update>
+
+    <select id="selectByOrderNo" resultMap="OrderMap">
+        select <include refid="BaseColumns"/>
+        from order_payment
+        where order_no = #{orderNo}
+    </select>
+</mapper>

@@ -8,4 +8,9 @@ public class SysConfig {
             "teaching.schedule.rule",
             "{\"classDays\":[1,2,3,5,6],\"selfStudyDays\":[4],\"restDays\":[7],\"holidayRest\":true}",
             String.class);
+
+
+    public static SystemConfigItem<String> createOrderGoodsName = new SystemConfigItem<>("createOrderGoodsName", "缴费下单", String.class);
+    public static SystemConfigItem<Integer> createOrderExpireTime = new SystemConfigItem<>("createOrderExpireTime", 5, Integer.class);
+
 }

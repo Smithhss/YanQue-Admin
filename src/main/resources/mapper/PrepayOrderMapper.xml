@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.order.prepay.mapper.PrepayOrderMapper">
+
+    <resultMap id="PrepayOrderMap" type="cn.yanque.models.order.prepay.pojo.entity.PrepayOrderEntity">
+        <id property="id" column="id"/>
+        <result property="orderNo" column="order_no"/>
+        <result property="studentName" column="student_name"/>
+        <result property="studentPhone" column="student_phone"/>
+        <result property="productId" column="product_id"/>
+        <result property="productAmount" column="product_amount"/>
+        <result property="discountAmount" column="discount_amount"/>
+        <result property="orderStatus" column="order_status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, order_no, student_name, student_phone, product_id, product_amount, discount_amount, order_status, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into prepay_order (order_no, student_name, student_phone, product_id, product_amount, discount_amount, order_status, created_at, updated_at)
+        values (#{orderNo}, #{studentName}, #{studentPhone}, #{productId}, #{productAmount}, #{discountAmount}, #{orderStatus}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updateById">
+        update prepay_order
+        set student_name = #{studentName},
+            student_phone = #{studentPhone},
+            product_id = #{productId},
+            product_amount = #{productAmount},
+            discount_amount = #{discountAmount},
+            order_status = #{orderStatus},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="PrepayOrderMap">
+        select <include refid="BaseColumns"/>
+        from prepay_order
+        where id = #{id}
+    </select>
+
+    <select id="selectPage" resultMap="PrepayOrderMap">
+        select <include refid="BaseColumns"/>
+        from prepay_order
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    student_name like concat('%', #{keyword}, '%')
+                    or student_phone like concat('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="orderStatus != null and orderStatus != ''">
+                and order_status = #{orderStatus}
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <delete id="deleteById">
+        delete from prepay_order where id = #{id}
+    </delete>
+
+    <select id="selectLatestByPhoneAndStatus" resultMap="PrepayOrderMap">
+        select <include refid="BaseColumns"/>
+        from prepay_order
+        where student_phone = #{studentPhone}
+          and order_status = #{orderStatus}
+        order by id desc
+        limit 1
+    </select>
+
+    <select id="selectLatestByPhone" resultMap="PrepayOrderMap">
+        select <include refid="BaseColumns"/>
+        from prepay_order
+        where student_phone = #{studentPhone}
+        order by id desc
+        limit 1
+    </select>
+
+    <update id="updatePrepayOrderSuccess">
+        update prepay_order
+        set order_status = 'SUCCESS',
+        where order_no = #{prepayOrderNo}
+    </update>
+</mapper>
