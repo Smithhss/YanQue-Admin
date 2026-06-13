@@ -450,9 +450,26 @@ LoginRes（响应对象 — 返回给前端，脱敏）
 - **UserDetailRes**：通过 `BeanUtils.copyProperties` 从 Entity 转换，天然过滤掉 password 等敏感字段
 - **分离目的**：Entity 负责持久化，聚合对象负责组装，VO 负责安全传输
 
-- **安全性**：Entity → VO 的转换天然过滤了敏感字段
-- **灵活性**：UserInfo 可以聚合任意多的表数据，不影响 VO 结构
-- **职责清晰**：Entity 负责持久化，聚合对象负责组装，VO 负责传输
+### 2.6 对象分层总览
+
+| 对象 | 包 | 作用 | 示例 |
+|------|-----|------|------|
+| Entity | pojo/entity/ | 数据库表映射 | SysUserEntity |
+| VO/Req | pojo/vo/req/ | 前端请求参数（@Valid 校验） | UserCreateReq |
+| VO/Res | pojo/vo/res/ | 前端响应结果（脱敏） | UserDetailRes |
+| BO | pojo/bo/ | Service→Mapper 查询条件 | QueryUserBo |
+| Info | pojo/info/ | Service 内部聚合数据 | UserInfo |
+
+**BO（Business Object）**：Service 层传给 Mapper 层的查询参数封装。
+```java
+@Data
+public class QueryUserBo {
+    private List<Long> ids;
+    // 以后扩展：private String status; private String keyword;
+}
+```
+- 直接传 `List<Long>` 也能用，但查询条件变多时就要改方法签名，所有调用方都要改
+- 用 BO 封装，加条件只需加字段，Mapper 方法签名不变
 
 ---
 
