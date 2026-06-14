@@ -36,12 +36,6 @@ public class StudentPageRes {
     @Schema(description = "专业")
     private String major;
 
-    @Schema(description = "来源支付订单号")
-    private String sourceOrderNo;
-
-    @Schema(description = "产品ID")
-    private String productId;
-
     @Schema(description = "状态")
     private String status;
 

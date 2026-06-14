@@ -37,12 +37,6 @@ public class StudentEntity {
     /** 专业 */
     private String major;
 
-    /** 来源支付订单号 */
-    private String sourceOrderNo;
-
-    /** 产品ID */
-    private String productId;
-
     /** 状态 */
     private String status;
 

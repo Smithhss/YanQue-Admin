@@ -17,7 +17,5 @@ public interface StudentMapper {
 
     StudentEntity selectByPhone(@Param("studentPhone") String studentPhone);
 
-    StudentEntity selectBySourceOrderNo(@Param("sourceOrderNo") String sourceOrderNo);
-
     List<StudentEntity> selectPage(QueryStudentBo queryStudentBo);
 }

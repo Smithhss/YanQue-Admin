@@ -8,14 +8,10 @@ create table if not exists student (
     grade_year int not null comment '届数',
     school varchar(100) not null comment '学校',
     major varchar(100) null comment '专业',
-    source_order_no varchar(64) not null comment '来源支付订单号',
-    product_id varchar(64) not null comment '产品ID',
     status varchar(30) not null default 'ACTIVE' comment '状态：ACTIVE启用，INACTIVE停用',
     created_at datetime not null default current_timestamp comment '创建时间',
     updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
     unique key uk_student_no (student_no),
     unique key uk_student_phone (student_phone),
-    unique key uk_source_order_no (source_order_no),
-    key idx_status (status),
-    key idx_product_id (product_id)
+    key idx_status (status)
 ) comment '学生表';

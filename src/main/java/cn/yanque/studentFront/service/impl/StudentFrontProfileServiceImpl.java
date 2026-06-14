@@ -5,6 +5,8 @@ import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
 import cn.yanque.models.order.prepay.service.OrderService;
 import cn.yanque.models.student.pojo.entity.StudentEntity;
+import cn.yanque.models.student.pojo.entity.StudentProductEntity;
+import cn.yanque.models.student.service.StudentProductService;
 import cn.yanque.models.student.service.StudentService;
 import cn.yanque.studentFront.pojo.req.CompleteStudentProfileReq;
 import cn.yanque.studentFront.pojo.res.CompleteStudentProfileRes;
@@ -21,6 +23,9 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
 
     @Autowired
     private StudentService studentService;
+
+    @Autowired
+    private StudentProductService studentProductService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -45,9 +50,13 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
         student.setGradeYear(req.getGradeYear());
         student.setSchool(req.getSchool());
         student.setMajor(req.getMajor());
-        student.setSourceOrderNo(order.getOrderNo());
-        student.setProductId(order.getProductId());
         StudentEntity createdStudent = studentService.createStudent(student);
+
+        StudentProductEntity studentProduct = new StudentProductEntity();
+        studentProduct.setStudentId(createdStudent.getId());
+        studentProduct.setProductId(order.getProductId());
+        studentProduct.setSourceOrderNo(order.getOrderNo());
+        studentProductService.createStudentProduct(studentProduct);
 
         CompleteStudentProfileRes res = new CompleteStudentProfileRes();
         res.setStudentId(createdStudent.getId());
