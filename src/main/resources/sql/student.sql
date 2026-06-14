@@ -1,0 +1,21 @@
+create table if not exists student (
+    id bigint primary key auto_increment comment '学生ID',
+    student_no varchar(32) not null comment '学员编号',
+    student_name varchar(50) not null comment '学生姓名',
+    student_phone varchar(30) not null comment '手机号',
+    password varchar(128) not null comment '登录密码',
+    education varchar(30) not null comment '学历',
+    grade_year int not null comment '届数',
+    school varchar(100) not null comment '学校',
+    major varchar(100) null comment '专业',
+    source_order_no varchar(64) not null comment '来源支付订单号',
+    product_id varchar(64) not null comment '产品ID',
+    status varchar(30) not null default 'ACTIVE' comment '状态：ACTIVE启用，INACTIVE停用',
+    created_at datetime not null default current_timestamp comment '创建时间',
+    updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
+    unique key uk_student_no (student_no),
+    unique key uk_student_phone (student_phone),
+    unique key uk_source_order_no (source_order_no),
+    key idx_status (status),
+    key idx_product_id (product_id)
+) comment '学生表';

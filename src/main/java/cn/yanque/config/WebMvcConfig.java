@@ -30,6 +30,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/student/login",
                         "/api/studentFront/order/createOrderNo",
                         "/api/studentFront/order/createPaymentOrder",
+                        "/api/studentFront/order/paymentReturnInfo",
+                        "/api/studentFront/student/completeProfile",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");
@@ -42,6 +44,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/student/login",
                         "/api/studentFront/order/createOrderNo",
                         "/api/studentFront/order/createPaymentOrder",
+                        "/api/studentFront/order/paymentReturnInfo",
+                        "/api/studentFront/student/completeProfile",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");
@@ -54,6 +58,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/student/login",
                         "/api/studentFront/order/createOrderNo",
                         "/api/studentFront/order/createPaymentOrder",
+                        "/api/studentFront/order/paymentReturnInfo",
+                        "/api/studentFront/student/completeProfile",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");

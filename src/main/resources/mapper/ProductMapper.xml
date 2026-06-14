@@ -35,6 +35,15 @@
         where id = #{id}
     </select>
 
+    <select id="selectByIds" resultMap="ProductMap">
+        select <include refid="BaseColumns"/>
+        from order_product
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
     <select id="selectPage" resultMap="ProductMap">
         select <include refid="BaseColumns"/>
         from order_product

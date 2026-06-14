@@ -9,6 +9,8 @@ import cn.yanque.config.ThreadPoolConfig;
 import cn.yanque.integration.yeepay.pojo.req.YeepayUnifiedOrderReq;
 import cn.yanque.integration.yeepay.pojo.res.YeepayUnifiedOrderRes;
 import cn.yanque.integration.yeepay.service.YeepayCashierService;
+import cn.yanque.models.order.product.mapper.ProductMapper;
+import cn.yanque.models.order.product.pojo.entity.ProductEntity;
 import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
 import cn.yanque.models.order.prepay.pojo.info.UpdateOrderStatusInfo;
 import cn.yanque.models.order.prepay.service.OrderService;
@@ -16,6 +18,7 @@ import cn.yanque.studentFront.biz.StudentOrderBiz;
 import cn.yanque.studentFront.pojo.req.CreatePaymentOrderReq;
 import cn.yanque.studentFront.pojo.res.CreateOrderNoRes;
 import cn.yanque.studentFront.pojo.res.CreatePaymentOrderRes;
+import cn.yanque.studentFront.pojo.res.PaymentReturnInfoRes;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,9 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
 
     @Autowired
     private YeepayCashierService yeepayCashierService;
+
+    @Autowired
+    private ProductMapper productMapper;
 
     @Override
     public CreateOrderNoRes createOrderNo() {
@@ -73,6 +79,25 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
         CreatePaymentOrderRes createPaymentOrderRes = new CreatePaymentOrderRes();
         BeanUtils.copyProperties(res, createPaymentOrderRes);
         return createPaymentOrderRes;
+    }
+
+    @Override
+    public PaymentReturnInfoRes paymentReturnInfo(String orderNo) {
+        OrderEntity order = orderService.selectByOrderNo(orderNo);
+        if (order == null) {
+            throw BusinessException.DateError.newInstance("支付订单不存在");
+        }
+        if (!OrderStatusEnum.SUCCESS.name().equals(order.getStatus())) {
+            throw BusinessException.DateError.newInstance("订单未支付成功");
+        }
+
+        PaymentReturnInfoRes res = new PaymentReturnInfoRes();
+        BeanUtils.copyProperties(order, res);
+        ProductEntity product = productMapper.selectById(Long.valueOf(order.getProductId()));
+        if (product != null) {
+            res.setProductContent(product.getCourseContent());
+        }
+        return res;
     }
 
     private void scheduleOrderTimeoutCheck(String orderNo) {

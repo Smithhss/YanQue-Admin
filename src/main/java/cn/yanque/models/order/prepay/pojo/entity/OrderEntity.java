@@ -29,6 +29,9 @@ public class OrderEntity {
     /** 产品ID */
     private String productId;
 
+    /** 产品内容 */
+    private String productContent;
+
     /** 订单支付金额 */
     private BigDecimal orderAmount;
 

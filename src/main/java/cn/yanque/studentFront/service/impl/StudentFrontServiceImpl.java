@@ -3,11 +3,14 @@ package cn.yanque.studentFront.service.impl;
 import cn.hutool.jwt.JWTUtil;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
+import cn.yanque.common.enums.ActiveEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.product.mapper.ProductMapper;
 import cn.yanque.models.order.product.pojo.entity.ProductEntity;
 import cn.yanque.models.order.prepay.mapper.PrepayOrderMapper;
 import cn.yanque.models.order.prepay.pojo.entity.PrepayOrderEntity;
+import cn.yanque.models.student.mapper.StudentMapper;
+import cn.yanque.models.student.pojo.entity.StudentEntity;
 import cn.yanque.studentFront.pojo.req.StudentLoginReq;
 import cn.yanque.studentFront.pojo.res.StudentInfoRes;
 import cn.yanque.studentFront.pojo.res.StudentLoginRes;
@@ -35,16 +38,28 @@ public class StudentFrontServiceImpl implements StudentFrontService {
     private ProductMapper productMapper;
 
     @Autowired
+    private StudentMapper studentMapper;
+
+    @Autowired
     private SysConfigService sysConfigService;
 
     @Override
     public StudentLoginRes login(StudentLoginReq req) {
 
-        // 先查询学生表 有数据返回登录
-
-
-
-        // 学生表查不到记录，肯定没有付过款
+        StudentEntity student = studentMapper.selectByPhone(req.getPhone());
+        if (student != null) {
+            if (!ActiveEnum.ACTIVE.name().equals(student.getStatus())) {
+                throw BusinessException.UserNotExist.newInstance("学生账号已停用");
+            }
+            if (!req.getPassword().equals(student.getPassword())) {
+                throw BusinessException.PasswordError;
+            }
+            StudentLoginRes res = new StudentLoginRes();
+            res.setNeedPay(false);
+            res.setToken(createToken(student));
+            res.setStudent(buildStudentInfo(student));
+            return res;
+        }
 
         PrepayOrderEntity pendingOrder = prepayOrderMapper.selectLatestByPhoneAndStatus(req.getPhone(), STATUS_PENDING_PAYMENT);
         if (pendingOrder != null) {
@@ -56,6 +71,13 @@ public class StudentFrontServiceImpl implements StudentFrontService {
         }
 
         throw BusinessException.PasswordError.newInstance("用户名不存在");
+    }
+
+    private StudentInfoRes buildStudentInfo(StudentEntity student) {
+        StudentInfoRes res = new StudentInfoRes();
+        res.setName(student.getStudentName());
+        res.setPhone(student.getStudentPhone());
+        return res;
     }
 
     private StudentInfoRes buildStudentInfo(PrepayOrderEntity order) {
@@ -82,6 +104,15 @@ public class StudentFrontServiceImpl implements StudentFrontService {
         Map<String, Object> map = new HashMap<>();
         map.put("uid", order.getId());
         map.put("phone", order.getStudentPhone());
+        map.put("student", true);
+        map.put("expire_time", System.currentTimeMillis() + TOKEN_EXPIRE_MILLIS);
+        return JWTUtil.createToken(map, sysConfigService.get(SysConfig.jwtSecret).getBytes());
+    }
+
+    private String createToken(StudentEntity student) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("uid", student.getId());
+        map.put("phone", student.getStudentPhone());
         map.put("student", true);
         map.put("expire_time", System.currentTimeMillis() + TOKEN_EXPIRE_MILLIS);
         return JWTUtil.createToken(map, sysConfigService.get(SysConfig.jwtSecret).getBytes());
