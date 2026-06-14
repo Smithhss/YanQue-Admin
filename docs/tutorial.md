@@ -802,34 +802,54 @@ sequenceDiagram
 ### 4.2 JwtAuthInterceptor — JWT 身份认证
 
 ```java
-@Component
-public class JwtAuthInterceptor implements HandlerInterceptor {
+private static final String AUTHORIZATION = "Authorization";
+private static final String BEARER_PREFIX = "Bearer ";
+private static final String USER_ID = "uid";
+private static final String EXPIRE_TIME = "expire_time";
 
-    @Override
-    public boolean preHandle(HttpServletRequest request, ...) {
-        // 1. 从 Header 取 token
-        String authorization = request.getHeader("Authorization");
-        String token = authorization.substring("Bearer ".length());
+@Override
+public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    // 1. 取 Authorization Header，不存在或格式错直接 401
+    String authorization = request.getHeader(AUTHORIZATION);
+    if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+        throw new BusinessException(401, "未登录或Token缺失");
+    }
 
-        // 2. 验证 JWT 签名
+    // 2. 去掉 "Bearer " 前缀得到 token
+    String token = authorization.substring(BEARER_PREFIX.length()).trim();
+    try {
+        // 3. 用数据库密钥验证签名（SysConfigService 有本地缓存）
         JWT jwt = JWT.of(token).setKey(sysConfigService.get(SysConfig.jwtSecret).getBytes());
-        if (!jwt.verify()) throw new BusinessException(401, "Token无效");
-
-        // 3. 提取 userId 和过期时间
-        Object userId = jwt.getPayload("uid");
-        Object expireTime = jwt.getPayload("expire_time");
-
-        // 4. 检查是否过期
-        if (System.currentTimeMillis() > Long.parseLong(String.valueOf(expireTime))) {
-            throw new BusinessException(401, "Token已过期");
+        if (!jwt.verify()) {
+            throw new BusinessException(401, "Token无效或已过期");
         }
 
-        // 5. 把 userId 放到 request attribute，后续拦截器可以取
+        // 4. 提取 payload 并检查过期
+        Object userId = jwt.getPayload(USER_ID);
+        Object expireTime = jwt.getPayload(EXPIRE_TIME);
+        if (userId == null || expireTime == null) {
+            throw new BusinessException(401, "Token无效或已过期");
+        }
+        if (System.currentTimeMillis() > Long.parseLong(String.valueOf(expireTime))) {
+            throw new BusinessException(401, "Token无效或已过期");
+        }
+
+        // 5. 存入 request attribute，后续拦截器直接取，不用重复解析 JWT
         request.setAttribute("userId", Long.parseLong(String.valueOf(userId)));
         return true;
+    } catch (BusinessException ex) {
+        throw ex;  // 保留自己抛的异常
+    } catch (Exception ex) {
+        throw new BusinessException(401, "Token无效或已过期");  // 其他异常统一包装
     }
 }
 ```
+
+**关键设计：**
+- 常量定义避免魔法字符串散落
+- 所有验证失败返回 401，错误消息统一，不暴露具体原因（安全考虑）
+- `catch (BusinessException) { throw ex; }` 保留自定义异常，其他异常统一包装为"Token无效或已过期"
+- `request.setAttribute("userId", ...)` 让后续拦截器不用重复解析 JWT
 
 **为什么用 `Authorization: Bearer xxx` 格式？**
 - 这是 OAuth 2.0 标准格式，前端框架（如 Axios）普遍支持
