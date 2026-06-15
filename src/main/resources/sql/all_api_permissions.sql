@@ -34,6 +34,7 @@ values
     (@teaching_id, 'teaching:campus', '校区管理', 'MENU', null, 2010, '校区管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:course', '课程管理', 'MENU', null, 2020, '课程管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:class', '班级管理', 'MENU', null, 2030, '班级管理页面', 'ACTIVE', now(), now()),
+    (@teaching_id, 'teaching:homework', '作业管理', 'MENU', null, 2040, '作业管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2050, '值班管理页面', 'ACTIVE', now(), now()),
     (@student_id, 'student:list', '学生列表', 'MENU', null, 3010, '学生列表页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
@@ -56,6 +57,7 @@ set @config_menu_id := (select id from sys_permission where permission_code = 's
 set @campus_menu_id := (select id from sys_permission where permission_code = 'teaching:campus' limit 1);
 set @course_menu_id := (select id from sys_permission where permission_code = 'teaching:course' limit 1);
 set @class_menu_id := (select id from sys_permission where permission_code = 'teaching:class' limit 1);
+set @homework_menu_id := (select id from sys_permission where permission_code = 'teaching:homework' limit 1);
 set @student_menu_id := (select id from sys_permission where permission_code = 'student:list' limit 1);
 set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
 set @product_menu_id := (select id from sys_permission where permission_code = 'order:product' limit 1);
@@ -121,6 +123,12 @@ values
     (@class_menu_id, 'api:class-schedule:date-detail', '查询当天课程详情', 'API', '/yq-admin/api/classes/schedules/{classId}/date-detail', 2150, '查询班级当天课程详情接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:add-course', '新增临时课程', 'API', '/yq-admin/api/classes/schedules/{classId}/addClassSchule', 2151, '新增临时课程接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:teacher-detail', '查询老师课表', 'API', '/yq-admin/api/classes/schedules/teacher-detail', 2152, '查询老师上课详情接口', 'ACTIVE', now(), now()),
+
+    (@homework_menu_id, 'api:homework:page', '分页查询作业', 'API', '/yq-admin/api/homeworks', 2171, '分页查询作业接口', 'ACTIVE', now(), now()),
+    (@homework_menu_id, 'api:homework:create', '新增作业', 'API', '/yq-admin/api/homeworks', 2172, '新增作业接口', 'ACTIVE', now(), now()),
+    (@homework_menu_id, 'api:homework:prepare', '获取作业发布预填信息', 'API', '/yq-admin/api/homeworks/prepare', 2173, '获取作业发布预填信息接口', 'ACTIVE', now(), now()),
+    (@homework_menu_id, 'api:homework:content', '预览作业内容', 'API', '/yq-admin/api/homeworks/{id}/content', 2174, '预览作业内容接口', 'ACTIVE', now(), now()),
+    (@homework_menu_id, 'api:homework:upload-sign', '生成作业内容上传预签名', 'API', '/yq-admin/api/homeworks/content/upload-sign', 2175, '生成作业内容上传预签名接口', 'ACTIVE', now(), now()),
 
     (@student_menu_id, 'api:student:page', '分页查询学生', 'API', '/yq-admin/api/students', 2156, '分页查询学生接口', 'ACTIVE', now(), now()),
     (@student_menu_id, 'api:student:assign-class', '学生分配班级', 'API', '/yq-admin/api/students/{id}/class', 2157, '给线下学生分配班级接口', 'ACTIVE', now(), now()),
