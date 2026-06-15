@@ -33,6 +33,7 @@ public class ControllerLogAspect {
 
     @Around("execution(* cn.yanque..controller..*.*(..))")
     public Object logController(ProceedingJoinPoint joinPoint) throws Throwable {
+
         long start = System.currentTimeMillis();
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         String methodName = signature.getDeclaringType().getSimpleName() + "#" + signature.getName();
@@ -46,6 +47,7 @@ public class ControllerLogAspect {
 
         Object result = joinPoint.proceed();
         long cost = System.currentTimeMillis() - start;
+
         log.info("接口结束: uri={}, controller={}, cost={}ms, result={}",
                 request == null ? "-" : request.getRequestURI(),
                 methodName,

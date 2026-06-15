@@ -66,6 +66,7 @@ public class OrderServiceImpl implements OrderService {
     public PageResult<OrderPageRes> pageOrder(OrderPageReq req) {
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
+
         QueryOrderBo queryOrderBo = buildQueryOrderBo(req);
         PageHelper.startPage(pageNum, pageSize);
         List<OrderEntity> list = orderMapper.selectPage(queryOrderBo);
