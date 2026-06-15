@@ -34,4 +34,17 @@ public class StudentHomeworkPageRes {
     private String answerFileName;
 
     private String answerObjectKey;
+
+    private Boolean submitted;
+
+    private String submissionFileName;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date submitTime;
+
+    private Boolean lateSubmitted;
+
+    private Integer score;
+
+    private String teacherRemark;
 }

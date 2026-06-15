@@ -6,10 +6,14 @@ import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkCreateReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPageReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPrepareReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPublishAnswerReq;
+import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkSubmissionGradeReq;
+import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkSubmissionPageReq;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkCreateRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPageRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPrepareRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPublishAnswerRes;
+import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkSubmissionGradeRes;
+import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkSubmissionPageRes;
 import cn.yanque.models.teaching.homework.service.HomeworkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -58,5 +62,19 @@ public class HomeworkController {
     public ApiResponse<HomeworkPublishAnswerRes> publishAnswer(@PathVariable Long id,
                                                                @Valid @RequestBody HomeworkPublishAnswerReq req) {
         return ApiResponse.success(homeworkService.publishAnswer(id, req));
+    }
+
+    @GetMapping("{id}/submissions")
+    @Operation(description = "分页查询作业提交记录")
+    public ApiResponse<PageResult<HomeworkSubmissionPageRes>> pageSubmissions(@PathVariable Long id,
+                                                                              @Valid @ModelAttribute HomeworkSubmissionPageReq req) {
+        return ApiResponse.success(homeworkService.pageSubmissions(id, req));
+    }
+
+    @PutMapping("submissions/{submissionId}/grade")
+    @Operation(description = "批改作业提交")
+    public ApiResponse<HomeworkSubmissionGradeRes> gradeSubmission(@PathVariable Long submissionId,
+                                                                   @Valid @RequestBody HomeworkSubmissionGradeReq req) {
+        return ApiResponse.success(homeworkService.gradeSubmission(submissionId, req));
     }
 }

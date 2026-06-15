@@ -25,6 +25,8 @@ public class UploadServiceImpl implements UploadService {
 
     private static final String HOMEWORK_ANSWER_PREFIX = "homework/answer/";
 
+    private static final String HOMEWORK_SUBMISSION_PREFIX = "homework/submission/";
+
     @Autowired
     private TosProperties tosProperties;
 
@@ -84,7 +86,9 @@ public class UploadServiceImpl implements UploadService {
         String normalizedObjectKey = objectKey.trim();
         // 通用签名接口必须限制业务目录，避免前端签发任意对象路径。
         if (normalizedObjectKey.startsWith("/") || normalizedObjectKey.contains("..")
-                || (!normalizedObjectKey.startsWith(HOMEWORK_CONTENT_PREFIX) && !normalizedObjectKey.startsWith(HOMEWORK_ANSWER_PREFIX))) {
+                || (!normalizedObjectKey.startsWith(HOMEWORK_CONTENT_PREFIX)
+                && !normalizedObjectKey.startsWith(HOMEWORK_ANSWER_PREFIX)
+                && !normalizedObjectKey.startsWith(HOMEWORK_SUBMISSION_PREFIX))) {
             throw BusinessException.DateError.newInstance("对象Key不允许访问");
         }
         return normalizedObjectKey;

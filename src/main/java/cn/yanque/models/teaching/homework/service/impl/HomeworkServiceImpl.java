@@ -4,19 +4,27 @@ import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.date.DateUtil;
 import cn.yanque.common.api.PageResult;
 import cn.yanque.common.exception.BusinessException;
+import cn.yanque.models.student.mapper.StudentMapper;
+import cn.yanque.models.student.pojo.entity.StudentEntity;
 import cn.yanque.models.teaching.clazz.mapper.ClazzMapper;
 import cn.yanque.models.teaching.clazz.pojo.entity.ClazzEntity;
 import cn.yanque.models.teaching.homework.mapper.HomeworkMapper;
+import cn.yanque.models.teaching.homework.mapper.HomeworkSubmissionMapper;
 import cn.yanque.models.teaching.homework.pojo.bo.QueryHomeworkBo;
 import cn.yanque.models.teaching.homework.pojo.entity.HomeworkEntity;
+import cn.yanque.models.teaching.homework.pojo.entity.HomeworkSubmissionEntity;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkCreateReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPageReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPrepareReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPublishAnswerReq;
+import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkSubmissionGradeReq;
+import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkSubmissionPageReq;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkCreateRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPageRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPrepareRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPublishAnswerRes;
+import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkSubmissionGradeRes;
+import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkSubmissionPageRes;
 import cn.yanque.models.teaching.homework.service.HomeworkService;
 import cn.yanque.models.teaching.schedule.mapper.ClassScheduleMapper;
 import cn.yanque.models.teaching.schedule.pojo.entity.ClassScheduleEntity;
@@ -38,6 +46,12 @@ public class HomeworkServiceImpl implements HomeworkService {
 
     @Autowired
     private HomeworkMapper homeworkMapper;
+
+    @Autowired
+    private HomeworkSubmissionMapper homeworkSubmissionMapper;
+
+    @Autowired
+    private StudentMapper studentMapper;
 
     @Autowired
     private ClazzMapper clazzMapper;
@@ -126,6 +140,47 @@ public class HomeworkServiceImpl implements HomeworkService {
         return res;
     }
 
+    @Override
+    public PageResult<HomeworkSubmissionPageRes> pageSubmissions(Long homeworkId, HomeworkSubmissionPageReq req) {
+        validateHomework(homeworkId);
+        int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
+        int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
+        PageHelper.startPage(pageNum, pageSize);
+        List<HomeworkSubmissionEntity> submissions = homeworkSubmissionMapper.selectByHomeworkId(homeworkId);
+        PageInfo<HomeworkSubmissionEntity> pageInfo = new PageInfo<>(submissions);
+        // 提交记录分页后再批量补学生信息，保持主分页查询简单，避免PageHelper分页被关联数据影响。
+        Map<Long, StudentEntity> studentMap = buildStudentMap(submissions);
+        List<HomeworkSubmissionPageRes> records = submissions.stream()
+                .map(item -> buildSubmissionPageRes(item, studentMap.get(item.getStudentId())))
+                .toList();
+        return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public HomeworkSubmissionGradeRes gradeSubmission(Long submissionId, HomeworkSubmissionGradeReq req) {
+        HomeworkSubmissionEntity existing = homeworkSubmissionMapper.selectById(submissionId);
+        if (existing == null) {
+            throw BusinessException.DateError.newInstance("提交记录不存在");
+        }
+
+        HomeworkSubmissionEntity submission = new HomeworkSubmissionEntity();
+        submission.setId(submissionId);
+        submission.setScore(req.getScore());
+        submission.setTeacherRemark(req.getTeacherRemark());
+        submission.setUpdatedAt(new Date());
+        // 批改只更新分数和评语，提交文件、提交时间等学生原始记录不能被批改流程改写。
+        if (homeworkSubmissionMapper.updateGrade(submission) == 0) {
+            throw BusinessException.DateError.newInstance("提交记录不存在");
+        }
+
+        HomeworkSubmissionGradeRes res = new HomeworkSubmissionGradeRes();
+        res.setId(submissionId);
+        res.setScore(req.getScore());
+        res.setTeacherRemark(req.getTeacherRemark());
+        return res;
+    }
+
     private ClazzEntity validateClass(Long classId) {
         ClazzEntity clazz = clazzMapper.selectById(classId);
         if (clazz == null) {
@@ -171,6 +226,29 @@ public class HomeworkServiceImpl implements HomeworkService {
         }
         return clazzMapper.selectByIds(classIds).stream()
                 .collect(Collectors.toMap(ClazzEntity::getId, ClazzEntity::getClassPeriod));
+    }
+
+    private Map<Long, StudentEntity> buildStudentMap(List<HomeworkSubmissionEntity> submissions) {
+        List<Long> studentIds = submissions.stream()
+                .map(HomeworkSubmissionEntity::getStudentId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (studentIds.isEmpty()) {
+            return Map.of();
+        }
+        return studentMapper.selectByIds(studentIds).stream()
+                .collect(Collectors.toMap(StudentEntity::getId, item -> item));
+    }
+
+    private HomeworkSubmissionPageRes buildSubmissionPageRes(HomeworkSubmissionEntity submission, StudentEntity student) {
+        HomeworkSubmissionPageRes res = new HomeworkSubmissionPageRes();
+        BeanUtils.copyProperties(submission, res);
+        if (student != null) {
+            res.setStudentName(student.getStudentName());
+            res.setStudentPhone(student.getStudentPhone());
+        }
+        return res;
     }
 
     private HomeworkPageRes buildPageRes(HomeworkEntity homework, Map<Long, String> classPeriodMap) {

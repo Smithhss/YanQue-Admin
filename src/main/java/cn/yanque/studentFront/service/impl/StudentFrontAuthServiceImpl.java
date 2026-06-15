@@ -51,6 +51,7 @@ public class StudentFrontAuthServiceImpl implements StudentFrontAuthService {
     @Override
     public StudentInfoRes buildStudentInfo(StudentEntity student) {
         StudentInfoRes res = new StudentInfoRes();
+        res.setId(student.getId());
         res.setName(student.getStudentName());
         res.setPhone(student.getStudentPhone());
         return res;
