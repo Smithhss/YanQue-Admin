@@ -5,12 +5,11 @@ import cn.yanque.common.api.PageResult;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkCreateReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPageReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPrepareReq;
-import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkUploadSignReq;
-import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkContentRes;
+import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPublishAnswerReq;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkCreateRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPageRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPrepareRes;
-import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkUploadSignRes;
+import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPublishAnswerRes;
 import cn.yanque.models.teaching.homework.service.HomeworkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -53,15 +53,10 @@ public class HomeworkController {
         return ApiResponse.success(homeworkService.prepareHomework(req));
     }
 
-    @GetMapping("{id}/content")
-    @Operation(description = "预览作业内容")
-    public ApiResponse<HomeworkContentRes> getHomeworkContent(@PathVariable Long id) {
-        return ApiResponse.success(homeworkService.getHomeworkContent(id));
-    }
-
-    @PostMapping("content/upload-sign")
-    @Operation(description = "生成作业内容上传预签名")
-    public ApiResponse<HomeworkUploadSignRes> createContentUploadSign(@Valid @RequestBody HomeworkUploadSignReq req) {
-        return ApiResponse.success(homeworkService.createContentUploadSign(req));
+    @PutMapping("{id}/answer")
+    @Operation(description = "发布作业答案")
+    public ApiResponse<HomeworkPublishAnswerRes> publishAnswer(@PathVariable Long id,
+                                                               @Valid @RequestBody HomeworkPublishAnswerReq req) {
+        return ApiResponse.success(homeworkService.publishAnswer(id, req));
     }
 }

@@ -18,6 +18,12 @@ public class HomeworkEntity {
 
     private String contentFileName;
 
+    private String answerObjectKey;
+
+    private String answerFileName;
+
+    private Boolean answerStudentVisible;
+
     private Long classId;
 
     private Date homeworkDate;

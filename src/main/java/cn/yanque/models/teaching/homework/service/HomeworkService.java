@@ -4,12 +4,11 @@ import cn.yanque.common.api.PageResult;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkCreateReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPageReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPrepareReq;
-import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkUploadSignReq;
-import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkContentRes;
+import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPublishAnswerReq;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkCreateRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPageRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPrepareRes;
-import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkUploadSignRes;
+import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPublishAnswerRes;
 
 /**
  * 作业服务。
@@ -22,7 +21,5 @@ public interface HomeworkService {
 
     HomeworkPrepareRes prepareHomework(HomeworkPrepareReq req);
 
-    HomeworkUploadSignRes createContentUploadSign(HomeworkUploadSignReq req);
-
-    HomeworkContentRes getHomeworkContent(Long id);
+    HomeworkPublishAnswerRes publishAnswer(Long id, HomeworkPublishAnswerReq req);
 }

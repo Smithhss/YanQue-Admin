@@ -21,6 +21,12 @@ public class HomeworkPageRes {
 
     private String contentFileName;
 
+    private String answerObjectKey;
+
+    private String answerFileName;
+
+    private Boolean answerStudentVisible;
+
     private Long classId;
 
     private String classPeriod;

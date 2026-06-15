@@ -92,6 +92,8 @@ values
     (@config_menu_id, 'api:config:create', '新增配置', 'API', '/yq-admin/api/sysConfig', 1143, '新增系统配置接口', 'ACTIVE', now(), now()),
     (@config_menu_id, 'api:config:update', '修改配置', 'API', '/yq-admin/api/sysConfig/{id}', 1144, '修改系统配置接口', 'ACTIVE', now(), now()),
     (@config_menu_id, 'api:config:delete', '删除配置', 'API', '/yq-admin/api/sysConfig/{id}', 1145, '删除系统配置接口', 'ACTIVE', now(), now()),
+    (@system_id, 'api:upload:presign-upload', '获取上传预签名', 'API', '/yq-admin/api/upload/presign-upload', 1151, '获取通用上传预签名接口', 'ACTIVE', now(), now()),
+    (@system_id, 'api:upload:presign-download', '获取下载预签名', 'API', '/yq-admin/api/upload/presign-download', 1152, '获取通用下载预签名接口', 'ACTIVE', now(), now()),
 
     (@campus_menu_id, 'api:campus:page', '分页查询校区', 'API', '/yq-admin/api/campus', 2111, '分页查询校区接口', 'ACTIVE', now(), now()),
     (@campus_menu_id, 'api:campus:detail', '查询校区详情', 'API', '/yq-admin/api/campus/{id}', 2112, '根据ID查询校区接口', 'ACTIVE', now(), now()),
@@ -127,8 +129,7 @@ values
     (@homework_menu_id, 'api:homework:page', '分页查询作业', 'API', '/yq-admin/api/homeworks', 2171, '分页查询作业接口', 'ACTIVE', now(), now()),
     (@homework_menu_id, 'api:homework:create', '新增作业', 'API', '/yq-admin/api/homeworks', 2172, '新增作业接口', 'ACTIVE', now(), now()),
     (@homework_menu_id, 'api:homework:prepare', '获取作业发布预填信息', 'API', '/yq-admin/api/homeworks/prepare', 2173, '获取作业发布预填信息接口', 'ACTIVE', now(), now()),
-    (@homework_menu_id, 'api:homework:content', '预览作业内容', 'API', '/yq-admin/api/homeworks/{id}/content', 2174, '预览作业内容接口', 'ACTIVE', now(), now()),
-    (@homework_menu_id, 'api:homework:upload-sign', '生成作业内容上传预签名', 'API', '/yq-admin/api/homeworks/content/upload-sign', 2175, '生成作业内容上传预签名接口', 'ACTIVE', now(), now()),
+    (@homework_menu_id, 'api:homework:publish-answer', '发布作业答案', 'API', '/yq-admin/api/homeworks/{id}/answer', 2177, '发布作业答案接口', 'ACTIVE', now(), now()),
 
     (@student_menu_id, 'api:student:page', '分页查询学生', 'API', '/yq-admin/api/students', 2156, '分页查询学生接口', 'ACTIVE', now(), now()),
     (@student_menu_id, 'api:student:assign-class', '学生分配班级', 'API', '/yq-admin/api/students/{id}/class', 2157, '给线下学生分配班级接口', 'ACTIVE', now(), now()),

@@ -2,12 +2,8 @@ package cn.yanque.models.teaching.homework.service.impl;
 
 import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.date.DateUtil;
-import cn.hutool.core.util.IdUtil;
 import cn.yanque.common.api.PageResult;
-import cn.yanque.common.dataConfig.service.SysConfig;
-import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.common.exception.BusinessException;
-import cn.yanque.config.TosProperties;
 import cn.yanque.models.teaching.clazz.mapper.ClazzMapper;
 import cn.yanque.models.teaching.clazz.pojo.entity.ClazzEntity;
 import cn.yanque.models.teaching.homework.mapper.HomeworkMapper;
@@ -16,22 +12,16 @@ import cn.yanque.models.teaching.homework.pojo.entity.HomeworkEntity;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkCreateReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPageReq;
 import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPrepareReq;
-import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkUploadSignReq;
-import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkContentRes;
+import cn.yanque.models.teaching.homework.pojo.vo.req.HomeworkPublishAnswerReq;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkCreateRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPageRes;
 import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPrepareRes;
-import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkUploadSignRes;
+import cn.yanque.models.teaching.homework.pojo.vo.res.HomeworkPublishAnswerRes;
 import cn.yanque.models.teaching.homework.service.HomeworkService;
 import cn.yanque.models.teaching.schedule.mapper.ClassScheduleMapper;
 import cn.yanque.models.teaching.schedule.pojo.entity.ClassScheduleEntity;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
-import com.volcengine.tos.TOSV2;
-import com.volcengine.tos.TOSV2ClientBuilder;
-import com.volcengine.tos.comm.HttpMethod;
-import com.volcengine.tos.model.object.PreSignedURLInput;
-import com.volcengine.tos.model.object.PreSignedURLOutput;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -46,8 +36,6 @@ import java.util.stream.Collectors;
 @Service
 public class HomeworkServiceImpl implements HomeworkService {
 
-    private static final String MARKDOWN_CONTENT_TYPE = "text/markdown; charset=utf-8";
-
     @Autowired
     private HomeworkMapper homeworkMapper;
 
@@ -56,12 +44,6 @@ public class HomeworkServiceImpl implements HomeworkService {
 
     @Autowired
     private ClassScheduleMapper classScheduleMapper;
-
-    @Autowired
-    private TosProperties tosProperties;
-
-    @Autowired
-    private SysConfigService sysConfigService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -123,75 +105,25 @@ public class HomeworkServiceImpl implements HomeworkService {
     }
 
     @Override
-    public HomeworkUploadSignRes createContentUploadSign(HomeworkUploadSignReq req) {
-        validateClass(req.getClassId());
-        String fileName = req.getFileName().trim();
-        if (!fileName.toLowerCase().endsWith(".md")) {
-            throw BusinessException.DateError.newInstance("作业内容只支持md格式");
-        }
-        validateTosConfig();
-
-        String contentFileName = fileName;
-        String objectKey = "homework/" + req.getClassId() + "/" + DateUtil.format(new Date(), DatePattern.PURE_DATE_PATTERN)
-                + "/" + IdUtil.fastSimpleUUID() + ".md";
-        Long uploadExpireSeconds = getUploadExpireSeconds();
-        Map<String, String> headers = Map.of("Content-Type", MARKDOWN_CONTENT_TYPE);
-        TOSV2 tos = createTosClient();
-        PreSignedURLInput input = PreSignedURLInput.builder()
-                .bucket(tosProperties.getBucket())
-                .key(objectKey)
-                .httpMethod(HttpMethod.PUT)
-                .expires(uploadExpireSeconds)
-                .header(headers)
-                .build();
-        PreSignedURLOutput output = tos.preSignedURL(input);
-
-        HomeworkUploadSignRes res = new HomeworkUploadSignRes();
-        res.setUploadUrl(output.getSignedUrl());
-        res.setContentObjectKey(objectKey);
-        res.setContentFileName(contentFileName);
-        res.setExpires(uploadExpireSeconds);
-        res.setHeaders(output.getSignedHeader() == null || output.getSignedHeader().isEmpty() ? headers : output.getSignedHeader());
-        return res;
-    }
-
-    @Override
-    public HomeworkContentRes getHomeworkContent(Long id) {
-        HomeworkEntity homework = homeworkMapper.selectById(id);
-        if (homework == null) {
+    @Transactional(rollbackFor = Exception.class)
+    public HomeworkPublishAnswerRes publishAnswer(Long id, HomeworkPublishAnswerReq req) {
+        validateHomework(id);
+        HomeworkEntity homework = new HomeworkEntity();
+        homework.setId(id);
+        homework.setAnswerObjectKey(req.getAnswerObjectKey());
+        homework.setAnswerFileName(req.getAnswerFileName());
+        homework.setAnswerStudentVisible(req.getAnswerStudentVisible());
+        homework.setUpdatedAt(new Date());
+        if (homeworkMapper.updateAnswer(homework) == 0) {
             throw BusinessException.DateError.newInstance("作业不存在");
         }
-        validateTosConfig();
-        Long previewExpireSeconds = getPreviewExpireSeconds();
-        PreSignedURLInput input = PreSignedURLInput.builder()
-                .bucket(tosProperties.getBucket())
-                .key(homework.getContentObjectKey())
-                .httpMethod(HttpMethod.GET)
-                .expires(previewExpireSeconds)
-                .build();
-        PreSignedURLOutput output = createTosClient().preSignedURL(input);
 
-        HomeworkContentRes res = new HomeworkContentRes();
-        res.setContentFileName(homework.getContentFileName());
-        res.setPreviewUrl(output.getSignedUrl());
-        res.setExpires(previewExpireSeconds);
+        HomeworkPublishAnswerRes res = new HomeworkPublishAnswerRes();
+        res.setId(id);
+        res.setAnswerObjectKey(req.getAnswerObjectKey());
+        res.setAnswerFileName(req.getAnswerFileName());
+        res.setAnswerStudentVisible(req.getAnswerStudentVisible());
         return res;
-    }
-
-    private Long getUploadExpireSeconds() {
-        Long uploadExpireSeconds = sysConfigService.get(SysConfig.tosUploadExpireSeconds);
-        if (uploadExpireSeconds == null || uploadExpireSeconds <= 0) {
-            throw BusinessException.DateError.newInstance("TOS上传签名过期时间配置错误");
-        }
-        return uploadExpireSeconds;
-    }
-
-    private Long getPreviewExpireSeconds() {
-        Long previewExpireSeconds = sysConfigService.get(SysConfig.tosPreviewExpireSeconds);
-        if (previewExpireSeconds == null || previewExpireSeconds <= 0) {
-            throw BusinessException.DateError.newInstance("TOS预览签名过期时间配置错误");
-        }
-        return previewExpireSeconds;
     }
 
     private ClazzEntity validateClass(Long classId) {
@@ -200,6 +132,14 @@ public class HomeworkServiceImpl implements HomeworkService {
             throw BusinessException.DateError.newInstance("班级不存在");
         }
         return clazz;
+    }
+
+    private HomeworkEntity validateHomework(Long id) {
+        HomeworkEntity homework = homeworkMapper.selectById(id);
+        if (homework == null) {
+            throw BusinessException.DateError.newInstance("作业不存在");
+        }
+        return homework;
     }
 
     private ClassScheduleEntity getSchedule(Long classId, Date homeworkDate) {
@@ -220,18 +160,6 @@ public class HomeworkServiceImpl implements HomeworkService {
         }
     }
 
-    private void validateTosConfig() {
-        if (isBlank(tosProperties.getEndpoint()) || isBlank(tosProperties.getRegion()) || isBlank(tosProperties.getBucket())
-                || isBlank(tosProperties.getAccessKey()) || isBlank(tosProperties.getSecretKey())) {
-            throw BusinessException.DateError.newInstance("TOS配置不完整");
-        }
-    }
-
-    private TOSV2 createTosClient() {
-        return new TOSV2ClientBuilder().build(tosProperties.getRegion(), tosProperties.getEndpoint(),
-                tosProperties.getAccessKey(), tosProperties.getSecretKey());
-    }
-
     private Map<Long, String> buildClassPeriodMap(List<HomeworkEntity> homeworks) {
         List<Long> classIds = homeworks.stream()
                 .map(HomeworkEntity::getClassId)
@@ -250,6 +178,9 @@ public class HomeworkServiceImpl implements HomeworkService {
         BeanUtils.copyProperties(homework, res);
         if (isBlank(res.getContentFileName())) {
             res.setContentFileName(getFileNameFromObjectKey(homework.getContentObjectKey()));
+        }
+        if (isBlank(res.getAnswerFileName())) {
+            res.setAnswerFileName(getFileNameFromObjectKey(homework.getAnswerObjectKey()));
         }
         res.setClassPeriod(classPeriodMap.get(homework.getClassId()));
         return res;

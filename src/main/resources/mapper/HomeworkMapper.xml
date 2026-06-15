@@ -7,6 +7,9 @@
         <result property="title" column="title"/>
         <result property="contentObjectKey" column="content_object_key"/>
         <result property="contentFileName" column="content_file_name"/>
+        <result property="answerObjectKey" column="answer_object_key"/>
+        <result property="answerFileName" column="answer_file_name"/>
+        <result property="answerStudentVisible" column="answer_student_visible"/>
         <result property="classId" column="class_id"/>
         <result property="homeworkDate" column="homework_date"/>
         <result property="classContent" column="class_content"/>
@@ -18,7 +21,7 @@
     </resultMap>
 
     <sql id="BaseColumns">
-        id, title, content_object_key, content_file_name, class_id, homework_date, class_content, start_time, deadline, remark, created_at, updated_at
+        id, title, content_object_key, content_file_name, answer_object_key, answer_file_name, answer_student_visible, class_id, homework_date, class_content, start_time, deadline, remark, created_at, updated_at
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
@@ -81,4 +84,13 @@
         and homework_date = #{homeworkDate}
         limit 1
     </select>
+
+    <update id="updateAnswer">
+        update homework
+        set answer_object_key = #{answerObjectKey},
+            answer_file_name = #{answerFileName},
+            answer_student_visible = #{answerStudentVisible},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
 </mapper>
