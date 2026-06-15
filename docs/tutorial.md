@@ -3281,6 +3281,26 @@ YeepayPaySuccessHandle.getType() 返回 "/yq-admin/yop-callback/paySuccess"
 匹配成功，调用 handle() 方法
 ```
 
+**为什么这样写？设计决策解析：**
+
+| 问题 | 设计决策 | 原因 |
+|------|---------|------|
+| 为什么用 Servlet 而非 Controller？ | 继承 `HttpServlet` | 易宝 SDK 的 `YopCallbackEngine.handle()` 需要原始 HTTP 请求信息，Controller 的 `@RequestBody` 会提前解析请求 |
+| 为什么 `doGet()` 转发到 `doPost()`？ | 统一处理 | 防御性编程，易宝可能用 GET 或 POST 发送回调 |
+| 为什么判断 Content-Type？ | 适配 JSON 和 Form | 易宝回调可能用两种格式，JSON 需手动读 `InputStream`，Form 由容器自动解析 |
+| 为什么用 `req.getRequestURI()`？ | 一个 Servlet 处理所有回调 | 通过 URI 区分类型：`/paySuccess` → 支付成功，`/refund` → 退款 |
+| 为什么转换 Headers 和 Params？ | 格式适配 | SDK 要求 `Map<String, String>` 和 `Map<String, List<String>>` |
+| 为什么 `writeResponse()` 处理 null？ | 返回 200 OK | 某些回调不需要返回内容，避免易宝重复发送回调 |
+| 为什么用 `getOutputStream()`？ | 支持二进制 | 比 `getWriter()` 更通用，编码可控 |
+
+**整体设计模式：**
+```
+Servlet（适配器） → YopCallbackEngine（路由器） → Handler（业务处理）
+```
+- Servlet 只负责"翻译"，把 HTTP 请求转为 SDK 能理解的格式
+- `YopCallbackEngine` 负责路由，根据 URI 找到对应 Handler
+- Handler 负责业务逻辑（更新订单状态等）
+
 **为什么回调处理要更新两个表？**
 - 支付订单（Order）：记录支付状态，后续用于对账
 - 预支付订单（PrepayOrder）：业务层关心的订单状态，前端展示用
