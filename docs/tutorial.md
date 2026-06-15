@@ -2,7 +2,7 @@
 
 > 本教程系统讲解 YanQue-Admin 项目的架构设计和实现原理，帮助你理解"为什么这样写"而不仅仅是"怎么写"。
 >
-> 共 12 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理，第 12 章讲解学生端业务。
+> 共 14 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理，第 12 章讲解学生端业务，第 13 章讲解作业系统，第 14 章讲解退款流程。
 >
 > 每个核心功能都附带流程图，便于理解整体逻辑。
 
@@ -22,6 +22,8 @@
 - [第 10 章：订单与支付 — 第三方支付集成](#第-10-章订单与支付--第三方支付集成)
 - [第 11 章：值班管理 — 教师排班系统](#第-11-章值班管理--教师排班系统)
 - [第 12 章：学生端 — 学生管理与前台业务](#第-12-章学生端--学生管理与前台业务)
+- [第 13 章：作业系统 — 教师发布与学生提交](#第-13-章作业系统--教师发布与学生提交)
+- [第 14 章：退款流程 — 易宝退款集成](#第-14-章退款流程--易宝退款集成)
 
 ---
 
@@ -3563,6 +3565,343 @@ public CompleteStudentProfileRes completeProfile(CompleteStudentProfileReq req) 
 - 学生下单涉及：创建订单 → 调用易宝 → 更新状态 → 超时检测
 - 这些逻辑跨多个 Service，需要一个编排层
 - Biz（Business）层负责协调多个 Service，单个 Service 保持原子性
+
+### 12.7 学生分配班级
+
+```java
+@PutMapping("{id}/class")
+public ApiResponse<StudentAssignClassRes> assignClass(@PathVariable Long id,
+                                                      @Valid @RequestBody StudentAssignClassReq req) {
+    return ApiResponse.success(studentService.assignClass(id, req));
+}
+```
+
+学生购买产品后，管理员需要把学生分配到具体班级。学生有了 `classId` 后才能查看该班级的作业、课表等信息。
+
+### 12.8 学生端认证：独立的拦截器体系
+
+学生端和后台管理使用**两套独立的拦截器链**：
+
+```
+后台管理拦截器链：
+  JwtAuthInterceptor → SignInterceptor → PermissionInterceptor
+
+学生端拦截器链：
+  StudentJwtAuthInterceptor（单独一套）
+```
+
+**StudentJwtAuthInterceptor 与 JwtAuthInterceptor 的区别：**
+
+| 维度 | JwtAuthInterceptor | StudentJwtAuthInterceptor |
+|------|--------------------|-----------------------------|
+| JWT payload | uid, expire_time | uid, phone, student:true, expire_time |
+| 额外校验 | 无 | 检查 student:true 标记 |
+| 用户信息 | 存入 request.setAttribute | 存入 StudentThreadLocal |
+| 权限校验 | 有（PermissionInterceptor） | 无（学生只看自己的数据） |
+
+**StudentThreadLocal — 线程级学生上下文：**
+```java
+public class StudentThreadLocal {
+    private static ThreadLocal<StudentEntity> studentEntityThreadLocal = new ThreadLocal<>();
+
+    public static StudentEntity get() { return studentEntityThreadLocal.get(); }
+    public static void set(StudentEntity student) { studentEntityThreadLocal.set(student); }
+    public static void remove() { studentEntityThreadLocal.remove(); }
+}
+```
+
+- 拦截器解析 JWT 后，查询学生完整信息存入 ThreadLocal
+- Service 层通过 `StudentThreadLocal.get()` 直接获取当前学生，不用重复查询
+- `afterCompletion` 中清理 ThreadLocal，防止线程复用导致数据污染
+
+**为什么学生端不用签名验证（SignInterceptor）？**
+- 学生端是 H5 页面，签名逻辑对前端实现成本较高
+- 学生只能看自己的数据，安全风险相对较低
+- 后台管理是内部系统，签名防篡改更有必要
+
+---
+
+## 第 13 章：作业系统 — 教师发布与学生提交
+
+> 本章讲解作业系统的完整生命周期：教师发布作业 → 学生提交 → 教师批改 → 发布答案。
+
+### 13.1 作业系统架构
+
+```
+作业生命周期：
+  教师发布作业 → 学生查看 → 学生提交 → 教师批改 → 教师发布答案 → 学生查看答案
+```
+
+**核心实体关系：**
+```
+HomeworkEntity（作业）
+    ├── classId → 班级
+    ├── homeworkDate → 作业日期
+    ├── contentObjectKey → 作业文件（OSS）
+    ├── answerObjectKey → 答案文件（OSS）
+    └── deadline → 截止时间
+
+HomeworkSubmissionEntity（学生提交）
+    ├── homeworkId → 关联作业
+    ├── studentId → 关联学生
+    ├── classId → 关联班级
+    ├── contentObjectKey → 提交文件（OSS）
+    ├── submitTime → 提交时间
+    ├── lateSubmitted → 是否迟交
+    ├── score → 分数
+    └── teacherRemark → 教师评语
+```
+
+**为什么作业和提交分成两张表？**
+- 一份作业对应多个学生提交（一对多）
+- 作业信息（标题、文件、截止时间）只存一份
+- 每个学生独立提交、独立批改
+
+### 13.2 教师端：发布作业
+
+**发布流程：**
+```java
+public HomeworkCreateRes addHomework(HomeworkCreateReq req) {
+    // 1. 校验班级存在
+    ClazzEntity clazz = validateClass(req.getClassId());
+
+    // 2. 同班同天只能有一份作业
+    validateHomeworkNotExists(req.getClassId(), homeworkDate);
+
+    // 3. 从课表获取当天课程内容（自动填充）
+    ClassScheduleEntity schedule = getSchedule(req.getClassId(), homeworkDate);
+
+    // 4. 校验截止时间
+    if (req.getDeadline().before(req.getStartTime())) {
+        throw BusinessException.DateError.newInstance("截止时间不能早于开始时间");
+    }
+
+    // 5. 创建作业（课程内容从课表自动获取）
+    homework.setClassContent(schedule.getCourseContent());
+    homeworkMapper.insert(homework);
+}
+```
+
+**关键设计：**
+- **同班同天唯一**：`validateHomeworkNotExists` 检查同一班级同一天不能重复发布
+- **课程内容自动填充**：从课表获取，不让老师手动维护
+- **预填接口**：`prepareHomework` 提供预填信息（班期、日期、默认标题），前端直接展示
+
+### 13.3 教师端：发布答案与批改
+
+**发布答案：**
+```java
+public HomeworkPublishAnswerRes publishAnswer(Long id, HomeworkPublishAnswerReq req) {
+    homework.setAnswerObjectKey(req.getAnswerObjectKey());  // 答案文件
+    homework.setAnswerFileName(req.getAnswerFileName());
+    homework.setAnswerStudentVisible(req.getAnswerStudentVisible()); // 是否对学生可见
+    homeworkMapper.updateAnswer(homework);
+}
+```
+
+- 答案发布后，通过 `answerStudentVisible` 控制学生是否能看到
+- 教师可以先发布作业，等学生都提交后再发布答案
+
+**批改作业：**
+```java
+public HomeworkSubmissionGradeRes gradeSubmission(Long submissionId, HomeworkSubmissionGradeReq req) {
+    submission.setScore(req.getScore());           // 分数
+    submission.setTeacherRemark(req.getTeacherRemark()); // 评语
+    homeworkSubmissionMapper.updateGrade(submission);
+}
+```
+
+- 批改只更新 `score` 和 `teacherRemark`，不影响学生提交的原始文件
+- 用 `updateGrade` 而非 `updateById`，明确只更新批改相关字段
+
+### 13.4 学生端：查看与提交作业
+
+**学生查看作业列表：**
+```java
+public PageResult<StudentHomeworkPageRes> pageHomework(StudentHomeworkPageReq req) {
+    StudentEntity student = StudentThreadLocal.get();  // 从 ThreadLocal 获取当前学生
+    if (student.getClassId() == null) {
+        return emptyResult;  // 未分配班级的学生看不到作业
+    }
+
+    List<HomeworkEntity> list = homeworkMapper.selectStudentPage(student.getClassId(), new Date());
+
+    // 批量查询当前学生的提交状态
+    Map<Long, HomeworkSubmissionEntity> submissionMap = buildSubmissionMap(list, student.getId());
+
+    // 组装：作业信息 + 我的提交状态
+    list.stream().map(item -> buildHomeworkRes(item, submissionMap.get(item.getId())));
+}
+```
+
+**为什么用 `buildSubmissionMap` 而非 SQL JOIN？**
+- 分页查询以 homework 为主表，保持 SQL 简单
+- 提交状态按当前学生批量补齐，避免分页 SQL 做不必要的关联
+- 同一个学生的多条作业提交一次性查出来，用 Map 关联
+
+**学生提交作业：**
+```java
+public StudentHomeworkSubmitRes submitHomework(Long homeworkId, StudentHomeworkSubmitReq req) {
+    // 1. 校验截止时间
+    if (homework.getDeadline() != null && now.after(homework.getDeadline())) {
+        throw BusinessException.DateError.newInstance("作业已截止，不能提交");
+    }
+
+    // 2. 校验文件路径（只能提交到自己的目录）
+    validateSubmissionObjectKey(req.getObjectKey(), homeworkId, student.getId());
+
+    // 3. 一个学生一份作业只保留一条记录（重新提交覆盖）
+    HomeworkSubmissionEntity submission = homeworkSubmissionMapper
+        .selectByHomeworkIdAndStudentId(homeworkId, student.getId());
+    if (submission == null) {
+        homeworkSubmissionMapper.insert(submission);   // 首次提交
+    } else {
+        homeworkSubmissionMapper.updateSubmit(submission); // 重新提交
+    }
+}
+```
+
+**文件路径安全校验：**
+```java
+private void validateSubmissionObjectKey(String objectKey, Long homeworkId, Long studentId) {
+    // 只允许 .md 格式
+    if (!objectKey.trim().toLowerCase().endsWith(".md")) {
+        throw BusinessException.DateError.newInstance("提交文件只支持md格式");
+    }
+    // 必须落在自己的作业目录下
+    String expectedPrefix = "homework/submission/" + homeworkId + "/" + studentId + "/";
+    if (!objectKey.startsWith(expectedPrefix) || objectKey.contains("..")) {
+        throw BusinessException.DateError.newInstance("提交文件路径不合法");
+    }
+}
+```
+
+- 防止学生用别人的 objectKey 覆盖提交记录
+- 防止路径穿越攻击（`..`）
+- 只允许 `.md` 格式，统一提交规范
+
+### 13.5 作业系统数据流
+
+```mermaid
+flowchart TD
+    subgraph 教师端
+        A[发布作业] --> B[学生提交]
+        B --> C[教师批改]
+        C --> D[发布答案]
+    end
+
+    subgraph 学生端
+        E[查看作业列表] --> F[下载作业内容]
+        F --> G[提交作业文件]
+        G --> H[查看分数和评语]
+        D --> I[查看答案]
+    end
+```
+
+---
+
+## 第 14 章：退款流程 — 易宝退款集成
+
+> 本章讲解退款订单的设计和易宝退款的集成方式。
+
+### 14.1 退款流程
+
+```mermaid
+sequenceDiagram
+    participant A as 管理员
+    participant C as RefundOrderController
+    participant B as RefundOrderBiz
+    participant O as OrderService
+    participant Y as 易宝支付
+
+    A->>C: POST /createRefundOrder (生成退款单号)
+    C-->>A: 退款单号
+
+    A->>C: POST /applyRefund (申请退款)
+    C->>B: applyRefund(refundOrderNo, req)
+    B->>O: 查询原支付订单
+    B->>B: 保存退款单 (状态: INIT)
+    B->>O: 增加已退金额
+    B->>Y: 调用易宝退款接口
+    Y-->>B: 退款流水号
+    B->>B: 更新退款单状态为 PROCESSING
+
+    Y->>B: 退款成功回调
+    B->>B: 更新退款单状态为 SUCCESS
+```
+
+### 14.2 退款订单实体
+
+```java
+@Data
+public class RefundOrderEntity {
+    private Long id;
+    private String refundOrderNo;    // 退款单号
+    private String paymentOrderNo;   // 原支付订单号
+    private BigDecimal paymentAmount;// 原支付金额
+    private BigDecimal refundAmount; // 退款金额
+    private String status;           // INIT/PROCESSING/SUCCESS/FAIL
+    private String reason;           // 退款原因
+    private String uniqueRefundNo;   // 易宝退款流水号
+    private String failReason;       // 失败原因
+    private Date refundSuccessTime;  // 退款成功时间
+}
+```
+
+### 14.3 退款核心逻辑
+
+**申请退款（applyRefund）：**
+```java
+public RefundApplyRes applyRefund(String refundOrderNo, RefundApplyReq req) {
+    // 1. 校验原订单（必须是支付成功的订单）
+    OrderEntity order = getRefundablePaymentOrder(req.getPaymentOrderNo());
+
+    // 2. 保存退款单（幂等：重复请求返回已有退款单）
+    RefundOrderEntity existed = saveApplyingRefundOrder(refundOrderNo, req, order);
+    if (existed != null) return buildRefundApplyRes(existed);
+
+    // 3. 增加原订单已退金额
+    orderService.increaseRefundedAmount(order.getOrderNo(), req.getRefundAmount());
+
+    // 4. 调用易宝退款
+    YeepayRefundRes res = yeepayCashierService.refund(yeepayRefundReq);
+
+    // 5. 更新退款单状态为 PROCESSING
+    refundOrderService.updateRefundProcessing(refundOrderNo, ...);
+}
+```
+
+**为什么退款失败要"回退已退金额"？**
+```java
+try {
+    yeepayRefundRes = requestYeepayRefund(order, refundOrderNo, req);
+} catch (Exception e) {
+    orderService.decreaseRefundedAmount(order.getOrderNo(), req.getRefundAmount()); // 回退
+    refundOrderService.updateRefundFail(refundOrderNo, ...);
+    throw BusinessException.RemoteError.newInstance("申请退款失败");
+}
+```
+- 第 3 步增加了已退金额，如果易宝调用失败，需要回退
+- 保证已退金额的准确性，防止退款失败但金额已被占用
+
+### 14.4 退款状态机
+
+```
+INIT（初始化）→ PROCESSING（退款中）→ SUCCESS（退款成功）
+INIT（初始化）→ FAIL（退款失败）
+PROCESSING（退款中）→ FAIL（退款失败）
+```
+
+**退款失败回调（回退已退金额）：**
+```java
+public void handleRefundFail(String refundOrderNo, String failReason) {
+    refundOrderService.updateRefundFail(refundOrderNo, PROCESSING, failReason);
+    orderService.decreaseRefundedAmount(refundOrder.getPaymentOrderNo(), refundOrder.getRefundAmount());
+}
+```
+
+- 退款失败时，回退原订单的已退金额，恢复退款额度
+- 乐观锁：只有当前状态是 PROCESSING 才能更新为 FAIL
 
 ---
 
