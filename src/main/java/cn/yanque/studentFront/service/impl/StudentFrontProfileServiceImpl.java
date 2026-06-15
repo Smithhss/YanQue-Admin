@@ -2,6 +2,8 @@ package cn.yanque.studentFront.service.impl;
 
 import cn.yanque.common.enums.OrderStatusEnum;
 import cn.yanque.common.exception.BusinessException;
+import cn.yanque.models.order.product.mapper.ProductMapper;
+import cn.yanque.models.order.product.pojo.entity.ProductEntity;
 import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
 import cn.yanque.models.order.prepay.service.OrderService;
 import cn.yanque.models.student.pojo.entity.StudentEntity;
@@ -10,6 +12,7 @@ import cn.yanque.models.student.service.StudentProductService;
 import cn.yanque.models.student.service.StudentService;
 import cn.yanque.studentFront.pojo.req.CompleteStudentProfileReq;
 import cn.yanque.studentFront.pojo.res.CompleteStudentProfileRes;
+import cn.yanque.studentFront.service.StudentFrontAuthService;
 import cn.yanque.studentFront.service.StudentFrontProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -25,7 +28,13 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
     private StudentService studentService;
 
     @Autowired
+    private ProductMapper productMapper;
+
+    @Autowired
     private StudentProductService studentProductService;
+
+    @Autowired
+    private StudentFrontAuthService studentFrontAuthService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -41,6 +50,10 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
         if (!OrderStatusEnum.SUCCESS.name().equals(order.getStatus())) {
             throw BusinessException.DateError.newInstance("订单未支付成功");
         }
+        ProductEntity product = productMapper.selectById(Long.valueOf(order.getProductId()));
+        if (product == null) {
+            throw BusinessException.ProductNotExist;
+        }
 
         StudentEntity student = new StudentEntity();
         student.setStudentName(order.getStudentName());
@@ -50,6 +63,7 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
         student.setGradeYear(req.getGradeYear());
         student.setSchool(req.getSchool());
         student.setMajor(req.getMajor());
+        student.setTeachingMode(product.getTeachingMode());
         StudentEntity createdStudent = studentService.createStudent(student);
 
         StudentProductEntity studentProduct = new StudentProductEntity();
@@ -61,6 +75,9 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
         CompleteStudentProfileRes res = new CompleteStudentProfileRes();
         res.setStudentId(createdStudent.getId());
         res.setCompleted(true);
+        res.setToken(studentFrontAuthService.createToken(createdStudent));
+        res.setSignSecret(studentFrontAuthService.createSignSecret(createdStudent));
+        res.setStudent(studentFrontAuthService.buildStudentInfo(createdStudent));
         return res;
     }
 }

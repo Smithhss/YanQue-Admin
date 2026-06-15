@@ -7,7 +7,8 @@ insert into sys_permission
 values
     (0, 'system', '系统管理', 'MENU', null, 10, '系统管理根节点', 'ACTIVE', now(), now()),
     (0, 'teaching', '教学管理', 'MENU', null, 20, '教学管理根节点', 'ACTIVE', now(), now()),
-    (0, 'order', '订单管理', 'MENU', null, 30, '订单管理根节点', 'ACTIVE', now(), now())
+    (0, 'student', '学生管理', 'MENU', null, 30, '学生管理根节点', 'ACTIVE', now(), now()),
+    (0, 'order', '订单管理', 'MENU', null, 40, '订单管理根节点', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),
@@ -20,6 +21,7 @@ on duplicate key update
 
 set @system_id := (select id from sys_permission where permission_code = 'system' limit 1);
 set @teaching_id := (select id from sys_permission where permission_code = 'teaching' limit 1);
+set @student_id := (select id from sys_permission where permission_code = 'student' limit 1);
 set @order_id := (select id from sys_permission where permission_code = 'order' limit 1);
 
 insert into sys_permission
@@ -32,8 +34,8 @@ values
     (@teaching_id, 'teaching:campus', '校区管理', 'MENU', null, 2010, '校区管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:course', '课程管理', 'MENU', null, 2020, '课程管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:class', '班级管理', 'MENU', null, 2030, '班级管理页面', 'ACTIVE', now(), now()),
-    (@teaching_id, 'teaching:student', '学生管理', 'MENU', null, 2040, '学生管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2050, '值班管理页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:list', '学生列表', 'MENU', null, 3010, '学生列表页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:payment', '订单管理', 'MENU', null, 3030, '支付订单管理页面', 'ACTIVE', now(), now())
@@ -54,7 +56,7 @@ set @config_menu_id := (select id from sys_permission where permission_code = 's
 set @campus_menu_id := (select id from sys_permission where permission_code = 'teaching:campus' limit 1);
 set @course_menu_id := (select id from sys_permission where permission_code = 'teaching:course' limit 1);
 set @class_menu_id := (select id from sys_permission where permission_code = 'teaching:class' limit 1);
-set @student_menu_id := (select id from sys_permission where permission_code = 'teaching:student' limit 1);
+set @student_menu_id := (select id from sys_permission where permission_code = 'student:list' limit 1);
 set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
 set @product_menu_id := (select id from sys_permission where permission_code = 'order:product' limit 1);
 set @prepay_order_menu_id := (select id from sys_permission where permission_code = 'order:prepay' limit 1);

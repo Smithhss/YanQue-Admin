@@ -15,4 +15,13 @@ public class CompleteStudentProfileRes {
 
     @Schema(description = "是否完成")
     private Boolean completed;
+
+    @Schema(description = "正式登录JWT token")
+    private String token;
+
+    @Schema(description = "正式登录签名密钥")
+    private String signSecret;
+
+    @Schema(description = "学生信息")
+    private StudentInfoRes student;
 }

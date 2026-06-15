@@ -26,12 +26,16 @@ import java.util.List;
 @Service
 public class StudentServiceImpl implements StudentService {
 
+    private static final String TEACHING_MODE_ONLINE = "ONLINE";
+    private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
+
     @Autowired
     private StudentMapper studentMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public StudentEntity createStudent(StudentEntity student) {
+        fillAndValidateTeachingMode(student);
         student.setStudentNo(createStudentNo());
         student.setStatus(ActiveEnum.ACTIVE.name());
         student.setCreatedAt(new Date());
@@ -57,6 +61,17 @@ public class StudentServiceImpl implements StudentService {
         PageInfo<StudentEntity> pageInfo = new PageInfo<>(list);
         List<StudentPageRes> records = list.stream().map(this::buildStudentPageRes).toList();
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
+    }
+
+    private void fillAndValidateTeachingMode(StudentEntity student) {
+        String teachingMode = student.getTeachingMode();
+        if (teachingMode == null || teachingMode.isBlank()) {
+            teachingMode = TEACHING_MODE_ONLINE;
+        }
+        if (!TEACHING_MODE_ONLINE.equals(teachingMode) && !TEACHING_MODE_OFFLINE.equals(teachingMode)) {
+            throw BusinessException.DateError.newInstance("上课方式只能是ONLINE或OFFLINE");
+        }
+        student.setTeachingMode(teachingMode);
     }
 
     private StudentPageRes buildStudentPageRes(StudentEntity student) {

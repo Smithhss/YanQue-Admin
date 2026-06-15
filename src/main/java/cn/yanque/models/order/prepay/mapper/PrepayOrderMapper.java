@@ -34,6 +34,14 @@ public interface PrepayOrderMapper {
     PrepayOrderEntity selectById(@Param("id") Long id);
 
     /**
+     * 按订单号查询预支付订单。
+     *
+     * @param orderNo 预支付订单号
+     * @return 预支付订单实体
+     */
+    PrepayOrderEntity selectByOrderNo(@Param("orderNo") String orderNo);
+
+    /**
      * 查询预支付订单列表，分页由PageHelper在Service层控制。
      *
      * @param keyword     学生姓名或手机号关键字

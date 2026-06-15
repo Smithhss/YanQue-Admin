@@ -1,8 +1,11 @@
 package cn.yanque.config;
 
 import cn.yanque.models.auth.interceptor.JwtAuthInterceptor;
+import cn.yanque.models.auth.interceptor.PendingPaySignInterceptor;
 import cn.yanque.models.auth.interceptor.PermissionInterceptor;
 import cn.yanque.models.auth.interceptor.SignInterceptor;
+import cn.yanque.models.auth.interceptor.StudentJwtAuthInterceptor;
+import cn.yanque.models.auth.interceptor.StudentSignInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -20,6 +23,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Autowired
     private SignInterceptor signInterceptor;
 
+    @Autowired
+    private PendingPaySignInterceptor pendingPaySignInterceptor;
+
+    @Autowired
+    private StudentJwtAuthInterceptor studentJwtAuthInterceptor;
+
+    @Autowired
+    private StudentSignInterceptor studentSignInterceptor;
+
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // 拦截器按注册顺序执行：先解析 JWT 得到 userId，再验签，最后做接口权限判断。
@@ -27,11 +39,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/sysUser/login",
-                        "/api/student/login",
-                        "/api/studentFront/order/createOrderNo",
-                        "/api/studentFront/order/createPaymentOrder",
-                        "/api/studentFront/order/paymentReturnInfo",
-                        "/api/studentFront/student/completeProfile",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");
@@ -41,11 +48,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/sysUser/login",
-                        "/api/student/login",
-                        "/api/studentFront/order/createOrderNo",
-                        "/api/studentFront/order/createPaymentOrder",
-                        "/api/studentFront/order/paymentReturnInfo",
-                        "/api/studentFront/student/completeProfile",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");
@@ -55,14 +57,24 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/sysUser/login",
-                        "/api/student/login",
-                        "/api/studentFront/order/createOrderNo",
-                        "/api/studentFront/order/createPaymentOrder",
-                        "/api/studentFront/order/paymentReturnInfo",
-                        "/api/studentFront/student/completeProfile",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");
+
+        registry.addInterceptor(pendingPaySignInterceptor)
+                .addPathPatterns("/student/pending/**");
+
+        registry.addInterceptor(studentJwtAuthInterceptor)
+                .addPathPatterns("/student/**")
+                .excludePathPatterns(
+                        "/student/login",
+                        "/student/pending/**");
+
+        registry.addInterceptor(studentSignInterceptor)
+                .addPathPatterns("/student/**")
+                .excludePathPatterns(
+                        "/student/login",
+                        "/student/pending/**");
         WebMvcConfigurer.super.addInterceptors(registry);
     }
 }
