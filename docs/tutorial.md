@@ -1556,32 +1556,91 @@ private String mask(String value) {
 
 ```java
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE)  // 最高优先级，保证第一个执行
 public class RequestGuidFilter extends OncePerRequestFilter {
 
+    public static final String REQUEST_GUID_KEY = "guid";
+    public static final String REQUEST_GUID_ATTR = "requestGuid";
+    public static final String REQUEST_GUID_HEADER = "X-Request-Guid";
+
     @Override
-    protected void doFilterInternal(HttpServletRequest request, ...) {
-        // 优先用前端传的 GUID，没有则生成
-        String guid = request.getHeader("X-Request-Guid");
-        if (guid == null) guid = UUID.randomUUID().toString().replace("-", "");
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        String guid = resolveGuid(request);
+        MDC.put(REQUEST_GUID_KEY, guid);                      // 1. 放入 MDC，日志自动带上
+        request.setAttribute(REQUEST_GUID_ATTR, guid);        // 2. 存入 request，后续代码可获取
+        response.setHeader(REQUEST_GUID_HEADER, guid);         // 3. 响应头返回，前端可记录
 
-        // 写入 MDC（日志上下文）
-        MDC.put("guid", guid);
+        try {
+            filterChain.doFilter(request, response);           // 4. 继续执行后续过滤器
+        } finally {
+            MDC.remove(REQUEST_GUID_KEY);                      // 5. 清理 MDC，防止线程复用污染
+        }
+    }
 
-        // 写入响应头（前端可以关联）
-        response.setHeader("X-Request-Guid", guid);
-
-        filterChain.doFilter(request, response);
-
-        MDC.remove("guid");  // 清理，防止线程复用导致污染
+    private String resolveGuid(HttpServletRequest request) {
+        String guid = request.getHeader(REQUEST_GUID_HEADER);
+        if (StringUtils.hasText(guid)) {
+            return guid.trim();                                // 客户端传了就复用
+        }
+        return UUID.randomUUID().toString().replace("-", "");  // 否则自动生成
     }
 }
 ```
 
-**为什么用 MDC？**
-- MDC（Mapped Diagnostic Context）是 SLF4J 的线程级上下文
-- 在 logback 配置里用 `%X{guid}` 引用，自动出现在每条日志中
-- 无需手动传参，所有日志自动携带 GUID
+**MDC 是什么？**
+
+MDC（Mapped Diagnostic Context）是日志框架（Logback/Log4j）提供的**线程级上下文容器**，本质就是一个线程安全的 Map：
+
+```java
+// 底层就是 ThreadLocal<Map<String, String>>
+MDC.put("guid", "abc123");   // 存
+MDC.get("guid");             // 取
+MDC.remove("guid");          // 删
+```
+
+**为什么不用手动传参？**
+```java
+// 手动传参：每条日志都要加 guid，太麻烦
+log.info("guid={}, msg={}", guid, "处理请求");
+
+// MDC：放一次，当前线程所有日志自动带上
+MDC.put("guid", "abc123");
+log.info("处理请求");           // 自动输出 [guid=abc123] 处理请求
+log.info("查询数据库");          // 自动输出 [guid=abc123] 查询数据库
+```
+
+**MDC 在 logback 中的配置：**
+```xml
+<pattern>%d{HH:mm:ss} [%X{guid}] %msg%n</pattern>
+<!--                         ↑
+                      %X{key} 就是读 MDC 中的值 -->
+```
+
+**执行流程：**
+```
+请求进入 Filter
+  ↓
+resolveGuid(): 有 X-Request-Guid 头就复用，否则生成 UUID
+  ↓
+MDC.put("guid", guid)         → 当前线程所有日志自动带上 [guid=xxx]
+  ↓
+request.setAttribute(...)      → 后续代码可通过 request 获取
+  ↓
+response.setHeader(...)        → 前端可通过响应头获取
+  ↓
+filterChain.doFilter(...)      → 执行后续过滤器 + Controller
+  ↓
+finally: MDC.remove("guid")   → 清理，防止线程池复用导致下一个请求带上旧 guid
+```
+
+**实际效果：**
+```
+[10:30:01] [a1b2c3d4] 接口开始: uri=/api/student/login ...
+[10:30:01] [a1b2c3d4] 查询学生表: SELECT * FROM student WHERE phone=?
+[10:30:01] [a1b2c3d4] 接口结束: cost=58ms ...
+```
+一条请求的所有日志共享同一个 GUID，排查问题时搜 GUID 即可找到完整链路。
 
 **为什么优先用前端传的 GUID？**
 - 前后端联调时，前端可以在控制台看到自己的请求 GUID
