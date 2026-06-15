@@ -18,6 +18,18 @@ public class StudentLoginRes {
     @Schema(description = "JWT token")
     private String token;
 
+    /** 签名密钥，正式登录后用于学生端接口签名 */
+    @Schema(description = "签名密钥")
+    private String signSecret;
+
+    /** 待支付临时token，仅needPay为true时返回 */
+    @Schema(description = "待支付临时token")
+    private String pendingPayToken;
+
+    /** 待支付临时签名密钥，仅needPay为true时返回 */
+    @Schema(description = "待支付临时签名密钥")
+    private String pendingPaySignSecret;
+
     /** 学生信息 */
     @Schema(description = "学生信息")
     private StudentInfoRes student;

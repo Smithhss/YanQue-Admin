@@ -36,6 +36,18 @@ public class StudentPageRes {
     @Schema(description = "专业")
     private String major;
 
+    @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
+    private String teachingMode;
+
+    @Schema(description = "班级ID")
+    private Long classId;
+
+    @Schema(description = "班级期数")
+    private String classPeriod;
+
+    @Schema(description = "产品内容")
+    private String productContent;
+
     @Schema(description = "状态")
     private String status;
 

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 学生前台接口。
  */
 @RestController
-@RequestMapping("/api/student")
+@RequestMapping("/student")
 @Tag(name = "StudentFrontController", description = "学生前台")
 public class StudentFrontController {
 

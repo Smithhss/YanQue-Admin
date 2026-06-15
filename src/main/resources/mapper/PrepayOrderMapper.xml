@@ -42,6 +42,13 @@
         where id = #{id}
     </select>
 
+    <select id="selectByOrderNo" resultMap="PrepayOrderMap">
+        select <include refid="BaseColumns"/>
+        from prepay_order
+        where order_no = #{orderNo}
+        limit 1
+    </select>
+
     <select id="selectPage" resultMap="PrepayOrderMap">
         select <include refid="BaseColumns"/>
         from prepay_order

@@ -5,6 +5,7 @@ create table if not exists order_payment (
     student_name varchar(50) not null comment '学生姓名',
     product_id varchar(64) not null comment '产品ID',
     order_amount decimal(10, 2) not null comment '订单支付金额',
+    refunded_amount decimal(10, 2) not null default 0.00 comment '已申请退款金额，包含退款处理中和退款成功金额',
     prepay_order_no varchar(32) not null comment '预支付订单号',
     status varchar(30) not null comment '支付订单状态',
     unique_order_no varchar(128) null comment '支付渠道唯一订单号',

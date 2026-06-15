@@ -5,5 +5,5 @@ import com.yeepay.yop.sdk.service.common.request.YopRequest;
 
 public interface YeepayGatewayService {
 
-    JSONObject request(YopRequest request);
+    JSONObject request(YopRequest request, String type);
 }

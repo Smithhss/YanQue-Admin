@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.teaching.homework.mapper.HomeworkSubmissionMapper">
+
+    <resultMap id="HomeworkSubmissionMap" type="cn.yanque.models.teaching.homework.pojo.entity.HomeworkSubmissionEntity">
+        <id property="id" column="id"/>
+        <result property="homeworkId" column="homework_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="classId" column="class_id"/>
+        <result property="contentObjectKey" column="content_object_key"/>
+        <result property="contentFileName" column="content_file_name"/>
+        <result property="submitTime" column="submit_time"/>
+        <result property="lateSubmitted" column="late_submitted"/>
+        <result property="teacherRemark" column="teacher_remark"/>
+        <result property="score" column="score"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, homework_id, student_id, class_id, content_object_key, content_file_name, submit_time, late_submitted, teacher_remark, score, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into homework_submission (
+            homework_id,
+            student_id,
+            class_id,
+            content_object_key,
+            content_file_name,
+            submit_time,
+            late_submitted,
+            teacher_remark,
+            score,
+            created_at,
+            updated_at
+        )
+        values (
+            #{homeworkId},
+            #{studentId},
+            #{classId},
+            #{contentObjectKey},
+            #{contentFileName},
+            #{submitTime},
+            #{lateSubmitted},
+            #{teacherRemark},
+            #{score},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateSubmit">
+        update homework_submission
+        set content_object_key = #{contentObjectKey},
+            content_file_name = #{contentFileName},
+            submit_time = #{submitTime},
+            late_submitted = #{lateSubmitted},
+            updated_at = #{updatedAt}
+        where homework_id = #{homeworkId}
+        and student_id = #{studentId}
+    </update>
+
+    <update id="updateGrade">
+        update homework_submission
+        set score = #{score},
+            teacher_remark = #{teacherRemark},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="HomeworkSubmissionMap">
+        select <include refid="BaseColumns"/>
+        from homework_submission
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectByHomeworkIdAndStudentId" resultMap="HomeworkSubmissionMap">
+        select <include refid="BaseColumns"/>
+        from homework_submission
+        where homework_id = #{homeworkId}
+        and student_id = #{studentId}
+        limit 1
+    </select>
+
+    <select id="selectByHomeworkIdsAndStudentId" resultMap="HomeworkSubmissionMap">
+        select <include refid="BaseColumns"/>
+        from homework_submission
+        where student_id = #{studentId}
+        and homework_id in
+        <foreach collection="homeworkIds" item="homeworkId" open="(" separator="," close=")">
+            #{homeworkId}
+        </foreach>
+    </select>
+
+    <select id="selectByHomeworkId" resultMap="HomeworkSubmissionMap">
+        select <include refid="BaseColumns"/>
+        from homework_submission
+        where homework_id = #{homeworkId}
+        order by submit_time desc, id desc
+    </select>
+</mapper>

@@ -9,6 +9,7 @@
         <result property="studentName" column="student_name"/>
         <result property="productId" column="product_id"/>
         <result property="orderAmount" column="order_amount"/>
+        <result property="refundedAmount" column="refunded_amount"/>
         <result property="prepayOrderNo" column="prepay_order_no"/>
         <result property="status" column="status"/>
         <result property="uniqueOrderNo" column="unique_order_no"/>
@@ -18,7 +19,7 @@
     </resultMap>
 
     <sql id="BaseColumns">
-        id, order_no, student_phone, student_name, product_id, order_amount, prepay_order_no, status, unique_order_no, pay_success_time, created_at, updated_at
+        id, order_no, student_phone, student_name, product_id, order_amount, refunded_amount, prepay_order_no, status, unique_order_no, pay_success_time, created_at, updated_at
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
@@ -62,6 +63,23 @@
             updated_at = now()
         where order_no = #{orderNo}
           and status = #{oldStatus}
+    </update>
+
+    <update id="increaseRefundedAmount">
+        update order_payment
+        set refunded_amount = refunded_amount + #{refundAmount},
+            updated_at = now()
+        where order_no = #{orderNo}
+          and status = 'SUCCESS'
+          and refunded_amount + #{refundAmount} &lt;= order_amount
+    </update>
+
+    <update id="decreaseRefundedAmount">
+        update order_payment
+        set refunded_amount = refunded_amount - #{refundAmount},
+            updated_at = now()
+        where order_no = #{orderNo}
+          and refunded_amount &gt;= #{refundAmount}
     </update>
 
     <select id="selectByOrderNo" resultMap="OrderMap">

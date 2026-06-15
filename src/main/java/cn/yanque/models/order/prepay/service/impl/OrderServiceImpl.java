@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -72,6 +73,22 @@ public class OrderServiceImpl implements OrderService {
         Map<String, ProductEntity> productMap = getProductMap(list);
         List<OrderPageRes> records = list.stream().map(order -> buildOrderPageRes(order, productMap)).toList();
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
+    }
+
+    @Override
+    public void increaseRefundedAmount(String orderNo, BigDecimal refundAmount) {
+        int rows = orderMapper.increaseRefundedAmount(orderNo, refundAmount);
+        if (rows != 1) {
+            throw BusinessException.DateError.newInstance("退款金额超过订单可退金额");
+        }
+    }
+
+    @Override
+    public void decreaseRefundedAmount(String orderNo, BigDecimal refundAmount) {
+        int rows = orderMapper.decreaseRefundedAmount(orderNo, refundAmount);
+        if (rows != 1) {
+            throw BusinessException.DateError.newInstance("释放退款金额失败");
+        }
     }
 
     private QueryOrderBo buildQueryOrderBo(OrderPageReq req) {

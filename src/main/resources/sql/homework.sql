@@ -1,0 +1,22 @@
+create table if not exists homework (
+    id bigint primary key auto_increment comment '作业ID',
+    title varchar(100) not null comment '作业标题',
+    content_object_key varchar(500) not null comment '作业内容对象存储Key',
+    content_file_name varchar(255) not null comment '作业内容文件名',
+    answer_object_key varchar(500) null comment '答案对象存储Key',
+    answer_file_name varchar(255) null comment '答案文件名',
+    answer_student_visible tinyint(1) not null default 0 comment '答案学生是否可见',
+    class_id bigint not null comment '班级ID',
+    homework_date date not null comment '作业日期',
+    class_content varchar(255) not null comment '课程内容',
+    start_time datetime not null comment '开始时间',
+    deadline datetime not null comment '截止时间',
+    remark varchar(500) null comment '备注',
+    created_at datetime not null default current_timestamp comment '创建时间',
+    updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
+    unique key uk_class_homework_date (class_id, homework_date),
+    key idx_class_id (class_id),
+    key idx_homework_date (homework_date),
+    key idx_start_time (start_time),
+    key idx_deadline (deadline)
+) comment '作业表';

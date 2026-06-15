@@ -13,4 +13,8 @@ public class SysConfig {
     public static SystemConfigItem<String> createOrderGoodsName = new SystemConfigItem<>("createOrderGoodsName", "缴费下单", String.class);
     public static SystemConfigItem<Integer> createOrderExpireTime = new SystemConfigItem<>("createOrderExpireTime", 5, Integer.class);
 
+    public static SystemConfigItem<Long> tosUploadExpireSeconds = new SystemConfigItem<>("tos.upload.expire.seconds", 600L, Long.class);
+
+    public static SystemConfigItem<Long> tosPreviewExpireSeconds = new SystemConfigItem<>("tos.preview.expire.seconds", 300L, Long.class);
+
 }

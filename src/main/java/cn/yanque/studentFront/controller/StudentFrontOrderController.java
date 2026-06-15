@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/studentFront/order")
+@RequestMapping("/student/pending/order")
 @Tag(name = "StudentFrontOrderController", description = "学生订单")
 public class StudentFrontOrderController {
 

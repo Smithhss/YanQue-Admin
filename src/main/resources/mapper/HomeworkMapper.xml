@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.teaching.homework.mapper.HomeworkMapper">
+
+    <resultMap id="HomeworkMap" type="cn.yanque.models.teaching.homework.pojo.entity.HomeworkEntity">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="contentObjectKey" column="content_object_key"/>
+        <result property="contentFileName" column="content_file_name"/>
+        <result property="answerObjectKey" column="answer_object_key"/>
+        <result property="answerFileName" column="answer_file_name"/>
+        <result property="answerStudentVisible" column="answer_student_visible"/>
+        <result property="classId" column="class_id"/>
+        <result property="homeworkDate" column="homework_date"/>
+        <result property="classContent" column="class_content"/>
+        <result property="startTime" column="start_time"/>
+        <result property="deadline" column="deadline"/>
+        <result property="remark" column="remark"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, title, content_object_key, content_file_name, answer_object_key, answer_file_name, answer_student_visible, class_id, homework_date, class_content, start_time, deadline, remark, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into homework (
+            title,
+            content_object_key,
+            content_file_name,
+            class_id,
+            homework_date,
+            class_content,
+            start_time,
+            deadline,
+            remark,
+            created_at,
+            updated_at
+        )
+        values (
+            #{title},
+            #{contentObjectKey},
+            #{contentFileName},
+            #{classId},
+            #{homeworkDate},
+            #{classContent},
+            #{startTime},
+            #{deadline},
+            #{remark},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="HomeworkMap">
+        select <include refid="BaseColumns"/>
+        from homework
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectPage" resultMap="HomeworkMap">
+        select <include refid="BaseColumns"/>
+        from homework
+        <where>
+            <if test="title != null and title != ''">
+                and title like concat('%', #{title}, '%')
+            </if>
+            <if test="classId != null">
+                and class_id = #{classId}
+            </if>
+            <if test="homeworkDate != null">
+                and homework_date = #{homeworkDate}
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <select id="selectStudentPage" resultMap="HomeworkMap">
+        select <include refid="BaseColumns"/>
+        from homework
+        where class_id = #{classId}
+        and start_time <![CDATA[<=]]> #{now}
+        order by homework_date desc, id desc
+    </select>
+
+    <select id="selectByClassIdAndHomeworkDate" resultMap="HomeworkMap">
+        select <include refid="BaseColumns"/>
+        from homework
+        where class_id = #{classId}
+        and homework_date = #{homeworkDate}
+        limit 1
+    </select>
+
+    <update id="updateAnswer">
+        update homework
+        set answer_object_key = #{answerObjectKey},
+            answer_file_name = #{answerFileName},
+            answer_student_visible = #{answerStudentVisible},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+</mapper>

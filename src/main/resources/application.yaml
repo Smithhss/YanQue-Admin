@@ -28,3 +28,11 @@ yeepay:
   merchant-no: ${YQ_YEEPAY_MERCHANT_NO:10093003553}
   pay-success-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
   pay-success-return-url: "xxxxx"
+  refund-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/refund"
+
+tos:
+  endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
+  region: ${YQ_TOS_REGION:cn-shanghai}
+  bucket: ${YQ_TOS_BUCKET:yq-admin-11-dev}
+  access-key: ${YQ_TOS_ACCESS_KEY:}
+  secret-key: ${YQ_TOS_SECRET_KEY:}

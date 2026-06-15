@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 学生前台资料接口。
  */
 @RestController
-@RequestMapping("/api/studentFront/student")
+@RequestMapping("/student/pending/profile")
 @Tag(name = "StudentFrontProfileController", description = "学生前台资料")
 public class StudentFrontProfileController {
 
