@@ -18,6 +18,8 @@ public interface HomeworkMapper {
 
     List<HomeworkEntity> selectPage(QueryHomeworkBo query);
 
+    List<HomeworkEntity> selectStudentPage(@Param("classId") Long classId, @Param("now") Date now);
+
     HomeworkEntity selectByClassIdAndHomeworkDate(@Param("classId") Long classId, @Param("homeworkDate") Date homeworkDate);
 
     int updateAnswer(HomeworkEntity homework);

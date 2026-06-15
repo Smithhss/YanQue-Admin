@@ -17,4 +17,6 @@ public interface StudentService {
     PageResult<StudentPageRes> pageStudent(StudentPageReq req);
 
     StudentAssignClassRes assignClass(Long id, StudentAssignClassReq req);
+
+    StudentEntity selectByStudentId(Long id);
 }

@@ -77,6 +77,14 @@
         order by id desc
     </select>
 
+    <select id="selectStudentPage" resultMap="HomeworkMap">
+        select <include refid="BaseColumns"/>
+        from homework
+        where class_id = #{classId}
+        and start_time <![CDATA[<=]]> #{now}
+        order by homework_date desc, id desc
+    </select>
+
     <select id="selectByClassIdAndHomeworkDate" resultMap="HomeworkMap">
         select <include refid="BaseColumns"/>
         from homework

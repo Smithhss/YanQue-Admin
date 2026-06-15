@@ -107,6 +107,11 @@ public class StudentServiceImpl implements StudentService {
         return res;
     }
 
+    @Override
+    public StudentEntity selectByStudentId(Long id) {
+        return studentMapper.selectById(id);
+    }
+
     private void fillAndValidateTeachingMode(StudentEntity student) {
         String teachingMode = student.getTeachingMode();
         if (teachingMode == null || teachingMode.isBlank()) {

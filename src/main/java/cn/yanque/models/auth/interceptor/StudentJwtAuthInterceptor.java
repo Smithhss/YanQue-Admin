@@ -4,6 +4,9 @@ import cn.hutool.jwt.JWT;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.common.exception.BusinessException;
+import cn.yanque.common.threadlocal.StudentThreadLocal;
+import cn.yanque.models.student.pojo.entity.StudentEntity;
+import cn.yanque.models.student.service.StudentService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +28,9 @@ public class StudentJwtAuthInterceptor implements HandlerInterceptor {
 
     @Autowired
     private SysConfigService sysConfigService;
+
+    @Autowired
+    private StudentService studentService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -53,13 +59,22 @@ public class StudentJwtAuthInterceptor implements HandlerInterceptor {
                 throw new BusinessException(401, "学生Token无效或已过期");
             }
 
+            StudentEntity student = studentService.selectByStudentId(Long.parseLong(String.valueOf(studentId)));
             request.setAttribute("studentId", Long.parseLong(String.valueOf(studentId)));
             request.setAttribute("studentPhone", String.valueOf(studentPhone));
+            StudentThreadLocal.set(student);
             return true;
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
             throw new BusinessException(401, "学生Token无效或已过期");
         }
+    }
+
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        StudentThreadLocal.remove();
+        HandlerInterceptor.super.afterCompletion(request, response, handler, ex);
     }
 }
