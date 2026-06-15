@@ -1659,6 +1659,30 @@ public SysConfigUpdateRes updateConfig(SysConfigUpdateReq req) {
 
 **核心需求：** 根据课程计划自动生成班级课表
 
+```mermaid
+flowchart TD
+    A[输入: 班级 + 第一天日期 + 排课规则] --> B[解析排课规则]
+    B --> C[获取课程明细列表]
+    C --> D[从第一天开始逐天遍历]
+    D --> E{当天类型?}
+
+    E -- 上课日 --> F[消耗一条课程明细]
+    F --> G[生成课表记录]
+    E -- 自习日 --> H[生成自习记录, 不消耗课程]
+    E -- 休息日 --> I[跳过]
+    E -- 节假日 --> J{跳过节假日?}
+
+    J -- 是 --> I
+    J -- 否 --> E
+
+    G --> K{课程明细用完?}
+    H --> K
+    I --> K
+
+    K -- 否 --> D
+    K -- 是 --> L[输出: 生成的课表列表]
+```
+
 ```
 输入：
   - 班级（关联课程）
@@ -2892,6 +2916,23 @@ flowchart TD
 
 ### 10.6 订单状态机
 
+```mermaid
+stateDiagram-v2
+    state "预支付订单" as prepay {
+        [*] --> PENDING_PAYMENT
+        PENDING_PAYMENT --> PAID: 支付成功回调
+        PENDING_PAYMENT --> CANCELED: 超时/手动取消
+    }
+
+    state "支付订单" as payment {
+        [*] --> INIT
+        INIT --> PROCESSING: 调用易宝
+        PROCESSING --> SUCCESS: 支付成功回调
+        PROCESSING --> FAIL: 支付失败回调
+        PROCESSING --> TIMEOUT: 15分钟超时
+    }
+```
+
 ```
 预支付订单状态：
   PENDING_PAYMENT（待支付）→ PAID（已支付）
@@ -3568,6 +3609,19 @@ public CompleteStudentProfileRes completeProfile(CompleteStudentProfileReq req) 
 
 ### 12.7 学生分配班级
 
+```mermaid
+flowchart TD
+    A[管理员选择学生] --> B[选择目标班级]
+    B --> C[PUT /student/id/class]
+    C --> D[校验学生存在]
+    D --> E[校验班级存在]
+    E --> F[更新学生 classId]
+    F --> G[返回成功]
+
+    G --> H[学生可查看该班级作业]
+    G --> I[学生可查看该班级课表]
+```
+
 ```java
 @PutMapping("{id}/class")
 public ApiResponse<StudentAssignClassRes> assignClass(@PathVariable Long id,
@@ -3659,6 +3713,26 @@ HomeworkSubmissionEntity（学生提交）
 
 ### 13.2 教师端：发布作业
 
+```mermaid
+flowchart TD
+    A[教师填写作业信息] --> B[预填接口 prepareHomework]
+    B --> C[校验班级存在]
+    C --> D{同班同天已有作业?}
+    D -- 是 --> E[抛异常: 该班级当天作业已存在]
+    D -- 否 --> F[查询当天课表]
+
+    F --> G{当天有课表?}
+    G -- 否 --> H[抛异常: 该班级当天没有课表]
+    G -- 是 --> I[自动填充课程内容]
+
+    I --> J[校验截止时间]
+    J --> K{截止时间 < 开始时间?}
+    K -- 是 --> L[抛异常: 截止时间不能早于开始时间]
+    K -- 否 --> M[创建作业记录]
+
+    M --> N[返回作业ID]
+```
+
 **发布流程：**
 ```java
 public HomeworkCreateRes addHomework(HomeworkCreateReq req) {
@@ -3689,6 +3763,22 @@ public HomeworkCreateRes addHomework(HomeworkCreateReq req) {
 
 ### 13.3 教师端：发布答案与批改
 
+```mermaid
+flowchart TD
+    subgraph 发布答案
+        A1[教师上传答案文件] --> A2[设置是否对学生可见]
+        A2 --> A3[更新作业答案信息]
+        A3 --> A4[answerStudentVisible 控制可见性]
+    end
+
+    subgraph 批改作业
+        B1[教师查看学生提交列表] --> B2[选择提交记录]
+        B2 --> B3[填写分数和评语]
+        B3 --> B4[更新 score + teacherRemark]
+        B4 --> B5[不影响学生原始提交文件]
+    end
+```
+
 **发布答案：**
 ```java
 public HomeworkPublishAnswerRes publishAnswer(Long id, HomeworkPublishAnswerReq req) {
@@ -3715,6 +3805,30 @@ public HomeworkSubmissionGradeRes gradeSubmission(Long submissionId, HomeworkSub
 - 用 `updateGrade` 而非 `updateById`，明确只更新批改相关字段
 
 ### 13.4 学生端：查看与提交作业
+
+```mermaid
+flowchart TD
+    subgraph 查看作业
+        A1[学生打开作业列表] --> A2[从 ThreadLocal 获取当前学生]
+        A2 --> A3{已分配班级?}
+        A3 -- 否 --> A4[返回空列表]
+        A3 -- 是 --> A5[查询班级作业列表]
+        A5 --> A6[批量查询我的提交状态]
+        A6 --> A7[组装: 作业信息 + 提交状态]
+    end
+
+    subgraph 提交作业
+        B1[学生上传 .md 文件到 OSS] --> B2[POST 提交作业]
+        B2 --> B3{已过截止时间?}
+        B3 -- 是 --> B4[抛异常: 作业已截止]
+        B3 -- 否 --> B5[校验文件路径安全]
+        B5 --> B6{路径合法?}
+        B6 -- 否 --> B7[抛异常: 提交文件路径不合法]
+        B6 -- 是 --> B8{已有提交记录?}
+        B8 -- 否 --> B9[插入新提交记录]
+        B8 -- 是 --> B10[覆盖更新提交记录]
+    end
+```
 
 **学生查看作业列表：**
 ```java
@@ -3831,6 +3945,18 @@ sequenceDiagram
 ```
 
 ### 14.2 退款订单实体
+
+```mermaid
+stateDiagram-v2
+    [*] --> INIT: 创建退款单
+    INIT --> PROCESSING: 调用易宝退款接口
+    INIT --> FAIL: 参数校验失败
+    PROCESSING --> SUCCESS: 易宝退款成功回调
+    PROCESSING --> FAIL: 易宝退款失败回调
+
+    note right of INIT: 保存退款单, 增加已退金额
+    note right of FAIL: 回退已退金额
+```
 
 ```java
 @Data
