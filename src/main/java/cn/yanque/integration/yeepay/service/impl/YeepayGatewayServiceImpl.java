@@ -19,16 +19,25 @@ public class YeepayGatewayServiceImpl implements YeepayGatewayService {
 
 
     @Override
-    public JSONObject request(YopRequest request) {
+    public JSONObject request(YopRequest request,  String type) {
         try {
             log.info("yeepay 发起调用,请求参数:{}", JSONObject.toJSONString(request));
             YopResponse response = getClient().request(request);
             log.info("yeepay 返回参数:{}", JSONObject.toJSONString(response));
             JSONObject jsonObject = JSONObject.parseObject(JSONObject.toJSONString(response.getResult()));
             String code = jsonObject.getString("code");
-            if (!code.equals("00000")) {
-                throw BusinessException.RemoteError.newInstance("调用yeepay失败" + jsonObject.getString("message"));
+
+            if (type.equals("cashier/order")) {
+                if (!code.equals("00000")) {
+                    throw BusinessException.RemoteError.newInstance("调用yeepay失败" + jsonObject.getString("message"));
+                }
             }
+            if (type.equals("refund")) {
+                if (!code.equals("OPR00000")) {
+                    throw BusinessException.RemoteError.newInstance("调用yeepay失败" + jsonObject.getString("message"));
+                }
+            }
+
             return jsonObject;
         } catch (Exception ex) {
             log.error("yeepay 异常, ex:", ex);

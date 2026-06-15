@@ -35,6 +35,9 @@ public class OrderEntity {
     /** 订单支付金额 */
     private BigDecimal orderAmount;
 
+    /** 已申请退款金额，包含退款处理中和退款成功金额 */
+    private BigDecimal refundedAmount;
+
     /** 预支付订单号 */
     private String prepayOrderNo;
 

@@ -28,4 +28,9 @@ public class YeepayProperties {
      * 支付成功跳转地址
      */
     private String paySuccessReturnUrl;
+
+    /**
+     * 退款结果回调地址
+     */
+    private String refundNotifyUrl;
 }

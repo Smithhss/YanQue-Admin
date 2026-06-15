@@ -156,7 +156,10 @@ values
     (@prepay_order_menu_id, 'api:prepay-order:update', '修改预支付订单', 'API', '/yq-admin/api/prepayOrders/{id}', 3124, '修改预支付订单接口', 'ACTIVE', now(), now()),
     (@prepay_order_menu_id, 'api:prepay-order:delete', '删除预支付订单', 'API', '/yq-admin/api/prepayOrders/{id}', 3125, '删除预支付订单接口', 'ACTIVE', now(), now()),
 
-    (@payment_order_menu_id, 'api:order:page', '分页查询支付订单', 'API', '/yq-admin/api/orders', 3131, '分页查询支付订单接口', 'ACTIVE', now(), now())
+    (@payment_order_menu_id, 'api:order:page', '分页查询支付订单', 'API', '/yq-admin/api/orders', 3131, '分页查询支付订单接口', 'ACTIVE', now(), now()),
+    (@payment_order_menu_id, 'api:refund-order:page', '分页查询退款订单', 'API', '/yq-admin/api/refundOrders', 3132, '分页查询退款订单接口', 'ACTIVE', now(), now()),
+    (@payment_order_menu_id, 'api:refund-order:create', '创建退款订单号', 'API', '/yq-admin/api/refundOrders/create', 3133, '创建退款订单号接口', 'ACTIVE', now(), now()),
+    (@payment_order_menu_id, 'api:refund-order:apply', '申请退款', 'API', '/yq-admin/api/refundOrders/{refundOrderNo}/apply', 3134, '申请退款接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

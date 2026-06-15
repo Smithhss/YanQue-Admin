@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.order.refund.mapper.RefundOrderMapper">
+
+    <resultMap id="RefundOrderMap" type="cn.yanque.models.order.refund.pojo.entity.RefundOrderEntity">
+        <id property="id" column="id"/>
+        <result property="refundOrderNo" column="refund_order_no"/>
+        <result property="paymentOrderNo" column="payment_order_no"/>
+        <result property="paymentAmount" column="payment_amount"/>
+        <result property="refundAmount" column="refund_amount"/>
+        <result property="status" column="status"/>
+        <result property="reason" column="reason"/>
+        <result property="uniqueRefundNo" column="unique_refund_no"/>
+        <result property="failReason" column="fail_reason"/>
+        <result property="refundSuccessTime" column="refund_success_time"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, refund_order_no, payment_order_no, payment_amount, refund_amount, status, reason, unique_refund_no, fail_reason, refund_success_time, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into order_refund (
+            refund_order_no,
+            payment_order_no,
+            payment_amount,
+            refund_amount,
+            status,
+            reason,
+            unique_refund_no,
+            fail_reason,
+            refund_success_time,
+            created_at,
+            updated_at
+        )
+        values (
+            #{refundOrderNo},
+            #{paymentOrderNo},
+            #{paymentAmount},
+            #{refundAmount},
+            #{status},
+            #{reason},
+            #{uniqueRefundNo},
+            #{failReason},
+            #{refundSuccessTime},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <select id="selectByRefundOrderNo" resultMap="RefundOrderMap">
+        select <include refid="BaseColumns"/>
+        from order_refund
+        where refund_order_no = #{refundOrderNo}
+    </select>
+
+    <select id="selectPage" resultMap="RefundOrderMap">
+        select <include refid="BaseColumns"/>
+        from order_refund
+        <where>
+            <if test="refundOrderNo != null and refundOrderNo != ''">
+                and refund_order_no like concat('%', #{refundOrderNo}, '%')
+            </if>
+            <if test="paymentOrderNo != null and paymentOrderNo != ''">
+                and payment_order_no like concat('%', #{paymentOrderNo}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <update id="updateRefundStatus">
+        update order_refund
+        set status = #{status},
+            <if test="uniqueRefundNo != null and uniqueRefundNo != ''">
+                unique_refund_no = #{uniqueRefundNo},
+            </if>
+            <if test="failReason != null and failReason != ''">
+                fail_reason = #{failReason},
+            </if>
+            <if test="refundSuccessTime != null">
+                refund_success_time = #{refundSuccessTime},
+            </if>
+            updated_at = now()
+        where refund_order_no = #{refundOrderNo}
+          and status = #{oldStatus}
+    </update>
+</mapper>

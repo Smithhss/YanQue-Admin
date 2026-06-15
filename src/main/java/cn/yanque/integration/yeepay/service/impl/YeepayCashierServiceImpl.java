@@ -5,13 +5,14 @@ import cn.hutool.core.date.DateUtil;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.config.YeepayProperties;
+import cn.yanque.integration.yeepay.pojo.req.YeepayRefundReq;
 import cn.yanque.integration.yeepay.pojo.req.YeepayUnifiedOrderReq;
+import cn.yanque.integration.yeepay.pojo.res.YeepayRefundRes;
 import cn.yanque.integration.yeepay.pojo.res.YeepayUnifiedOrderRes;
 import cn.yanque.integration.yeepay.service.YeepayCashierService;
 import cn.yanque.integration.yeepay.service.YeepayGatewayService;
 import com.alibaba.fastjson2.JSONObject;
 import com.yeepay.yop.sdk.service.common.request.YopRequest;
-import com.yeepay.yop.sdk.service.common.response.YopResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -43,7 +44,22 @@ public class YeepayCashierServiceImpl implements YeepayCashierService {
         request.addParameter("expiredTime", DateUtil.format(DateUtil.offsetMinute(new Date(), sysConfigService.get(SysConfig.createOrderExpireTime)), DatePattern.NORM_DATETIME_PATTERN));
         request.addParameter("returnUrl", yeepayProperties.getPaySuccessReturnUrl() + "?orderNo=" + req.getOrderNo());
 
-        JSONObject result = yeepayGatewayService.request(request);
+        JSONObject result = yeepayGatewayService.request(request, "cashier/order");
         return JSONObject.parseObject(result.toJSONString(), YeepayUnifiedOrderRes.class);
+    }
+
+    public YeepayRefundRes refund(YeepayRefundReq req) {
+        YopRequest request = new YopRequest("/rest/v1.0/trade/refund", "POST");
+        request.addParameter("parentMerchantNo", yeepayProperties.getParentMerchantNo());
+        request.addParameter("merchantNo", yeepayProperties.getMerchantNo());
+        request.addParameter("orderId", req.getOrderNo());
+        request.addParameter("uniqueOrderNo", req.getUniqueOrderNo());
+        request.addParameter("refundRequestId", req.getRefundOrderNo());
+        request.addParameter("refundAmount", req.getRefundAmount());
+        request.addParameter("description", req.getReason());
+        request.addParameter("notifyUrl", yeepayProperties.getRefundNotifyUrl());
+
+        JSONObject result = yeepayGatewayService.request(request, "refund");
+        return JSONObject.parseObject(result.toJSONString(), YeepayRefundRes.class);
     }
 }
