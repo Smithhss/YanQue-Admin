@@ -37,6 +37,7 @@ public class SysRoleServiceImpl implements SysRoleService {
     @Transactional(rollbackFor = Exception.class)
     public RoleCreateRes addRole(RoleCreateReq req) {
         SysRoleEntity role = new SysRoleEntity();
+
         role.setRoleCode(req.getRoleCode());
         role.setRoleName(req.getRoleName());
         role.setDescription(req.getDescription());

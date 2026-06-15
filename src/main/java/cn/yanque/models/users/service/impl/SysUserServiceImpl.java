@@ -181,13 +181,17 @@ public class SysUserServiceImpl implements SysUserService {
 
         //3.生成token
         String token = createToken(sysUserEntity);
+
         loginRes.setToken(token);
         String signSecret = createSignSecret();
         redisUtil.set(SIGN_SECRET_KEY_PREFIX + sysUserEntity.getId(), signSecret, SIGN_SECRET_EXPIRE);
         loginRes.setSignSecret(signSecret);
 
+        //4.获取用户信息
         UserInfo userInfo = getUserInfo(sysUserEntity.getId());
+        //5.获取用户详情
         UserDetailRes userDetailRes = new UserDetailRes();
+
         BeanUtils.copyProperties(userInfo.getSysUserEntity(), userDetailRes);
         loginRes.setUserDetailRes(userDetailRes);
 

@@ -2,7 +2,7 @@
 
 > 本教程系统讲解 YanQue-Admin 项目的架构设计和实现原理，帮助你理解"为什么这样写"而不仅仅是"怎么写"。
 >
-> 共 11 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理。
+> 共 12 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理，第 12 章讲解学生端业务。
 >
 > 每个核心功能都附带流程图，便于理解整体逻辑。
 
@@ -21,6 +21,7 @@
 - [第 9 章：排课系统 — 算法驱动的业务模块](#第-9-章排课系统--算法驱动的业务模块)
 - [第 10 章：订单与支付 — 第三方支付集成](#第-10-章订单与支付--第三方支付集成)
 - [第 11 章：值班管理 — 教师排班系统](#第-11-章值班管理--教师排班系统)
+- [第 12 章：学生端 — 学生管理与前台业务](#第-12-章学生端--学生管理与前台业务)
 
 ---
 
@@ -3287,6 +3288,284 @@ user.getRealName() != null ? user.getRealName() : user.getUsername()
 
 ---
 
+## 第 12 章：学生端 — 学生管理与前台业务
+
+> 本章讲解学生模块的设计，以及学生端前台业务（登录、下单、完善资料）的完整流程。
+
+### 12.1 学生模块结构
+
+```
+student/
+├── controller/StudentController.java           ← 后台管理接口（分页查询）
+├── mapper/
+│   ├── StudentMapper.java                      ← 学生数据访问
+│   └── StudentProductMapper.java               ← 学生产品关联
+├── pojo/
+│   ├── bo/QueryStudentBo.java                  ← 查询条件
+│   ├── entity/
+│   │   ├── StudentEntity.java                  ← 学生实体
+│   │   └── StudentProductEntity.java           ← 学生-产品关联
+│   └── vo/
+│       ├── req/StudentPageReq.java             ← 分页请求
+│       └── res/StudentPageRes.java             ← 分页响应
+└── service/
+    ├── StudentService.java                     ← 学生服务接口
+    ├── StudentProductService.java              ← 学生产品服务
+    └── impl/
+        ├── StudentServiceImpl.java             ← 学生服务实现
+        └── StudentProductServiceImpl.java      ← 学生产品实现
+```
+
+**StudentEntity — 学生实体：**
+```java
+@Data
+public class StudentEntity {
+    private Long id;
+    private String studentNo;      // 学员编号：STU + 时间戳 + 随机数
+    private String studentName;    // 姓名
+    private String studentPhone;   // 手机号（登录凭证）
+    private String password;       // 登录密码
+    private String education;      // 学历
+    private Integer gradeYear;     // 届数
+    private String school;         // 学校
+    private String major;          // 专业
+    private String status;         // ACTIVE/INACTIVE
+}
+```
+
+**StudentProductEntity — 学生产品关联：**
+```java
+@Data
+public class StudentProductEntity {
+    private Long id;
+    private Long studentId;        // 学生ID
+    private String productId;      // 产品ID
+    private String sourceOrderNo;  // 来源支付订单号
+    private String status;         // 状态
+}
+```
+
+**为什么需要 StudentProduct 关联表？**
+- 学生购买产品后，需要记录"哪个学生买了哪个产品"
+- `sourceOrderNo` 记录来源订单，方便对账和溯源
+- 一个学生可以购买多个产品，一个产品可以被多个学生购买（多对多）
+
+### 12.2 学生端前台架构
+
+学生端前台（`studentFront/`）是独立于后台管理的模块，面向学生用户：
+
+```
+studentFront/
+├── biz/                                    ← 业务编排层（跨模块协调）
+│   ├── StudentOrderBiz.java
+│   └── impl/StudentOrderBizImpl.java
+├── controller/
+│   ├── StudentFrontOrderController.java    ← 学生订单接口
+│   └── StudentFrontProfileController.java  ← 学生资料接口
+├── pojo/
+│   ├── req/                                ← 请求对象
+│   └── res/                                ← 响应对象
+└── service/
+    ├── StudentFrontService.java            ← 学生登录服务
+    ├── StudentFrontProfileService.java     ← 学生资料服务
+    └── impl/
+```
+
+**为什么学生端单独一个 `studentFront` 包，不放在 `models/student` 里？**
+- `models/student` 是后台管理用的（管理员查学生列表）
+- `studentFront` 是学生自己用的（登录、下单、完善资料）
+- 两套接口的认证方式不同：后台用 RBAC 权限，学生端用学生 JWT
+- 分开后职责清晰，互不影响
+
+### 12.3 学生登录 — 双重身份判断
+
+**登录流程图：**
+
+```mermaid
+flowchart TD
+    A[学生输入手机号+密码] --> B[查询学生表]
+    B --> C{学生存在?}
+    C -- 是 --> D[校验状态和密码]
+    D --> E[生成JWT, 返回学生信息]
+    C -- 否 --> F[查询预支付订单]
+
+    F --> G{有待支付订单?}
+    G -- 是 --> H[返回待支付订单信息]
+    H --> I[前端跳转支付页面]
+    G -- 否 --> J[返回错误: 用户名不存在]
+```
+
+**核心逻辑：**
+```java
+public StudentLoginRes login(StudentLoginReq req) {
+    // 1. 先查学生表
+    StudentEntity student = studentMapper.selectByPhone(req.getPhone());
+    if (student != null) {
+        // 已注册学生 → 正常登录
+        return buildLoginRes(student);
+    }
+
+    // 2. 学生不存在，查是否有待支付订单
+    PrepayOrderEntity pendingOrder = prepayOrderMapper
+        .selectLatestByPhoneAndStatus(req.getPhone(), "PENDING_PAYMENT");
+    if (pendingOrder != null) {
+        // 有待支付订单 → 提示需要先支付
+        return buildNeedPayRes(pendingOrder);
+    }
+
+    // 3. 都没有 → 报错
+    throw BusinessException.PasswordError.newInstance("用户名不存在");
+}
+```
+
+**为什么要先查学生表再查订单表？**
+- 场景：学生下单后还没支付，这时用手机号登录
+- 如果只查学生表，会报"用户不存在"，体验差
+- 查订单表后可以提示"您有待支付订单"，引导完成支付
+
+**学生 JWT 与管理员 JWT 的区别：**
+```java
+// 学生 JWT payload
+map.put("uid", student.getId());
+map.put("phone", student.getStudentPhone());
+map.put("student", true);              // 标记是学生身份
+map.put("expire_time", ...);
+
+// 管理员 JWT payload
+map.put("uid", sysUserEntity.getId());
+map.put("expire_time", ...);
+```
+- 学生 JWT 多了 `phone` 和 `student: true` 字段
+- 后续拦截器可以通过 `student` 字段判断是学生还是管理员
+
+### 12.4 学生下单 — 支付流程
+
+**下单流程图：**
+
+```mermaid
+sequenceDiagram
+    participant S as 学生前端
+    participant OC as StudentFrontOrderController
+    participant OB as StudentOrderBiz
+    participant OS as OrderService
+    participant YC as YeepayCashierService
+    participant Y as 易宝支付
+
+    S->>OC: POST /createOrderNo
+    OC->>OB: 生成订单号
+    OB-->>S: 订单号
+
+    S->>OC: POST /createPaymentOrder
+    OC->>OB: createPaymentOrder(req)
+    OB->>OS: saveOrder (状态: INIT)
+    OB->>YC: unifiedOrder (调用易宝)
+    YC->>Y: 请求收银台
+    Y-->>YC: 收银台地址
+    OB->>OS: updateOrderStatus (INIT → PROCESSING)
+    OB->>OB: scheduleOrderTimeoutCheck (15分钟超时)
+    OB-->>S: 收银台地址
+    S->>Y: 跳转支付
+```
+
+**超时检测机制：**
+```java
+private void scheduleOrderTimeoutCheck(String orderNo) {
+    ThreadPoolConfig.getScheduledPool().schedule(() -> {
+        OrderEntity latestOrder = orderService.selectByOrderNo(orderNo);
+        if (latestOrder == null || !OrderStatusEnum.PROCESSING.name().equals(latestOrder.getStatus())) {
+            return;  // 已经不是支付中状态，不用处理
+        }
+        // 15分钟后仍是 PROCESSING → 标记为超时
+        orderService.updateOrderStatus(new UpdateOrderStatusInfo(
+            orderNo, OrderStatusEnum.TIMEOUT.name(), OrderStatusEnum.PROCESSING.name(), null, null));
+    }, 15, TimeUnit.MINUTES);
+}
+```
+
+**为什么用定时任务而非数据库轮询？**
+- 定时任务是内存级别的，15分钟后自动触发，不需要额外的定时器服务
+- 只检查一次，如果状态已变更（支付成功/失败）就跳过
+- `PROCESSING → TIMEOUT` 是乐观锁更新，防止与支付回调并发冲突
+
+### 12.5 支付成功后完善资料
+
+**完善资料流程图：**
+
+```mermaid
+flowchart TD
+    A[支付成功] --> B[跳转到完善资料页面]
+    B --> C[学生填写: 密码、学历、届数、学校、专业]
+    C --> D[POST /completeProfile]
+
+    D --> E[校验密码一致性]
+    E --> F[查询支付订单]
+    F --> G{订单存在且已支付?}
+    G -- 否 --> H[返回错误]
+    G -- 是 --> I[创建学生账号]
+
+    I --> J[创建学生产品关联]
+    J --> K[返回学生ID]
+```
+
+**核心逻辑：**
+```java
+@Transactional(rollbackFor = Exception.class)
+public CompleteStudentProfileRes completeProfile(CompleteStudentProfileReq req) {
+    // 1. 校验密码
+    if (!req.getPassword().equals(req.getConfirmPassword())) {
+        throw BusinessException.ParamsError.newInstance("两次输入的密码不一致");
+    }
+
+    // 2. 校验订单
+    OrderEntity order = orderService.selectByOrderNo(req.getOrderNo());
+    if (!OrderStatusEnum.SUCCESS.name().equals(order.getStatus())) {
+        throw BusinessException.DateError.newInstance("订单未支付成功");
+    }
+
+    // 3. 创建学生（订单里的姓名和手机号自动填充）
+    StudentEntity student = new StudentEntity();
+    student.setStudentName(order.getStudentName());
+    student.setStudentPhone(order.getStudentPhone());
+    student.setPassword(req.getPassword());
+    // ... 学历、届数、学校、专业
+    StudentEntity createdStudent = studentService.createStudent(student);
+
+    // 4. 创建学生-产品关联
+    StudentProductEntity studentProduct = new StudentProductEntity();
+    studentProduct.setStudentId(createdStudent.getId());
+    studentProduct.setProductId(order.getProductId());
+    studentProduct.setSourceOrderNo(order.getOrderNo());
+    studentProductService.createStudentProduct(studentProduct);
+}
+```
+
+**为什么学生姓名和手机号从订单取，不让学生填？**
+- 下单时已经填过姓名和手机号了
+- 避免学生填写不一致（下单填张三，注册填李四）
+- 数据来源统一，以订单为准
+
+**为什么创建学生和创建关联要在同一个事务？**
+- 如果学生创建成功但关联失败，学生就"孤立"了（有账号但没产品）
+- 如果关联创建成功但学生失败，关联就引用了不存在的学生
+- 事务保证两者要么都成功，要么都回滚
+
+### 12.6 学生端 vs 后台管理 对比
+
+| 维度 | 后台管理（models/） | 学生端（studentFront/） |
+|------|---------------------|------------------------|
+| 用户 | 管理员 | 学生 |
+| 认证 | JWT + 签名 + RBAC 权限 | 简单 JWT（无签名） |
+| 接口前缀 | /api/... | /api/studentFront/... |
+| 业务层 | Controller → Service | Controller → Biz → Service |
+| 数据隔离 | 可看所有数据 | 只看自己的数据 |
+
+**为什么学生端多了 Biz 层？**
+- 学生下单涉及：创建订单 → 调用易宝 → 更新状态 → 超时检测
+- 这些逻辑跨多个 Service，需要一个编排层
+- Biz（Business）层负责协调多个 Service，单个 Service 保持原子性
+
+---
+
 ## 附录 B：新模块 Mapper 方法汇总
 
 ### 订单模块
@@ -3318,6 +3597,16 @@ user.getRealName() != null ? user.getRealName() : user.getUsername()
 | `ClassDutyMapper.countCampusDuty` | 统计校区值班数 | 重复校验 |
 | `ClassDutyMapper.countTeacherTimeConflict` | 老师时间冲突检测 | 冲突校验 |
 
+### 学生模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `StudentMapper.insert` | 插入学生 | 注册/完善资料 |
+| `StudentMapper.selectByPhone` | 按手机号查询 | 学生登录 |
+| `StudentMapper.selectPage` | 分页查询 | 后台学生列表 |
+| `StudentProductMapper.insert` | 插入学生产品关联 | 支付成功后绑定 |
+| `PrepayOrderMapper.selectLatestByPhoneAndStatus` | 按手机号+状态查最新订单 | 学生登录时查待支付订单 |
+
 ---
 
 ## 附录 C：项目完整模块结构
@@ -3342,15 +3631,21 @@ cn.yanque
 │       ├── handle/                 ← 回调处理器
 │       ├── pojo/                   ← 请求/响应对象
 │       └── service/                ← 支付服务
-└── models/                         ← 业务模块
-    ├── auth/                       ← 认证拦截器
-    ├── order/                      ← 订单模块
-    │   ├── prepay/                 ← 预支付订单 + 支付订单
-    │   └── product/                ← 产品管理
-    ├── teaching/                   ← 教学模块
-    │   ├── campus/                 ← 校区管理
-    │   ├── clazz/                  ← 班级管理
-    │   ├── course/                 ← 课程管理
-    │   ├── duty/                   ← 值班管理
-    │   └── schedule/               ← 排课管理
-    └── users/                      ← 用户模块
+├── models/                         ← 业务模块
+│   ├── auth/                       ← 认证拦截器
+│   ├── order/                      ← 订单模块
+│   │   ├── prepay/                 ← 预支付订单 + 支付订单
+│   │   └── product/                ← 产品管理
+│   ├── student/                    ← 学生管理（后台）
+│   ├── teaching/                   ← 教学模块
+│   │   ├── campus/                 ← 校区管理
+│   │   ├── clazz/                  ← 班级管理
+│   │   ├── course/                 ← 课程管理
+│   │   ├── duty/                   ← 值班管理
+│   │   └── schedule/               ← 排课管理
+│   └── users/                      ← 用户模块
+└── studentFront/                   ← 学生端前台（独立于后台管理）
+    ├── biz/                        ← 业务编排（跨模块协调）
+    ├── controller/                 ← 学生端接口
+    ├── pojo/                       ← 请求/响应对象
+    └── service/                    ← 学生端服务
