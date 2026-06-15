@@ -1451,20 +1451,74 @@ public class ControllerLogAspect {
     @Around("execution(* cn.yanque..controller..*.*(..))")
     public Object logController(ProceedingJoinPoint joinPoint) throws Throwable {
         long start = System.currentTimeMillis();
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        String methodName = signature.getDeclaringType().getSimpleName() + "#" + signature.getName();
+        HttpServletRequest request = getCurrentRequest();
 
-        // 记录入参
-        log.info("接口开始: uri={}, controller={}, args={}", ...);
+        log.info("接口开始: uri={}, httpMethod={}, controller={}, args={}",
+                request == null ? "-" : request.getRequestURI(),
+                request == null ? "-" : request.getMethod(),
+                methodName,
+                buildArgsLog(joinPoint.getArgs(), signature.getParameterNames()));
 
-        // 执行目标方法
         Object result = joinPoint.proceed();
-
-        // 记录出参和耗时
         long cost = System.currentTimeMillis() - start;
-        log.info("接口结束: uri={}, controller={}, cost={}ms, result={}", ..., cost, ...);
 
+        log.info("接口结束: uri={}, controller={}, cost={}ms, result={}",
+                request == null ? "-" : request.getRequestURI(),
+                methodName,
+                cost,
+                toJson(sanitizeObject(result)));
         return result;
     }
 }
+```
+
+**切入点表达式解析：**
+```java
+@Around("execution(* cn.yanque..controller..*.*(..))")
+//                              │        │     │ │
+//                              │        │     │ └── 任意方法参数
+//                              │        │     └── 任意方法名
+//                              │        └── 任意类名
+//                              └── cn.yanque 下任意子包中的 controller 包
+```
+- 匹配 `cn.yanque` 包下所有 `controller` 包中的所有方法
+- 新增接口自动有日志，无需额外配置
+
+**执行流程：**
+```
+请求进入
+  ↓
+记录开始时间 start
+  ↓
+获取方法名（如 StudentController#login）
+  ↓
+获取 HttpServletRequest（URI、HTTP 方法）
+  ↓
+打印请求日志：uri、httpMethod、controller、参数
+  ↓
+执行实际方法 joinPoint.proceed()
+  ↓
+计算耗时 cost = 当前时间 - 开始时间
+  ↓
+打印响应日志：uri、controller、耗时、返回值（脱敏后）
+  ↓
+返回结果
+```
+
+**关键方法说明：**
+| 方法 | 作用 |
+|------|------|
+| `buildArgsLog()` | 格式化请求参数，方便排查 |
+| `sanitizeObject()` | 敏感字段脱敏（密码、手机号等） |
+| `toJson()` | 将返回对象转为 JSON 字符串打印 |
+| `getCurrentRequest()` | 从 Spring 上下文获取当前请求对象 |
+
+**实际日志效果：**
+```
+接口开始: uri=/api/student/login, httpMethod=POST, controller=StudentController#login, args={phone: "138****1234", password: "***"}
+接口结束: uri=/api/student/login, controller=StudentController#login, cost=58ms, result={"code":200,"data":{...}}
 ```
 
 **为什么用 AOP 而非在每个 Controller 方法里写 log？**
