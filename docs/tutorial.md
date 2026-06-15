@@ -3143,85 +3143,79 @@ public class YeepayProperties {
 **回调流程图：**
 
 ```mermaid
-flowchart TD
-    A[易宝发送支付成功通知] --> B[YeepayCallbackServlet]
-    B --> C[解析请求: Headers + Params + Body]
-    C --> D[YopCallbackEngine.handle]
-    D --> E[YeepayPaySuccessHandle.handle]
+sequenceDiagram
+    participant Y as 易宝支付
+    participant S as YeepayCallbackServlet
+    participant E as YopCallbackEngine
+    participant H as YeepayPaySuccessHandle
+    participant OS as OrderService
+    participant PS as PrepayOrderService
 
-    E --> F[解析回调数据 YeepayPaySuccessInfo]
-    F --> G[查询订单 orderService.selectByOrderNo]
+    Y->>S: POST /yop-callback/paySuccess
+    S->>S: 解析请求 (Headers + Params + Body)
+    S->>E: handle(yopCallback)
+    E->>E: 根据 type 路由到对应 Handler
+    E->>H: handle(yopCallback)
 
-    G --> H{订单存在?}
-    H -- 否 --> I[记录错误日志, 返回]
-    H -- 是 --> J[更新订单状态: PROCESSING → SUCCESS]
+    H->>H: 解析 JSON → YeepayPaySuccessInfo
+    Note over H: orderId: 支付订单号<br/>paySuccessTime: 支付成功时间
 
-    J --> K[更新预支付订单状态: PAID]
-    K --> L[回调处理完成]
+    H->>OS: selectByOrderNo(orderId)
+    OS-->>H: OrderEntity
+
+    alt 订单不存在
+        H->>H: 记录错误日志, 返回
+    else 订单存在
+        H->>OS: updateOrderStatus(PROCESSING → SUCCESS)
+        H->>PS: updatePrepayOrderSuccess(prepayOrderNo)
+        Note over PS: PENDING_PAYMENT → PAID
+    end
 ```
 
-**文字流程图：**
+**核心代码：**
+```java
+@Override
+public void handle(YopCallback yopCallback) {
+    // 1. 解析回调数据
+    YeepayPaySuccessInfo info = JSONObject.parseObject(
+        yopCallback.getBizData(), YeepayPaySuccessInfo.class);
 
+    // 2. 查询订单
+    OrderEntity order = orderService.selectByOrderNo(info.getOrderId());
+    if (order == null) {
+        log.error("未查询到订单");
+        return;
+    }
+
+    // 3. 更新支付订单状态: PROCESSING → SUCCESS
+    Date paySuccessTime = DateUtil.parse(info.getPaySuccessDate(), ...);
+    orderService.updateOrderStatus(new UpdateOrderStatusInfo(
+        info.getOrderId(), 
+        OrderStatusEnum.SUCCESS.name(),      // 新状态
+        OrderStatusEnum.PROCESSING.name(),    // 旧状态（乐观锁）
+        null, 
+        paySuccessTime
+    ));
+
+    // 4. 更新预支付订单状态: PENDING_PAYMENT → PAID
+    prepayOrderService.updatePrepayOrderSuccess(order.getPrepayOrderNo());
+}
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      支付回调处理流程                               │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  易宝发送 POST 请求  │
-                   │  /yop-callback/     │
-                   │  paySuccess         │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  YeepayCallback     │
-                   │  Servlet 解析请求    │
-                   │  - Headers          │
-                   │  - Params           │
-                   │  - Body (JSON)      │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  YopCallbackEngine  │
-                   │  路由到对应 Handler  │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  YeepayPaySuccess   │
-                   │  Handle 处理        │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  解析回调 JSON       │
-                   │  - orderId          │
-                   │  - paySuccessDate   │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  查询订单            │
-                   │  orderService       │
-                   │  .selectByOrderNo() │
-                   └─────────────────────┘
-                          │         │
-                      不存在        存在
-                          ▼         ▼
-              ┌──────────────┐  ┌─────────────────────┐
-              │  记录错误日志 │  │  更新订单状态        │
-              │  返回         │  │  PROCESSING→SUCCESS │
-              └──────────────┘  └─────────────────────┘
-                                          │
-                                          ▼
-                                ┌─────────────────────┐
-                                │  更新预支付订单状态   │
-                                │  → PAID             │
-                                └─────────────────────┘
+
+**为什么要更新两个表？**
+| 表 | 字段 | 用途 |
+|----|------|------|
+| `order_payment` | status = SUCCESS | 支付订单状态，用于对账 |
+| `prepay_order` | order_status = PAID | 预支付订单状态，前端展示 |
+
+**为什么用乐观锁（带旧状态更新）？**
+```sql
+UPDATE order_payment 
+SET status = 'SUCCESS', pay_success_time = ?
+WHERE order_no = ? AND status = 'PROCESSING'  -- 只有当前是 PROCESSING 才更新
 ```
+- 防止重复回调导致状态错误
+- 如果已经是 SUCCESS，第二次回调不会更新任何行
 
 **为什么用 Servlet 处理回调而非 Controller？**
 - 易宝支付 SDK 要求使用 `YopCallbackEngine` 处理回调
