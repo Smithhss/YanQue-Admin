@@ -94,4 +94,11 @@
         </where>
         order by id desc
     </select>
+
+    <update id="updateClassId">
+        update student
+        set class_id = #{classId},
+            updated_at = now()
+        where id = #{id}
+    </update>
 </mapper>

@@ -35,6 +35,20 @@ set parent_id = @student_list_id,
     updated_at = now()
 where permission_code = 'api:student:page';
 
+insert into sys_permission
+    (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
+values
+    (@student_list_id, 'api:student:assign-class', '学生分配班级', 'API', '/yq-admin/api/students/{id}/class', 2157, '给线下学生分配班级接口', 'ACTIVE', now(), now())
+on duplicate key update
+    parent_id = values(parent_id),
+    permission_name = values(permission_name),
+    permission_type = values(permission_type),
+    api_path = values(api_path),
+    sort_num = values(sort_num),
+    description = values(description),
+    status = values(status),
+    updated_at = now();
+
 update sys_permission
 set status = 'INACTIVE',
     updated_at = now()

@@ -18,4 +18,6 @@ public interface StudentMapper {
     StudentEntity selectByPhone(@Param("studentPhone") String studentPhone);
 
     List<StudentEntity> selectPage(QueryStudentBo queryStudentBo);
+
+    int updateClassId(@Param("id") Long id, @Param("classId") Long classId);
 }
