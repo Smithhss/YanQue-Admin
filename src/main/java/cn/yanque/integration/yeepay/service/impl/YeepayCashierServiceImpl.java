@@ -41,7 +41,7 @@ public class YeepayCashierServiceImpl implements YeepayCashierService {
         request.addParameter("goodsName", sysConfigService.get(SysConfig.createOrderGoodsName));
         request.addParameter("notifyUrl", yeepayProperties.getPaySuccessNotifyUrl());
         request.addParameter("expiredTime", DateUtil.format(DateUtil.offsetMinute(new Date(), sysConfigService.get(SysConfig.createOrderExpireTime)), DatePattern.NORM_DATETIME_PATTERN));
-        request.addParameter("returnUrl", yeepayProperties.getPaySuccessReturnUrl());
+        request.addParameter("returnUrl", yeepayProperties.getPaySuccessReturnUrl() + "?orderNo=" + req.getOrderNo());
 
         JSONObject result = yeepayGatewayService.request(request);
         return JSONObject.parseObject(result.toJSONString(), YeepayUnifiedOrderRes.class);

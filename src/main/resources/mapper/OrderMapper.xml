@@ -69,4 +69,27 @@
         from order_payment
         where order_no = #{orderNo}
     </select>
+
+    <select id="selectPage" resultMap="OrderMap">
+        select <include refid="BaseColumns"/>
+        from order_payment
+        <where>
+            <if test="orderNo != null and orderNo != ''">
+                and order_no like concat('%', #{orderNo}, '%')
+            </if>
+            <if test="studentName != null and studentName != ''">
+                and student_name like concat('%', #{studentName}, '%')
+            </if>
+            <if test="studentPhone != null and studentPhone != ''">
+                and student_phone like concat('%', #{studentPhone}, '%')
+            </if>
+            <if test="prepayOrderNo != null and prepayOrderNo != ''">
+                and prepay_order_no like concat('%', #{prepayOrderNo}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+        order by id desc
+    </select>
 </mapper>

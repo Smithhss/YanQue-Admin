@@ -34,6 +34,14 @@ public interface ProductMapper {
     ProductEntity selectById(@Param("id") Long id);
 
     /**
+     * 按ID批量查询产品。
+     *
+     * @param ids 产品ID列表
+     * @return 产品列表
+     */
+    List<ProductEntity> selectByIds(@Param("ids") List<String> ids);
+
+    /**
      * 查询产品列表，分页由PageHelper在Service层控制。
      *
      * @param keyword 课程内容关键字

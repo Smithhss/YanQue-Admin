@@ -32,9 +32,11 @@ values
     (@teaching_id, 'teaching:campus', '校区管理', 'MENU', null, 2010, '校区管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:course', '课程管理', 'MENU', null, 2020, '课程管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:class', '班级管理', 'MENU', null, 2030, '班级管理页面', 'ACTIVE', now(), now()),
-    (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2040, '值班管理页面', 'ACTIVE', now(), now()),
+    (@teaching_id, 'teaching:student', '学生管理', 'MENU', null, 2040, '学生管理页面', 'ACTIVE', now(), now()),
+    (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2050, '值班管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
-    (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now())
+    (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now()),
+    (@order_id, 'order:payment', '订单管理', 'MENU', null, 3030, '支付订单管理页面', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),
@@ -52,9 +54,11 @@ set @config_menu_id := (select id from sys_permission where permission_code = 's
 set @campus_menu_id := (select id from sys_permission where permission_code = 'teaching:campus' limit 1);
 set @course_menu_id := (select id from sys_permission where permission_code = 'teaching:course' limit 1);
 set @class_menu_id := (select id from sys_permission where permission_code = 'teaching:class' limit 1);
+set @student_menu_id := (select id from sys_permission where permission_code = 'teaching:student' limit 1);
 set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
 set @product_menu_id := (select id from sys_permission where permission_code = 'order:product' limit 1);
 set @prepay_order_menu_id := (select id from sys_permission where permission_code = 'order:prepay' limit 1);
+set @payment_order_menu_id := (select id from sys_permission where permission_code = 'order:payment' limit 1);
 
 insert into sys_permission
     (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
@@ -116,6 +120,8 @@ values
     (@class_menu_id, 'api:class-schedule:add-course', '新增临时课程', 'API', '/yq-admin/api/classes/schedules/{classId}/addClassSchule', 2151, '新增临时课程接口', 'ACTIVE', now(), now()),
     (@class_menu_id, 'api:class-schedule:teacher-detail', '查询老师课表', 'API', '/yq-admin/api/classes/schedules/teacher-detail', 2152, '查询老师上课详情接口', 'ACTIVE', now(), now()),
 
+    (@student_menu_id, 'api:student:page', '分页查询学生', 'API', '/yq-admin/api/students', 2156, '分页查询学生接口', 'ACTIVE', now(), now()),
+
     (@duty_menu_id, 'api:class-duty:page', '分页查询值班', 'API', '/yq-admin/api/classDuties', 2161, '分页查询值班接口', 'ACTIVE', now(), now()),
     (@duty_menu_id, 'api:class-duty:detail', '查询值班详情', 'API', '/yq-admin/api/classDuties/{id}', 2162, '查询值班详情接口', 'ACTIVE', now(), now()),
     (@duty_menu_id, 'api:class-duty:create', '新增值班', 'API', '/yq-admin/api/classDuties', 2163, '新增值班接口', 'ACTIVE', now(), now()),
@@ -134,7 +140,9 @@ values
     (@prepay_order_menu_id, 'api:prepay-order:detail', '查询预支付订单详情', 'API', '/yq-admin/api/prepayOrders/{id}', 3122, '根据ID查询预支付订单接口', 'ACTIVE', now(), now()),
     (@prepay_order_menu_id, 'api:prepay-order:create', '新增预支付订单', 'API', '/yq-admin/api/prepayOrders', 3123, '新增预支付订单接口', 'ACTIVE', now(), now()),
     (@prepay_order_menu_id, 'api:prepay-order:update', '修改预支付订单', 'API', '/yq-admin/api/prepayOrders/{id}', 3124, '修改预支付订单接口', 'ACTIVE', now(), now()),
-    (@prepay_order_menu_id, 'api:prepay-order:delete', '删除预支付订单', 'API', '/yq-admin/api/prepayOrders/{id}', 3125, '删除预支付订单接口', 'ACTIVE', now(), now())
+    (@prepay_order_menu_id, 'api:prepay-order:delete', '删除预支付订单', 'API', '/yq-admin/api/prepayOrders/{id}', 3125, '删除预支付订单接口', 'ACTIVE', now(), now()),
+
+    (@payment_order_menu_id, 'api:order:page', '分页查询支付订单', 'API', '/yq-admin/api/orders', 3131, '分页查询支付订单接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

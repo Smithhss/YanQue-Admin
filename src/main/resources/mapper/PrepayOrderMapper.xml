@@ -82,7 +82,7 @@
 
     <update id="updatePrepayOrderSuccess">
         update prepay_order
-        set order_status = 'SUCCESS',
+        set order_status = 'SUCCESS'
         where order_no = #{prepayOrderNo}
     </update>
 </mapper>
