@@ -3301,6 +3301,74 @@ Servlet（适配器） → YopCallbackEngine（路由器） → Handler（业务
 - `YopCallbackEngine` 负责路由，根据 URI 找到对应 Handler
 - Handler 负责业务逻辑（更新订单状态等）
 
+**支付回调完整流程图：**
+
+```mermaid
+flowchart TD
+    subgraph 启动阶段
+        A1["@PostConstruct init()"] --> A2["YopCallbackHandlerFactory.register('/yq-admin/yop-callback/paySuccess', this)"]
+        A2 --> A3["Handler 注册到工厂"]
+    end
+
+    subgraph 回调阶段
+        B1["易宝发送 POST 请求"] --> B2["YeepayCallbackServlet.doPost()"]
+        B2 --> B3["resolve(): 解析 Headers + Params + Body"]
+        B3 --> B4["构建 YopCallbackRequest"]
+        B4 --> B5["YopCallbackEngine.handle(callbackRequest)"]
+        
+        B5 --> B6{"根据 URI 路由"}
+        B6 -- "/yop-callback/paySuccess" --> B7["YeepayPaySuccessHandle.handle()"]
+        B6 -- "/yop-callback/refund" --> B8["YeepayRefundHandle.handle()"]
+    end
+
+    subgraph 支付成功处理
+        B7 --> C1["解析 JSON → YeepayPaySuccessInfo"]
+        C1 --> C2["获取 orderId（支付订单号）"]
+        C2 --> C3["orderService.selectByOrderNo(orderId)"]
+        C3 --> C4{订单存在?}
+        C4 -- 否 --> C5["记录错误日志, 返回"]
+        C4 -- 是 --> C6["更新支付订单: PROCESSING → SUCCESS"]
+        C6 --> C7["更新预支付订单: PENDING_PAYMENT → PAID"]
+    end
+
+    subgraph 退款处理
+        B8 --> D1["解析 JSON → YeepayRefundInfo"]
+        D1 --> D2["获取 refundRequestId（退款订单号）"]
+        D2 --> D3{退款状态?}
+        D3 -- SUCCESS --> D4["refundOrderBiz.handleRefundSuccess()"]
+        D3 -- FAILED --> D5["refundOrderBiz.handleRefundFail()"]
+    end
+```
+
+**用大白话解释整个流程：**
+
+```
+1. 应用启动时
+   @PostConstruct → 把 Handler 注册到工厂
+   工厂记录: "/yop-callback/paySuccess" → YeepayPaySuccessHandle
+   工厂记录: "/yop-callback/refund" → YeepayRefundHandle
+
+2. 学生支付成功后
+   易宝服务器 → POST /yq-admin/yop-callback/paySuccess
+   请求体: { "orderId": "YQ20260615...", "paySuccessDate": "2026-06-15 14:30:00" }
+
+3. Servlet 接收请求
+   resolve() → 解析为 YopCallbackRequest 对象
+   包含: URI、Headers、Params、Body
+
+4. Engine 路由
+   YopCallbackEngine.handle() → 根据 URI 查找 Handler
+   URI = "/yq-admin/yop-callback/paySuccess" → 找到 YeepayPaySuccessHandle
+
+5. Handler 处理业务
+   解析 JSON → 拿到 orderId
+   查数据库 → 找到订单
+   更新状态 → 支付订单 SUCCESS, 预支付订单 PAID
+
+6. 返回响应
+   Servlet 返回 200 OK → 易宝不再重发
+```
+
 **为什么回调处理要更新两个表？**
 - 支付订单（Order）：记录支付状态，后续用于对账
 - 预支付订单（PrepayOrder）：业务层关心的订单状态，前端展示用
