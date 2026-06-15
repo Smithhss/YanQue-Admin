@@ -2043,30 +2043,59 @@ flowchart TD
     Q -- 否 --> L
 ```
 
-**文字流程图：**
+**核心代码：**
+```java
+List<ClassScheduleEntity> schedules = new ArrayList<>();
+Date currentDate = truncateDate(firstClassDate);
+int courseIndex = 0;
 
+while (courseIndex < courseDetails.size()) {
+    int weekValue = getWeekValue(currentDate);  // 1-7 代表周一到周日
+    
+    // 1. 节假日判断（调用外部 API）
+    if (Boolean.TRUE.equals(rule.getHolidayRest())) {
+        HolidayInfo holidayInfo = holidayService.getHolidayInfo(currentDate);
+        if (holidayInfo != null && Boolean.TRUE.equals(holidayInfo.getHoliday())) {
+            schedules.add(buildSchedule(classId, currentDate, null, 
+                holidayInfo.getName(), ClassScheduleTypeEnum.HOLIDAY));
+            currentDate = addDays(currentDate, 1);
+            continue;  // 不消耗课程明细
+        }
+    }
+    
+    // 2. 休息日判断
+    if (rule.getRestDays() != null && rule.getRestDays().contains(weekValue)) {
+        schedules.add(buildSchedule(classId, currentDate, null, 
+            "休息", ClassScheduleTypeEnum.REST));
+        currentDate = addDays(currentDate, 1);
+        continue;
+    }
+    
+    // 3. 自习日判断
+    if (rule.getSelfStudyDays() != null && rule.getSelfStudyDays().contains(weekValue)) {
+        schedules.add(buildSchedule(classId, currentDate, null, 
+            "自习", ClassScheduleTypeEnum.SELF_STUDY));
+        currentDate = addDays(currentDate, 1);
+        continue;
+    }
+    
+    // 4. 上课日 → 消耗一条课程明细
+    if (rule.getClassDays().contains(weekValue)) {
+        CourseDetailEntity detail = courseDetails.get(courseIndex);
+        schedules.add(buildSchedule(classId, currentDate, detail, 
+            detail.getClassContent(), ClassScheduleTypeEnum.CLASS));
+        courseIndex++;  // 消耗课程
+    }
+    
+    currentDate = addDays(currentDate, 1);
+}
+return schedules;
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       课表生成流程                                │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  查询班级信息        │
-                   │  获取 courseId       │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  获取排课规则配置    │
-                   │  classDays/restDays  │
-                   │  selfStudyDays       │
-                   │  holidayRest         │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  校验第一天上课日期  │
+
+**关键设计：**
+- **while 循环逐天遍历**，自动跳过休息日/节假日/自习日
+- **只有上课日消耗课程明细**，其他类型不消耗
+- **节假日判断优先级最高**，避免在节假日生成上课记录
                    │  必须是上课日        │
                    │  不能是节假日        │
                    └─────────────────────┘
@@ -2295,29 +2324,44 @@ flowchart TD
     J --> K[查询该时间段已排课老师]
     K --> L{老师时间冲突?}
     L -- 是 --> M[抛异常: 老师已有课程]
-    L -- 否 --> N[更新课表老师]
+    L -- 否 --> N[批量更新课表老师]
 
     N --> O{还有阶段?}
     O -- 是 --> F
     O -- 否 --> P[分配完成]
 ```
 
-**文字流程图：**
+**老师冲突检测核心代码：**
+```java
+// 查询该阶段的日期范围
+Date stageStartDate = schedules.get(0).getScheduleDate();
+Date stageEndDate = schedules.get(schedules.size() - 1).getScheduleDate();
 
+// 查询该时间段内已排课的老师（排除当前班级）
+List<Long> occupiedTeacherIds = classScheduleMapper
+    .selectTeacheringUserId(stageStartDate, stageEndDate, classId);
+
+// 检查冲突
+if (occupiedTeacherIds.contains(item.getTeacherId())) {
+    throw BusinessException.DateError.newInstance("老师在该阶段时间内已有课程");
+}
+
+// 批量更新该阶段所有课表的 teacher_id
+updateCount += classScheduleMapper.updateTeacherByCourseDetailIds(
+    classId, courseDetailIds, item.getTeacherId());
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      老师分配流程                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  查询班级和课程信息  │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  课程按阶段分组      │
-                   │  Stage1: [day1-5]   │
+
+**为什么要排除当前班级？**
+```sql
+SELECT DISTINCT teacher_id 
+FROM sys_class_schedule
+WHERE schedule_date BETWEEN ? AND ?
+  AND teacher_id IS NOT NULL
+  AND class_id != ?  -- 排除当前班级
+```
+- 同一个老师可以在不同班级的不同时间段授课
+- 只检查**其他班级**在该时间段内是否占用了这个老师
+- 当前班级重新分配老师时，不会被自己之前的分配记录阻塞
                    │  Stage2: [day6-10]  │
                    └─────────────────────┘
                               │
@@ -2373,6 +2417,60 @@ flowchart TD
 
 **为什么老师冲突检测按时间段而非按天？**
 - 一个阶段可能跨多天（如 5 天课程）
+- 一次查询判断整个阶段，性能更好
+- 如果按天查询，需要循环查 5 次数据库
+
+**加课功能关键设计：**
+```java
+// 1. 在指定日期插入新课程
+if (当天是自习/休息/节假日) {
+    // 直接改为上课
+    classScheduleEntity.setClassType(ClassScheduleTypeEnum.CLASS);
+} else if (当天已是上课) {
+    // 插入一条新上课记录（该班当天有两节课）
+    newList.add(newClassSchedule);
+}
+
+// 2. 后续所有上课日往后顺延
+for (剩余课程) {
+    按排课规则重新计算日期（跳过休息日/节假日/自习日）
+}
+
+// 3. 冲突检测（SQL 层面）
+SELECT teacher_id, schedule_date, COUNT(*) cnt
+FROM sys_class_schedule
+WHERE teacher_id IS NOT NULL
+GROUP BY teacher_id, schedule_date
+HAVING cnt > 1;
+
+// 有重复则回滚事务
+if (duplicateCount > 0) {
+    throw new BusinessException("老师同一天存在重复课表");
+}
+```
+
+**N+1 查询优化：**
+```java
+// ❌ 不好的写法：逐个查询老师
+for (ClassScheduleEntity schedule : schedules) {
+    SysUserEntity teacher = sysUserMapper.selectById(schedule.getTeacherId());
+    // 100 条课表 = 100 次数据库查询
+}
+
+// ✅ 优化写法：批量查询 + Map 缓存
+Set<Long> teacherIds = schedules.stream()
+    .map(ClassScheduleEntity::getTeacherId)
+    .collect(Collectors.toSet());
+
+List<SysUserEntity> teachers = sysUserMapper.selectByIds(new ArrayList<>(teacherIds));
+Map<Long, SysUserEntity> teacherMap = teachers.stream()
+    .collect(Collectors.toMap(SysUserEntity::getId, Function.identity()));
+
+// 100 条课表 = 1 次数据库查询
+for (ClassScheduleEntity schedule : schedules) {
+    SysUserEntity teacher = teacherMap.get(schedule.getTeacherId());
+}
+```
 - 只要老师在这 5 天内有任何一天有课，就不能分配
 - `selectTeacheringUserId` 查询的是时间段内的所有已排课老师
 
