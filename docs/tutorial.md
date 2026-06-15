@@ -2,7 +2,7 @@
 
 > 本教程系统讲解 YanQue-Admin 项目的架构设计和实现原理，帮助你理解"为什么这样写"而不仅仅是"怎么写"。
 >
-> 共 14 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理，第 12 章讲解学生端业务，第 13 章讲解作业系统，第 14 章讲解退款流程。
+> 共 15 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理，第 12 章讲解学生端业务，第 13 章讲解作业系统，第 14 章讲解退款流程，第 15 章讲解 Docker 部署。
 >
 > 每个核心功能都附带流程图，便于理解整体逻辑。
 
@@ -24,6 +24,7 @@
 - [第 12 章：学生端 — 学生管理与前台业务](#第-12-章学生端--学生管理与前台业务)
 - [第 13 章：作业系统 — 教师发布与学生提交](#第-13-章作业系统--教师发布与学生提交)
 - [第 14 章：退款流程 — 易宝退款集成](#第-14-章退款流程--易宝退款集成)
+- [第 15 章：Docker 部署 — 容器化构建与运行](#第-15-章docker-部署--容器化构建与运行)
 
 ---
 
@@ -4031,6 +4032,138 @@ public void handleRefundFail(String refundOrderNo, String failReason) {
 
 ---
 
+## 第 15 章：Docker 部署 — 容器化构建与运行
+
+> 本章讲解如何将 Spring Boot 项目打包为 Docker 镜像，实现一键部署。
+
+### 15.1 Dockerfile 多阶段构建
+
+```mermaid
+flowchart LR
+    subgraph Stage1 [构建阶段: maven:3.9.9-eclipse-temurin-17]
+        A[复制 settings.xml] --> B[复制 pom.xml]
+        B --> C[mvn dependency:go-offline]
+        C --> D[复制 src 源码]
+        D --> E[mvn package -DskipTests]
+    end
+
+    subgraph Stage2 [运行阶段: eclipse-temurin:17-jre]
+        F[复制 jar 包] --> G[设置环境变量]
+        G --> H[暴露 8080 端口]
+        H --> I[java -jar 启动]
+    end
+
+    E --> F
+```
+
+**Dockerfile 完整代码：**
+```dockerfile
+# ===== 构建阶段 =====
+FROM maven:3.9.9-eclipse-temurin-17 AS builder
+WORKDIR /app
+COPY settings.xml /root/.m2/settings.xml   # 阿里云 Maven 镜像加速
+COPY pom.xml .
+RUN mvn -B dependency:go-offline            # 先下载依赖（利用 Docker 缓存层）
+COPY src ./src
+RUN mvn -B -DskipTests package              # 编译打包
+
+# ===== 运行阶段 =====
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+ENV SPRING_PROFILES_ACTIVE=prod             # 激活生产环境配置
+ENV JAVA_OPTS="-Xms256m -Xmx512m"          # JVM 内存参数
+COPY --from=builder /app/target/*.jar /app/yanque-admin.jar
+EXPOSE 8080
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/yanque-admin.jar"]
+```
+
+**为什么用多阶段构建？**
+- 构建阶段用 `maven` 镜像（~800MB），包含完整的 Maven + JDK
+- 运行阶段用 `eclipse-temurin:17-jre`（~200MB），只有 JRE，体积小 75%
+- 最终镜像不包含源码、编译中间产物，安全性更高
+
+**为什么先复制 `pom.xml` 再 `dependency:go-offline`？**
+```dockerfile
+COPY pom.xml .
+RUN mvn -B dependency:go-offline    # 第一层缓存：依赖下载
+COPY src ./src
+RUN mvn -B -DskipTests package      # 第二层：编译打包
+```
+- Docker 按层缓存，`pom.xml` 不变时依赖下载层直接复用缓存
+- 只有改了 `pom.xml`（加减依赖）才会重新下载
+- 如果一次性复制所有文件，改一行代码就要重新下载所有依赖
+
+### 15.2 Maven 镜像加速 — settings.xml
+
+```xml
+<settings>
+  <mirrors>
+    <mirror>
+      <id>aliyunmaven</id>
+      <mirrorOf>*</mirrorOf>
+      <name>Aliyun Maven</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+    </mirror>
+  </mirrors>
+</settings>
+```
+
+- 默认 Maven 中央仓库在海外，国内下载慢
+- 阿里云镜像同步了 Maven 中央仓库，下载速度提升 10 倍以上
+- 通过 `COPY settings.xml /root/.m2/settings.xml` 注入到构建阶段
+
+### 15.3 .dockerignore — 排除不需要的文件
+
+```
+.git
+.idea
+target
+logs
+*.log
+*.iml
+Dockerfile
+.dockerignore
+```
+
+**为什么需要 .dockerignore？**
+- `COPY . .` 会复制当前目录所有文件到 Docker 上下文
+- `.git` 可能有几百 MB，`target/` 是编译产物，都不需要
+- 排除后 Docker 构建上下文更小，构建速度更快
+
+### 15.4 运行时环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `SPRING_PROFILES_ACTIVE` | 激活的配置文件 | `prod` |
+| `JAVA_OPTS` | JVM 参数 | `-Xms256m -Xmx512m` |
+
+**如何覆盖环境变量？**
+```bash
+# 运行时指定生产数据库
+docker run -e SPRING_PROFILES_ACTIVE=prod \
+           -e JAVA_OPTS="-Xms512m -Xmx1g" \
+           -p 8080:8080 \
+           yanque-admin
+```
+
+### 15.5 构建与运行命令
+
+```bash
+# 构建镜像
+docker build -t yanque-admin .
+
+# 运行容器
+docker run -d -p 8080:8080 --name yanque-admin yanque-admin
+
+# 查看日志
+docker logs -f yanque-admin
+
+# 停止容器
+docker stop yanque-admin
+```
+
+---
+
 ## 附录 B：新模块 Mapper 方法汇总
 
 ### 订单模块
@@ -4072,12 +4205,44 @@ public void handleRefundFail(String refundOrderNo, String failReason) {
 | `StudentProductMapper.insert` | 插入学生产品关联 | 支付成功后绑定 |
 | `PrepayOrderMapper.selectLatestByPhoneAndStatus` | 按手机号+状态查最新订单 | 学生登录时查待支付订单 |
 
+### 作业模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `HomeworkMapper.insert` | 插入作业 | 教师发布作业 |
+| `HomeworkMapper.selectById` | 查询作业详情 | 作业详情 |
+| `HomeworkMapper.selectPage` | 分页查询 | 作业列表 |
+| `HomeworkMapper.selectStudentPage` | 学生端分页查询 | 学生查看作业 |
+| `HomeworkMapper.selectByClassIdAndHomeworkDate` | 按班级+日期查询 | 同班同天唯一校验 |
+| `HomeworkMapper.updateAnswer` | 更新答案信息 | 发布答案 |
+| `HomeworkSubmissionMapper.insert` | 插入提交记录 | 学生提交作业 |
+| `HomeworkSubmissionMapper.selectByHomeworkId` | 按作业查询提交 | 教师查看提交列表 |
+| `HomeworkSubmissionMapper.selectByHomeworkIdAndStudentId` | 按作业+学生查询 | 学生查看自己的提交 |
+| `HomeworkSubmissionMapper.selectByHomeworkIdsAndStudentId` | 批量查询提交状态 | 学生作业列表批量补齐 |
+| `HomeworkSubmissionMapper.updateSubmit` | 更新提交记录 | 重新提交 |
+| `HomeworkSubmissionMapper.updateGrade` | 更新批改信息 | 教师批改 |
+
+### 退款模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `RefundOrderMapper.insert` | 插入退款单 | 创建退款 |
+| `RefundOrderMapper.selectByRefundOrderNo` | 按退款单号查询 | 退款处理 |
+| `RefundOrderMapper.updateRefundProcessing` | 更新为退款中 | 调用易宝后 |
+| `RefundOrderMapper.updateRefundSuccess` | 更新为退款成功 | 退款成功回调 |
+| `RefundOrderMapper.updateRefundFail` | 更新为退款失败 | 退款失败回调 |
+
 ---
 
 ## 附录 C：项目完整模块结构
 
 ```
-cn.yanque
+项目根目录
+├── Dockerfile                      ← Docker 多阶段构建
+├── .dockerignore                   ← Docker 构建排除规则
+├── settings.xml                    ← Maven 阿里云镜像加速
+├── pom.xml                         ← Maven 依赖管理
+└── src/main/java/cn.yanque
 ├── common/                         ← 公共组件
 │   ├── annotations/                ← @NoAuthCheck 等自定义注解
 │   ├── api/                        ← ApiResponse、PageResult
@@ -4100,13 +4265,15 @@ cn.yanque
 │   ├── auth/                       ← 认证拦截器
 │   ├── order/                      ← 订单模块
 │   │   ├── prepay/                 ← 预支付订单 + 支付订单
-│   │   └── product/                ← 产品管理
+│   │   ├── product/                ← 产品管理
+│   │   └── refund/                 ← 退款模块
 │   ├── student/                    ← 学生管理（后台）
 │   ├── teaching/                   ← 教学模块
 │   │   ├── campus/                 ← 校区管理
 │   │   ├── clazz/                  ← 班级管理
 │   │   ├── course/                 ← 课程管理
 │   │   ├── duty/                   ← 值班管理
+│   │   ├── homework/               ← 作业模块
 │   │   └── schedule/               ← 排课管理
 │   └── users/                      ← 用户模块
 └── studentFront/                   ← 学生端前台（独立于后台管理）
