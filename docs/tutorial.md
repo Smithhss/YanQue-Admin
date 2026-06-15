@@ -962,27 +962,58 @@ JWT 只证明"这个用户已登录"，但不保证：
 
 ### 4.4 拦截器链注册顺序
 
-```java
-registry.addInterceptor(jwtAuthInterceptor)     // 1. 先解析 JWT，拿到 userId
-    .addPathPatterns("/api/**")
-    .excludePathPatterns("/api/sysUser/login", ...);
+项目有**两套拦截器体系**，分别处理后台管理和学生端：
 
-registry.addInterceptor(signInterceptor)          // 2. 再验签（需要 userId）
-    .addPathPatterns("/api/**")
-    .excludePathPatterns("/api/sysUser/login", ...);
-
-registry.addInterceptor(permissionInterceptor)    // 3. 最后检查权限（需要 userId）
-    .addPathPatterns("/api/**")
-    .excludePathPatterns("/api/sysUser/login", ...);
+**后台管理（`/api/**`）：**
+```
+JwtAuthInterceptor → SignInterceptor → PermissionInterceptor
+（解析JWT）           （验签）            （权限校验）
 ```
 
-**为什么登录接口要排除所有拦截器？**
-- 登录时还没有 token 和签名密钥
-- 登录是获取凭证的入口，不能用凭证来校验
+**学生端（`/student/**`）：**
+```
+PendingPaySignInterceptor → StudentJwtAuthInterceptor → StudentSignInterceptor
+（待支付接口验签）           （解析学生JWT）               （学生端验签）
+```
 
-**为什么 Swagger 也要排除？**
-- 本地开发时需要直接访问 Swagger UI 测试接口
-- 生产环境可以通过 Nginx 或 Spring Security 限制 Swagger 访问
+```java
+// ===== 后台管理拦截器 =====
+registry.addInterceptor(jwtAuthInterceptor)          // 1. 先解析 JWT，拿到 userId
+    .addPathPatterns("/api/**")
+    .excludePathPatterns("/api/sysUser/login", ...);
+
+registry.addInterceptor(signInterceptor)              // 2. 再验签（需要 userId）
+    .addPathPatterns("/api/**")
+    .excludePathPatterns("/api/sysUser/login", ...);
+
+registry.addInterceptor(permissionInterceptor)        // 3. 最后检查权限（需要 userId）
+    .addPathPatterns("/api/**")
+    .excludePathPatterns("/api/sysUser/login", ...);
+
+// ===== 学生端拦截器 =====
+registry.addInterceptor(pendingPaySignInterceptor)    // 4. 待支付接口单独验签（无JWT）
+    .addPathPatterns("/student/pending/**");
+
+registry.addInterceptor(studentJwtAuthInterceptor)    // 5. 学生 JWT 认证
+    .addPathPatterns("/student/**")
+    .excludePathPatterns("/student/login", "/student/pending/**");
+
+registry.addInterceptor(studentSignInterceptor)        // 6. 学生端验签
+    .addPathPatterns("/student/**")
+    .excludePathPatterns("/student/login", "/student/pending/**");
+```
+
+**排除路径说明：**
+| 排除路径 | 原因 |
+|----------|------|
+| `/api/sysUser/login` | 登录时还没有 token 和签名密钥 |
+| `/student/login` | 学生登录没有 token |
+| `/student/pending/**` | 待支付接口单独处理（只有验签，没有 JWT） |
+| `/swagger-ui/**` | 本地开发调试接口文档 |
+
+**为什么 `/student/pending/**` 要单独处理？**
+- 学生下单前还没有 token（未注册），但需要验签防篡改
+- 所以 `pendingPaySignInterceptor` 只验签不验 JWT
 
 ---
 
