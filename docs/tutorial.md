@@ -4623,6 +4623,655 @@ docker stop yanque-admin
 
 ---
 
+## 第 16 章：考试系统 — 题库、组卷与在线考试
+
+> 本章讲解考试系统的完整生命周期：题库管理 → 组卷 → 创建考试 → 学生答题 → 自动判分 → 教师批改。
+
+### 16.1 考试系统架构
+
+**考试系统模块结构：**
+
+```
+exam/
+├── question/          ← 题库管理
+│   ├── entity/        ExamQuestionEntity, ExamQuestionOptionEntity, ExamQuestionCourseEntity
+│   ├── mapper/        ExamQuestionMapper, ExamQuestionOptionMapper, ExamQuestionCourseMapper
+│   ├── service/       ExamQuestionService
+│   └── controller/    ExamQuestionController
+├── paper/             ← 试卷管理
+│   ├── entity/        ExamPaperEntity, ExamPaperQuestionEntity
+│   ├── mapper/        ExamPaperMapper, ExamPaperQuestionMapper
+│   ├── service/       ExamPaperService
+│   └── controller/    ExamPaperController
+└── exam/              ← 考试管理
+    ├── entity/        ExamEntity, StudentExamRecordEntity, StudentExamAnswerEntity
+    ├── mapper/        ExamMapper, StudentExamRecordMapper, StudentExamAnswerMapper
+    ├── service/       ExamService
+    └── controller/    ExamController
+
+studentFront/
+└── StudentExamController + StudentExamService   ← 学生端考试
+```
+
+**核心实体关系：**
+
+```mermaid
+erDiagram
+    ExamQuestion ||--o{ ExamQuestionOption : "has"
+    ExamQuestion ||--o{ ExamQuestionCourse : "belongs to"
+    ExamPaper ||--o{ ExamPaperQuestion : "contains"
+    ExamPaperQuestion }o--|| ExamQuestion : "references"
+    Exam ||--|| ExamPaper : "uses"
+    Exam ||--o{ StudentExamRecord : "has"
+    StudentExamRecord ||--o{ StudentExamAnswer : "has"
+    StudentExamAnswer }o--|| ExamQuestion : "answers"
+```
+
+**数据流：**
+
+```mermaid
+flowchart TD
+    A[题库管理] --> B[试卷管理]
+    B --> C[考试管理]
+    C --> D[学生考试]
+    D --> E[自动判分]
+    E --> F[教师批改]
+    F --> G[公布成绩]
+```
+
+### 16.2 题库管理（ExamQuestion）
+
+**题型设计：**
+
+| 题型 | 枚举值 | 选项 | 自动判分 |
+|------|--------|------|----------|
+| 单选题 | SINGLE | 有 | 自动 |
+| 多选题 | MULTIPLE | 有 | 自动 |
+| 判断题 | JUDGE | 有 | 自动 |
+| 填空题 | FILL | 无 | 手动 |
+| 简答题 | SHORT | 无 | 手动 |
+| 编程题 | PROGRAMMING | 无 | 手动 |
+
+**难度等级：**
+
+```java
+VERY_EASY("很简单"), EASY("简单"), NORMAL("普通"), HARD("困难"), VERY_HARD("很困难")
+```
+
+**题目实体：**
+
+```java
+@Data
+public class ExamQuestionEntity {
+    private Long id;
+    private String questionType;      // SINGLE/MULTIPLE/JUDGE/FILL/SHORT/PROGRAMMING
+    private String questionContent;   // 题干
+    private String answerContent;     // 正确答案
+    private String analysisContent;   // 答案解析
+    private String difficulty;        // VERY_EASY/EASY/NORMAL/HARD/VERY_HARD
+    private String status;            // ENABLED/DISABLED
+}
+```
+
+**题目与课程关联：**
+
+```java
+@Data
+public class ExamQuestionCourseEntity {
+    private Long id;
+    private Long questionId;    // 题目ID
+    private Long courseId;      // 课程ID
+    private String stageName;   // 阶段名称（可为空）
+}
+```
+
+**为什么题目要关联课程和阶段？**
+- 一个题目可以属于多个课程（通用题）
+- 按课程+阶段筛选题目，方便组卷
+- 支持"Java基础阶段"、"AI阶段"等不同维度的题库
+
+**创建题目核心逻辑：**
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public Long createQuestion(ExamQuestionEntity question, 
+                           List<ExamQuestionCourseEntity> courseStages,
+                           List<ExamQuestionOptionEntity> options) {
+    validateCourseStages(courseStages);     // 校验课程阶段
+    questionMapper.insert(question);        // 插入题目
+    saveQuestionCourses(question.getId(), courseStages, now);  // 关联课程
+    saveOptions(question.getId(), options, now);               // 保存选项
+    return question.getId();
+}
+```
+
+**为什么创建题目要同时保存课程关联和选项？**
+- 题目、课程关联、选项是原子操作，必须在同一个事务
+- 如果题目创建成功但选项保存失败，题目就"残缺"了
+- 先删后插模式：更新时先删除旧关联，再插入新关联
+
+### 16.3 试卷管理（ExamPaper）
+
+**试卷实体：**
+
+```java
+@Data
+public class ExamPaperEntity {
+    private Long id;
+    private String paperName;      // 试卷名称
+    private Long courseId;         // 关联课程
+    private String stageName;      // 阶段名称（可为空，表示整门课程）
+    private BigDecimal totalScore; // 总分数
+}
+```
+
+**试卷-题目关联：**
+
+```java
+@Data
+public class ExamPaperQuestionEntity {
+    private Long id;
+    private Long paperId;          // 试卷ID
+    private Long questionId;       // 题目ID
+    private BigDecimal questionScore; // 该题分值
+}
+```
+
+**为什么每题分值存在关联表而非题目表？**
+- 同一道题在不同试卷中分值可能不同
+- 试卷的总分 = 所有题目分值之和
+- 分值是试卷的属性，不是题目的属性
+
+**组卷流程图：**
+
+```mermaid
+flowchart TD
+    A[创建试卷] --> B[设置试卷名称]
+    B --> C[关联课程和阶段]
+    C --> D[从题库选题]
+    D --> E[设置每题分值]
+    E --> F[计算总分]
+    F --> G[保存试卷]
+```
+
+### 16.4 考试管理（Exam）
+
+**考试实体：**
+
+```java
+@Data
+public class ExamEntity {
+    private Long id;
+    private Long paperId;             // 试卷ID
+    private Long classId;             // 班级ID
+    private Date startTime;           // 可进入考试开始时间
+    private Date endTime;             // 可进入考试截止时间
+    private Integer durationMinutes;  // 学生个人答题时长（分钟）
+    private Long invigilatorUserId;   // 监考老师ID
+    private Boolean answerVisible;    // 是否向学生公布答案
+}
+```
+
+**为什么考试有两个时间概念？**
+- **考试时间窗口**（startTime ~ endTime）：学生可以进入考试的时间范围
+- **个人答题时长**（durationMinutes）：学生进入后有多少分钟答题
+
+**示例：**
+- 考试时间窗口：2026-06-15 09:00 ~ 2026-06-15 18:00（全天可进入）
+- 个人答题时长：120 分钟
+- 学生 A 在 09:30 进入 → 截止时间 11:30
+- 学生 B 在 14:00 进入 → 截止时间 16:00
+
+**考试时间窗口重叠检测：**
+
+```java
+private void validateExam(ExamEntity exam) {
+    // 校验试卷存在
+    // 校验班级存在
+    // 校验监考老师存在
+    // 检测同一班级考试时间窗口重叠
+    if (examMapper.countClassTimeOverlap(exam.getId(), exam.getClassId(), 
+            exam.getStartTime(), exam.getEndTime()) > 0) {
+        throw BusinessException.DateError.newInstance("该班级考试时间窗口存在重叠");
+    }
+}
+```
+
+**为什么同一班级不能有重叠的考试时间窗口？**
+- 避免学生同时面对两场考试
+- 时间窗口重叠意味着学生可能在一场考试未结束时进入另一场
+- 检测 SQL：`WHERE class_id = ? AND start_time < #{endTime} AND end_time > #{startTime}`
+
+### 16.5 学生端考试流程
+
+**学生考试状态机：**
+
+```mermaid
+stateDiagram-v2
+    [*] --> NOT_STARTED: 考试未开始
+    NOT_STARTED --> AVAILABLE: 到达开始时间
+    AVAILABLE --> IN_PROGRESS: 学生进入考试
+    IN_PROGRESS --> SUBMITTED: 学生交卷
+    IN_PROGRESS --> TIMEOUT: 超过截止时间
+
+    note right of IN_PROGRESS: 创建考试记录<br/>计算个人截止时间
+    note right of SUBMITTED: 客观题自动判分<br/>主观题待批改
+```
+
+**学生考试列表状态：**
+
+| 状态 | 显示 | 可否进入 |
+|------|------|----------|
+| NOT_STARTED | 未开始 | 否 |
+| AVAILABLE | 可开始 | 是 |
+| IN_PROGRESS | 进行中 | 是（继续答题） |
+| SUBMITTED | 已提交/已批改/待批改 | 否 |
+| TIMEOUT | 已超时 | 否 |
+| ENDED | 已结束 | 否 |
+
+**开始考试流程图：**
+
+```mermaid
+flowchart TD
+    A[学生点击开始考试] --> B[查询学生信息]
+    B --> C[校验学生属于该班级]
+    C --> D[查询考试信息]
+    D --> E{考试是否在时间窗口内?}
+
+    E -- 未开始 --> F[抛异常: 考试暂未开始]
+    E -- 已结束 --> G[抛异常: 考试进入时间已结束]
+    E -- 在窗口内 --> H{已有考试记录?}
+
+    H -- 是 --> I{记录状态?}
+    I -- SUBMITTED --> J[抛异常: 考试已提交]
+    I -- IN_PROGRESS + 超时 --> K[抛异常: 考试已超时]
+    I -- IN_PROGRESS --> L[返回已有记录]
+
+    H -- 否 --> M[创建考试记录]
+    M --> N[计算个人截止时间]
+    N --> O[返回考试信息]
+```
+
+**开始考试核心代码：**
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public StudentExamStartRes startExam(Long examId) {
+    StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
+    ExamEntity exam = validateStudentExam(student, examId);
+    Date now = new Date();
+
+    // 校验时间窗口
+    if (exam.getStartTime().after(now)) throw ...;
+    if (exam.getEndTime().before(now)) throw ...;
+
+    // 查询已有记录
+    StudentExamRecordEntity record = studentExamRecordMapper
+        .selectByExamIdAndStudentId(examId, student.getId());
+    if (record != null) {
+        // 已有记录 → 检查状态
+        if (STATUS_SUBMITTED.equals(record.getStatus())) throw ...;
+        if (record.getDeadlineTime().before(now)) throw ...;
+        return buildStartRes(exam, record);
+    }
+
+    // 首次进入 → 创建记录
+    record = new StudentExamRecordEntity();
+    record.setExamId(examId);
+    record.setStudentId(student.getId());
+    record.setStartTime(now);
+    record.setDeadlineTime(buildDeadlineTime(now, exam));  // 计算截止时间
+    record.setStatus(STATUS_IN_PROGRESS);
+    record.setGradingStatus(GRADING_STATUS_PENDING);
+    studentExamRecordMapper.insert(record);
+    return buildStartRes(exam, record);
+}
+```
+
+**截止时间计算逻辑：**
+
+```java
+private Date buildDeadlineTime(Date startTime, ExamEntity exam) {
+    Calendar calendar = Calendar.getInstance();
+    calendar.setTime(startTime);
+    calendar.add(Calendar.MINUTE, exam.getDurationMinutes());
+    Date personalDeadline = calendar.getTime();
+    // 取 个人截止时间 和 考试结束时间 的较小值
+    return personalDeadline.after(exam.getEndTime()) ? exam.getEndTime() : personalDeadline;
+}
+```
+
+- 学生 A 在 17:00 进入，答题时长 120 分钟 → 个人截止 19:00
+- 但考试结束时间是 18:00 → 实际截止 18:00
+
+### 16.6 答题与交卷
+
+**获取试卷（不含答案）：**
+
+```java
+public StudentExamPaperRes getExamPaper(Long recordId) {
+    // 校验学生身份、考试记录、是否超时
+    // 查询试卷信息
+    // 查询题目列表（只返回题干和选项，不返回正确答案）
+    StudentExamPaperRes res = new StudentExamPaperRes();
+    res.setQuestions(buildPaperQuestions(paper.getId()));
+    return res;
+}
+```
+
+**为什么获取试卷时不返回正确答案？**
+- 防止学生通过查看接口获取答案
+- 答案只在交卷后、且 `answerVisible = true` 时才返回
+
+**交卷流程图：**
+
+```mermaid
+flowchart TD
+    A[学生点击交卷] --> B[校验学生身份]
+    B --> C[校验考试记录]
+    C --> D{已提交?}
+    D -- 是 --> E[抛异常: 已提交]
+    D -- 否 --> F{已超时?}
+
+    F -- 是 --> G[抛异常: 已超时不能交卷]
+    F -- 否 --> H[查询试卷题目]
+    H --> I[校验提交的题目属于该试卷]
+    I --> J[遍历每道题]
+
+    J --> K{题目类型?}
+    K -- 客观题 --> L[自动判分]
+    K -- 主观题 --> M[标记待批改]
+
+    L --> N[组装答题记录]
+    M --> N
+    N --> O[批量保存答题记录]
+    O --> P[更新考试记录状态]
+    P --> Q[返回结果]
+```
+
+**交卷核心代码：**
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public StudentExamSubmitRes submitExam(Long recordId, StudentExamSubmitReq req) {
+    // 1. 校验学生、记录、时间
+    // 2. 查询试卷题目
+    // 3. 校验提交的题目属于该试卷
+    // 4. 查询题目详情
+    // 5. 组装答题记录（含自动判分）
+    List<StudentExamAnswerEntity> answers = paperQuestions.stream()
+        .map(paperQuestion -> buildExamAnswer(record, exam, paperQuestion, 
+            questionMap.get(paperQuestion.getQuestionId()),
+            answerMap.get(paperQuestion.getQuestionId()), now))
+        .toList();
+
+    // 6. 批量保存
+    studentExamAnswerMapper.deleteByRecordId(recordId);
+    studentExamAnswerMapper.insertBatch(answers);
+
+    // 7. 更新记录状态
+    record.setStatus(STATUS_SUBMITTED);
+    record.setGradingStatus(buildGradingStatus(answers));  // 全客观题→COMPLETED, 否则→PENDING
+    record.setScore(totalScore);
+    studentExamRecordMapper.updateSubmit(record);
+}
+```
+
+### 16.7 自动判分机制
+
+**客观题自动判分：**
+
+```java
+private void fillAutoScore(StudentExamAnswerEntity answer, ExamQuestionEntity question) {
+    if (!OBJECTIVE_QUESTION_TYPES.contains(question.getQuestionType())) {
+        // 主观题：不自动判分，score 和 correct 设为 null
+        answer.setCorrect(null);
+        answer.setScore(null);
+        return;
+    }
+    // 客观题：比较答案
+    boolean correct = normalizeAnswer(answer.getAnswerContent())
+        .equals(normalizeAnswer(question.getAnswerContent()));
+    answer.setCorrect(correct);
+    answer.setScore(correct ? answer.getQuestionScore() : BigDecimal.ZERO);
+}
+```
+
+**答案标准化处理：**
+
+```java
+private String normalizeAnswer(String value) {
+    if (!StringUtils.hasText(value)) return "";
+    return Arrays.stream(value.split("[,，]"))   // 按逗号分割
+        .map(String::trim)                        // 去空格
+        .filter(StringUtils::hasText)             // 过滤空串
+        .map(String::toUpperCase)                 // 转大写
+        .sorted()                                 // 排序
+        .collect(Collectors.joining(","));         // 重新拼接
+}
+```
+
+**为什么答案要标准化？**
+- 多选题答案可能是 `"A,B"` 或 `"B,A"` 或 `"a，b"`
+- 标准化后统一为 `"A,B"`，避免格式差异导致误判
+- 排序保证 `"A,B"` 和 `"B,A"` 判定为相同答案
+
+**批改状态判断：**
+
+```java
+private String buildGradingStatus(List<StudentExamAnswerEntity> answers) {
+    boolean allObjective = answers.stream()
+        .allMatch(answer -> OBJECTIVE_QUESTION_TYPES.contains(answer.getQuestionType()));
+    return allObjective ? GRADING_STATUS_COMPLETED : GRADING_STATUS_PENDING;
+}
+```
+
+- 全是客观题 → 自动判分完成，状态为 `COMPLETED`
+- 有主观题 → 需要教师批改，状态为 `PENDING`
+
+### 16.8 教师批改
+
+**查看学生提交列表：**
+
+```java
+public PageResult<ExamSubmissionPageRes> pageSubmissions(Long examId, Integer pageNum, Integer pageSize) {
+    ExamEntity exam = getRequiredExam(examId);
+    // 分页查询该班级的所有学生
+    List<StudentEntity> students = studentMapper.selectByClassId(exam.getClassId());
+    // 查询该考试的所有记录
+    Map<Long, StudentExamRecordEntity> recordMap = studentExamRecordMapper
+        .selectByExamId(examId).stream()
+        .collect(Collectors.toMap(StudentExamRecordEntity::getStudentId, Function.identity()));
+    // 组装：学生信息 + 考试记录
+    return students.stream()
+        .map(student -> buildSubmissionPageRes(exam, student, recordMap.get(student.getId()), now))
+        .toList();
+}
+```
+
+**学生提交状态显示：**
+
+| 记录状态 | 批改状态 | 显示 |
+|----------|----------|------|
+| null | - | 未参加/未进入 |
+| IN_PROGRESS + 超时 | - | 已超时 |
+| IN_PROGRESS | - | 进行中 |
+| SUBMITTED | PENDING | 待批改 |
+| SUBMITTED | COMPLETED | 已批改 |
+
+**批改主观题：**
+
+```java
+@Transactional(rollbackFor = Exception.class)
+public ExamSubmissionGradeRes gradeSubmission(Long recordId, ExamSubmissionGradeReq req) {
+    // 1. 校验考试记录已提交
+    // 2. 遍历每道题的批改结果
+    for (ExamSubmissionGradeAnswerReq answerReq : req.getAnswers()) {
+        // 客观题不能手动批改
+        if (OBJECTIVE_QUESTION_TYPES.contains(answer.getQuestionType())) {
+            throw BusinessException.DateError.newInstance("客观题由系统自动判分，不能手动批改");
+        }
+        // 分数不能超过题目分值
+        if (answerReq.getScore().compareTo(answer.getQuestionScore()) > 0) {
+            throw BusinessException.DateError.newInstance("题目得分不能超过题目分值");
+        }
+        answer.setScore(answerReq.getScore());
+        studentExamAnswerMapper.updateScore(answer);
+    }
+
+    // 3. 重新计算总分
+    BigDecimal totalScore = latestAnswers.stream()
+        .map(StudentExamAnswerEntity::getScore)
+        .filter(Objects::nonNull)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    // 4. 判断批改状态（所有题都有分数 → COMPLETED）
+    String gradingStatus = latestAnswers.stream().allMatch(answer -> answer.getScore() != null)
+        ? GRADING_STATUS_COMPLETED : GRADING_STATUS_PENDING;
+
+    // 5. 更新记录
+    record.setScore(totalScore);
+    record.setGradingStatus(gradingStatus);
+    studentExamRecordMapper.updateGrade(record);
+}
+```
+
+**为什么批改后要重新计算总分？**
+- 总分 = 客观题自动得分 + 主观题教师给分
+- 每次批改后重新求和，保证总分准确
+- 支持分批批改（先批改简答，再批改编程题）
+
+### 16.9 答案可见性控制
+
+**`answerVisible` 字段的作用：**
+
+```java
+// 学生查看答卷时
+if (!Boolean.TRUE.equals(exam.getAnswerVisible())) {
+    res.setScore(null);           // 不显示分数
+    res.setCorrect(answer.getCorrect());  // 不显示是否正确
+}
+```
+
+| answerVisible | 学生看到 |
+|---------------|----------|
+| false | 只看到自己的答案，看不到分数和正确答案 |
+| true | 看到自己的答案 + 分数 + 正确答案 + 解析 |
+
+**为什么需要这个控制？**
+- 考试期间公布答案会导致泄题
+- 教师可以等所有学生考完后再统一公布
+- 支持"先批改，后公布"的灵活流程
+
+### 16.10 数据聚合与 N+1 优化
+
+**考试列表查询优化：**
+
+```java
+private void fillNames(List<? extends ExamPageRes> records) {
+    // 批量查询试卷、班级、老师信息
+    Map<Long, ExamPaperEntity> paperMap = paperIds.stream()
+        .map(examPaperMapper::selectById)
+        .collect(Collectors.toMap(ExamPaperEntity::getId, Function.identity()));
+    Map<Long, ClazzEntity> classMap = clazzMapper.selectByIds(classIds).stream()
+        .collect(Collectors.toMap(ClazzEntity::getId, Function.identity()));
+    Map<Long, SysUserEntity> userMap = sysUserMapper.selectByIds(userIds).stream()
+        .collect(Collectors.toMap(SysUserEntity::getId, Function.identity()));
+
+    // 填充名称字段
+    records.forEach(record -> {
+        record.setPaperName(paperMap.get(record.getPaperId()).getPaperName());
+        record.setClassPeriod(classMap.get(record.getClassId()).getClassPeriod());
+        record.setInvigilatorName(buildUserName(userMap.get(record.getInvigilatorUserId())));
+    });
+}
+```
+
+**试卷题目查询优化：**
+
+```java
+private List<StudentExamPaperQuestionRes> buildPaperQuestions(Long paperId) {
+    // 1. 查询试卷题目关联
+    List<ExamPaperQuestionEntity> paperQuestions = examPaperQuestionMapper.selectByPaperId(paperId);
+    // 2. 批量查询题目详情（避免 N+1）
+    Map<Long, ExamQuestionEntity> questionMap = examQuestionMapper.selectByIds(questionIds).stream()
+        .collect(Collectors.toMap(ExamQuestionEntity::getId, Function.identity()));
+    // 3. 批量查询选项（避免 N+1）
+    Map<Long, List<ExamQuestionOptionEntity>> optionMap = examQuestionOptionMapper
+        .selectByQuestionIds(questionIds).stream()
+        .collect(Collectors.groupingBy(ExamQuestionOptionEntity::getQuestionId));
+    // 4. 组装结果
+    return paperQuestions.stream().map(paperQuestion -> {
+        ExamQuestionEntity question = questionMap.get(paperQuestion.getQuestionId());
+        // ... 组装
+    }).toList();
+}
+```
+
+**为什么批量查询 + Map 是最优模式？**
+- 10 道题逐个查询 = 10 次数据库往返
+- 批量查询 = 1 次数据库往返
+- Map 查找复杂度 O(1)，总性能与 JOIN 相当
+
+### 16.11 考试系统 Mapper 方法汇总
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `ExamQuestionMapper.insert` | 插入题目 | 创建题目 |
+| `ExamQuestionMapper.selectPage` | 分页查询题库 | 题库列表 |
+| `ExamQuestionOptionMapper.selectByQuestionIds` | 批量查询选项 | 试卷题目展示 |
+| `ExamQuestionCourseMapper.deleteByQuestionId` | 删除课程关联 | 更新题目 |
+| `ExamPaperMapper.insert` | 插入试卷 | 创建试卷 |
+| `ExamPaperQuestionMapper.selectByPaperId` | 查询试卷题目 | 组卷、考试 |
+| `ExamMapper.insert` | 插入考试 | 创建考试 |
+| `ExamMapper.countClassTimeOverlap` | 时间窗口重叠检测 | 创建考试校验 |
+| `ExamMapper.selectStudentPage` | 学生端考试列表 | 学生端 |
+| `StudentExamRecordMapper.insert` | 插入考试记录 | 开始考试 |
+| `StudentExamRecordMapper.selectByExamIdAndStudentId` | 查询学生考试记录 | 开始考试 |
+| `StudentExamAnswerMapper.insertBatch` | 批量插入答题 | 交卷 |
+| `StudentExamAnswerMapper.selectByRecordId` | 查询答题记录 | 查看答卷、批改 |
+| `StudentExamAnswerMapper.updateScore` | 更新题目分数 | 教师批改 |
+| `StudentExamRecordMapper.updateSubmit` | 更新提交状态 | 交卷 |
+| `StudentExamRecordMapper.updateGrade` | 更新批改结果 | 教师批改 |
+
+### 16.12 考试系统流程图
+
+**完整考试流程：**
+
+```mermaid
+sequenceDiagram
+    participant T as 教师/管理员
+    participant Q as 题库管理
+    participant P as 试卷管理
+    participant E as 考试管理
+    participant S as 学生端
+    participant G as 批改系统
+
+    T->>Q: 创建题目（单选/多选/判断/简答等）
+    Q-->>T: 题目ID
+
+    T->>P: 创建试卷，选题组卷
+    P-->>T: 试卷ID
+
+    T->>E: 创建考试（试卷+班级+时间+时长）
+    E->>E: 校验时间窗口不重叠
+    E-->>T: 考试ID
+
+    S->>S: 查看考试列表
+    S->>S: 开始考试（创建记录，计算截止时间）
+    S->>S: 获取试卷（题目+选项，不含答案）
+    S->>S: 交卷（客观题自动判分）
+
+    T->>G: 查看学生提交列表
+    T->>G: 批改主观题
+    G->>G: 重新计算总分
+
+    T->>E: 设置 answerVisible = true
+    S->>S: 查看答卷（答案+分数+解析）
+```
+
+---
+
 ## 附录 B：新模块 Mapper 方法汇总
 
 ### 订单模块
@@ -4691,6 +5340,27 @@ docker stop yanque-admin
 | `RefundOrderMapper.updateRefundSuccess` | 更新为退款成功 | 退款成功回调 |
 | `RefundOrderMapper.updateRefundFail` | 更新为退款失败 | 退款失败回调 |
 
+### 考试模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `ExamQuestionMapper.insert` | 插入题目 | 创建题目 |
+| `ExamQuestionMapper.selectPage` | 分页查询题库 | 题库列表 |
+| `ExamQuestionOptionMapper.selectByQuestionIds` | 批量查询选项 | 试卷题目展示 |
+| `ExamQuestionCourseMapper.deleteByQuestionId` | 删除课程关联 | 更新题目 |
+| `ExamPaperMapper.insert` | 插入试卷 | 创建试卷 |
+| `ExamPaperQuestionMapper.selectByPaperId` | 查询试卷题目 | 组卷、考试 |
+| `ExamMapper.insert` | 插入考试 | 创建考试 |
+| `ExamMapper.countClassTimeOverlap` | 时间窗口重叠检测 | 创建考试校验 |
+| `ExamMapper.selectStudentPage` | 学生端考试列表 | 学生端 |
+| `StudentExamRecordMapper.insert` | 插入考试记录 | 开始考试 |
+| `StudentExamRecordMapper.selectByExamIdAndStudentId` | 查询学生考试记录 | 开始考试 |
+| `StudentExamAnswerMapper.insertBatch` | 批量插入答题 | 交卷 |
+| `StudentExamAnswerMapper.selectByRecordId` | 查询答题记录 | 查看答卷、批改 |
+| `StudentExamAnswerMapper.updateScore` | 更新题目分数 | 教师批改 |
+| `StudentExamRecordMapper.updateSubmit` | 更新提交状态 | 交卷 |
+| `StudentExamRecordMapper.updateGrade` | 更新批改结果 | 教师批改 |
+
 ---
 
 ## 附录 C：项目完整模块结构
@@ -4726,6 +5396,10 @@ docker stop yanque-admin
 │   │   ├── prepay/                 ← 预支付订单 + 支付订单
 │   │   ├── product/                ← 产品管理
 │   │   └── refund/                 ← 退款模块
+│   ├── exam/                       ← 考试模块
+│   │   ├── exam/                   ← 考试管理（安排、记录、批改）
+│   │   ├── paper/                  ← 试卷管理（组卷）
+│   │   └── question/               ← 题库管理（题目、选项、课程关联）
 │   ├── student/                    ← 学生管理（后台）
 │   ├── teaching/                   ← 教学模块
 │   │   ├── campus/                 ← 校区管理
