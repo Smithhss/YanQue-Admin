@@ -42,7 +42,8 @@ values
     (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:payment', '订单管理', 'MENU', null, 3030, '支付订单管理页面', 'ACTIVE', now(), now()),
-    (@exam_id, 'exam:question', '题库管理', 'MENU', null, 5010, '题库管理页面', 'ACTIVE', now(), now())
+    (@exam_id, 'exam:question', '题库管理', 'MENU', null, 5010, '题库管理页面', 'ACTIVE', now(), now()),
+    (@exam_id, 'exam:paper', '试卷管理', 'MENU', null, 5020, '试卷管理页面', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),
@@ -67,6 +68,7 @@ set @product_menu_id := (select id from sys_permission where permission_code = '
 set @prepay_order_menu_id := (select id from sys_permission where permission_code = 'order:prepay' limit 1);
 set @payment_order_menu_id := (select id from sys_permission where permission_code = 'order:payment' limit 1);
 set @exam_question_menu_id := (select id from sys_permission where permission_code = 'exam:question' limit 1);
+set @exam_paper_menu_id := (select id from sys_permission where permission_code = 'exam:paper' limit 1);
 
 insert into sys_permission
     (parent_id, permission_code, permission_name, permission_type, api_path, sort_num, description, status, created_at, updated_at)
@@ -170,7 +172,12 @@ values
     (@exam_question_menu_id, 'api:exam-question:create', '新增题目', 'API', '/yq-admin/api/examQuestions', 5113, '新增题目接口', 'ACTIVE', now(), now()),
     (@exam_question_menu_id, 'api:exam-question:update', '修改题目', 'API', '/yq-admin/api/examQuestions/{id}', 5114, '修改题目接口', 'ACTIVE', now(), now()),
     (@exam_question_menu_id, 'api:exam-question:delete', '删除题目', 'API', '/yq-admin/api/examQuestions/{id}', 5115, '删除题目接口', 'ACTIVE', now(), now()),
-    (@exam_question_menu_id, 'api:exam-question:status', '修改题目状态', 'API', '/yq-admin/api/examQuestions/{id}/status', 5116, '修改题目状态接口', 'ACTIVE', now(), now())
+    (@exam_question_menu_id, 'api:exam-question:status', '修改题目状态', 'API', '/yq-admin/api/examQuestions/{id}/status', 5116, '修改题目状态接口', 'ACTIVE', now(), now()),
+
+    (@exam_paper_menu_id, 'api:exam-paper:page', '分页查询试卷', 'API', '/yq-admin/api/examPapers', 5211, '分页查询试卷接口', 'ACTIVE', now(), now()),
+    (@exam_paper_menu_id, 'api:exam-paper:detail', '查询试卷详情', 'API', '/yq-admin/api/examPapers/{id}', 5212, '根据ID查询试卷接口', 'ACTIVE', now(), now()),
+    (@exam_paper_menu_id, 'api:exam-paper:save', '保存试卷', 'API', '/yq-admin/api/examPapers', 5213, '保存试卷和题目接口', 'ACTIVE', now(), now()),
+    (@exam_paper_menu_id, 'api:exam-paper:delete', '删除试卷', 'API', '/yq-admin/api/examPapers/{id}', 5214, '删除试卷接口', 'ACTIVE', now(), now())
 on duplicate key update
     parent_id = values(parent_id),
     permission_name = values(permission_name),

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.exam.paper.mapper.ExamPaperQuestionMapper">
+
+    <resultMap id="ExamPaperQuestionMap" type="cn.yanque.models.exam.paper.pojo.entity.ExamPaperQuestionEntity">
+        <id property="id" column="id"/>
+        <result property="paperId" column="paper_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="questionScore" column="question_score"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insertBatch">
+        insert into exam_paper_question
+            (paper_id, question_id, question_score, created_at, updated_at)
+        values
+        <foreach collection="questions" item="item" separator=",">
+            (#{item.paperId}, #{item.questionId}, #{item.questionScore}, #{item.createdAt}, #{item.updatedAt})
+        </foreach>
+    </insert>
+
+    <select id="selectByPaperId" resultMap="ExamPaperQuestionMap">
+        select id, paper_id, question_id, question_score, created_at, updated_at
+        from exam_paper_question
+        where paper_id = #{paperId}
+        order by id asc
+    </select>
+
+    <select id="selectByPaperIds" resultMap="ExamPaperQuestionMap">
+        select id, paper_id, question_id, question_score, created_at, updated_at
+        from exam_paper_question
+        where paper_id in
+        <foreach collection="paperIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        order by paper_id asc, id asc
+    </select>
+
+    <delete id="deleteByPaperId">
+        delete from exam_paper_question where paper_id = #{paperId}
+    </delete>
+</mapper>

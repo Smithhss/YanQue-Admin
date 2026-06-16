@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.exam.paper.mapper.ExamPaperMapper">
+
+    <resultMap id="ExamPaperMap" type="cn.yanque.models.exam.paper.pojo.entity.ExamPaperEntity">
+        <id property="id" column="id"/>
+        <result property="paperName" column="paper_name"/>
+        <result property="courseId" column="course_id"/>
+        <result property="stageName" column="stage_name"/>
+        <result property="totalScore" column="total_score"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, paper_name, course_id, stage_name, total_score, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into exam_paper
+            (paper_name, course_id, stage_name, total_score, created_at, updated_at)
+        values
+            (#{paperName}, #{courseId}, #{stageName}, #{totalScore}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <select id="selectById" resultMap="ExamPaperMap">
+        select <include refid="BaseColumns"/>
+        from exam_paper
+        where id = #{id}
+    </select>
+
+    <select id="selectPage" resultMap="ExamPaperMap">
+        select <include refid="BaseColumns"/>
+        from exam_paper
+        <where>
+            <if test="courseId != null">
+                and course_id = #{courseId}
+            </if>
+            <if test="stageName != null and stageName != ''">
+                and stage_name = #{stageName}
+            </if>
+            <if test="paperName != null and paperName != ''">
+                and paper_name like concat('%', #{paperName}, '%')
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <delete id="deleteById">
+        delete from exam_paper where id = #{id}
+    </delete>
+</mapper>
