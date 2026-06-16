@@ -14,5 +14,7 @@ public interface ExamQuestionOptionMapper {
 
     List<ExamQuestionOptionEntity> selectByQuestionId(@Param("questionId") Long questionId);
 
+    List<ExamQuestionOptionEntity> selectByQuestionIds(@Param("questionIds") List<Long> questionIds);
+
     int deleteByQuestionId(@Param("questionId") Long questionId);
 }

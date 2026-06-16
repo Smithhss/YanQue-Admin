@@ -15,6 +15,8 @@ public interface OrderMapper {
 
     OrderEntity selectByOrderNo(@Param("orderNo") String orderNo);
 
+    OrderEntity selectLatestSuccessByStudentPhone(@Param("studentPhone") String studentPhone);
+
     List<OrderEntity> selectPage(QueryOrderBo queryOrderBo);
 
     int increaseRefundedAmount(@Param("orderNo") String orderNo, @Param("refundAmount") BigDecimal refundAmount);

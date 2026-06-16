@@ -3,6 +3,7 @@ package cn.yanque.common.exception;
 import cn.yanque.common.api.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -50,6 +51,13 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleException(Exception ex) {
         log.error("系统异常", ex);
         return ApiResponse.fail(500, "系统开小差了，请稍后重试");
+    }
+
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ApiResponse<Void> httpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        log.error("参数转换异常", ex);
+        return ApiResponse.fail(400, "参数解析失败");
     }
 
     private String buildValidationMessage(List<FieldError> fieldErrors, String defaultMessage) {

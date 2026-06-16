@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.exam.exam.mapper.StudentExamAnswerMapper">
+
+    <resultMap id="StudentExamAnswerMap" type="cn.yanque.models.exam.exam.pojo.entity.StudentExamAnswerEntity">
+        <id property="id" column="id"/>
+        <result property="recordId" column="record_id"/>
+        <result property="examId" column="exam_id"/>
+        <result property="paperId" column="paper_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="questionType" column="question_type"/>
+        <result property="questionScore" column="question_score"/>
+        <result property="answerContent" column="answer_content"/>
+        <result property="correct" column="correct"/>
+        <result property="score" column="score"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insertBatch">
+        insert into student_exam_answer
+            (record_id, exam_id, paper_id, question_id, question_type, question_score,
+             answer_content, correct, score, created_at, updated_at)
+        values
+        <foreach collection="answers" item="item" separator=",">
+            (#{item.recordId}, #{item.examId}, #{item.paperId}, #{item.questionId}, #{item.questionType}, #{item.questionScore},
+             #{item.answerContent}, #{item.correct}, #{item.score}, #{item.createdAt}, #{item.updatedAt})
+        </foreach>
+    </insert>
+
+    <select id="selectById" resultMap="StudentExamAnswerMap">
+        select id, record_id, exam_id, paper_id, question_id, question_type, question_score,
+               answer_content, correct, score, created_at, updated_at
+        from student_exam_answer
+        where id = #{id}
+    </select>
+
+    <select id="selectByRecordId" resultMap="StudentExamAnswerMap">
+        select id, record_id, exam_id, paper_id, question_id, question_type, question_score,
+               answer_content, correct, score, created_at, updated_at
+        from student_exam_answer
+        where record_id = #{recordId}
+        order by id asc
+    </select>
+
+    <update id="updateScore">
+        update student_exam_answer
+        set score = #{score},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteByRecordId">
+        delete from student_exam_answer where record_id = #{recordId}
+    </delete>
+</mapper>

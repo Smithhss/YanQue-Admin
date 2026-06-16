@@ -53,6 +53,15 @@
         where id = #{id}
     </select>
 
+    <select id="selectByIds" resultMap="ExamQuestionMap">
+        select <include refid="BaseColumns"/>
+        from exam_question
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
     <select id="selectPage" resultMap="ExamQuestionMap">
         select <include refid="BaseColumns"/>
         from exam_question

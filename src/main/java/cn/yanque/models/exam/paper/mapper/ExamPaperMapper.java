@@ -15,6 +15,8 @@ public interface ExamPaperMapper {
 
     ExamPaperEntity selectById(@Param("id") Long id);
 
+    List<ExamPaperEntity> selectByIds(@Param("ids") List<Long> ids);
+
     List<ExamPaperEntity> selectPage(QueryExamPaperBo query);
 
     int deleteById(@Param("id") Long id);

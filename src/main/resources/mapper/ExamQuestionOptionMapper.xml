@@ -31,6 +31,16 @@
         order by option_key asc, id asc
     </select>
 
+    <select id="selectByQuestionIds" resultMap="ExamQuestionOptionMap">
+        select <include refid="BaseColumns"/>
+        from exam_question_option
+        where question_id in
+        <foreach collection="questionIds" item="questionId" open="(" separator="," close=")">
+            #{questionId}
+        </foreach>
+        order by question_id asc, option_key asc, id asc
+    </select>
+
     <delete id="deleteByQuestionId">
         delete from exam_question_option where question_id = #{questionId}
     </delete>

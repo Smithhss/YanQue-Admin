@@ -16,6 +16,8 @@ public interface OrderService {
 
     OrderEntity selectByOrderNo(String orderNo);
 
+    OrderEntity selectLatestSuccessByStudentPhone(String studentPhone);
+
     PageResult<OrderPageRes> pageOrder(OrderPageReq req);
 
     void increaseRefundedAmount(String orderNo, BigDecimal refundAmount);

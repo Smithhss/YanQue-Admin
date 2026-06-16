@@ -19,6 +19,8 @@ public interface ExamQuestionMapper {
 
     ExamQuestionEntity selectById(@Param("id") Long id);
 
+    List<ExamQuestionEntity> selectByIds(@Param("ids") List<Long> ids);
+
     List<ExamQuestionEntity> selectPage(QueryExamQuestionBo query);
 
     int deleteById(@Param("id") Long id);
