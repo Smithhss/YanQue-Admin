@@ -5147,9 +5147,13 @@ public ExamSubmissionGradeRes gradeSubmission(Long recordId, ExamSubmissionGrade
 
 ```java
 // 学生查看答卷时
-if (!Boolean.TRUE.equals(exam.getAnswerVisible())) {
-    res.setScore(null);           // 不显示分数
-    res.setCorrect(answer.getCorrect());  // 不显示是否正确
+boolean answerVisible = Boolean.TRUE.equals(exam.getAnswerVisible());
+res.setScore(answerVisible ? record.getScore() : null);  // 不公布时隐藏分数
+
+// 构建题目列表时
+if (answerVisible) {
+    res.setCorrect(answer.getCorrect());   // 公布时才显示是否正确
+    res.setScore(answer.getScore());       // 公布时才显示题目得分
 }
 ```
 
@@ -5172,17 +5176,21 @@ private void fillNames(List<? extends ExamPageRes> records) {
     // 批量查询试卷、班级、老师信息
     Map<Long, ExamPaperEntity> paperMap = paperIds.stream()
         .map(examPaperMapper::selectById)
+        .filter(paper -> paper != null)
         .collect(Collectors.toMap(ExamPaperEntity::getId, Function.identity()));
     Map<Long, ClazzEntity> classMap = clazzMapper.selectByIds(classIds).stream()
         .collect(Collectors.toMap(ClazzEntity::getId, Function.identity()));
     Map<Long, SysUserEntity> userMap = sysUserMapper.selectByIds(userIds).stream()
         .collect(Collectors.toMap(SysUserEntity::getId, Function.identity()));
 
-    // 填充名称字段
+    // 填充名称字段（带空值保护）
     records.forEach(record -> {
-        record.setPaperName(paperMap.get(record.getPaperId()).getPaperName());
-        record.setClassPeriod(classMap.get(record.getClassId()).getClassPeriod());
-        record.setInvigilatorName(buildUserName(userMap.get(record.getInvigilatorUserId())));
+        ExamPaperEntity paper = paperMap.get(record.getPaperId());
+        ClazzEntity clazz = classMap.get(record.getClassId());
+        SysUserEntity user = userMap.get(record.getInvigilatorUserId());
+        record.setPaperName(paper == null ? null : paper.getPaperName());
+        record.setClassPeriod(clazz == null ? null : clazz.getClassPeriod());
+        record.setInvigilatorName(user == null ? null : buildUserName(user));
     });
 }
 ```
