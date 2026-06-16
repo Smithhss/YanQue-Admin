@@ -41,6 +41,9 @@ import java.util.List;
 @Service
 public class CourseServiceImpl implements CourseService {
 
+    private static final String TEACHING_MODE_ONLINE = "ONLINE";
+    private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
+
     @Autowired
     private CourseMapper courseMapper;
 
@@ -53,6 +56,7 @@ public class CourseServiceImpl implements CourseService {
         CourseEntity course = new CourseEntity();
         course.setCourseName(req.getCourseName());
         course.setCourseDays(req.getCourseDays());
+        course.setTeachingMode(validateTeachingMode(req.getTeachingMode()));
         course.setMaterialPath(req.getMaterialPath());
         course.setCreatedAt(new Date());
         course.setUpdatedAt(new Date());
@@ -70,6 +74,7 @@ public class CourseServiceImpl implements CourseService {
         course.setId(req.getId());
         course.setCourseName(req.getCourseName());
         course.setCourseDays(req.getCourseDays());
+        course.setTeachingMode(validateTeachingMode(req.getTeachingMode()));
         course.setMaterialPath(req.getMaterialPath());
         course.setUpdatedAt(new Date());
 
@@ -265,6 +270,17 @@ public class CourseServiceImpl implements CourseService {
         CoursePageRes res = new CoursePageRes();
         BeanUtils.copyProperties(course, res);
         return res;
+    }
+
+    private String validateTeachingMode(String teachingMode) {
+        if (teachingMode == null || teachingMode.isBlank()) {
+            throw BusinessException.DateError.newInstance("上课方式不能为空");
+        }
+        String normalizedTeachingMode = teachingMode.trim();
+        if (!TEACHING_MODE_ONLINE.equals(normalizedTeachingMode) && !TEACHING_MODE_OFFLINE.equals(normalizedTeachingMode)) {
+            throw BusinessException.DateError.newInstance("上课方式只能是ONLINE或OFFLINE");
+        }
+        return normalizedTeachingMode;
     }
 
     private CourseDetailItemRes buildCourseDetailItemRes(CourseDetailEntity detail) {

@@ -24,4 +24,6 @@ public interface StudentMapper {
     List<StudentEntity> selectPage(QueryStudentBo queryStudentBo);
 
     int updateClassId(@Param("id") Long id, @Param("classId") Long classId);
+
+    int updateStudentTag(@Param("id") Long id, @Param("studentTag") String studentTag);
 }

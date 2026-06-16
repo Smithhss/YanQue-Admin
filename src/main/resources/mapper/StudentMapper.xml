@@ -14,13 +14,14 @@
         <result property="major" column="major"/>
         <result property="teachingMode" column="teaching_mode"/>
         <result property="classId" column="class_id"/>
+        <result property="studentTag" column="student_tag"/>
         <result property="status" column="status"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
     <sql id="BaseColumns">
-        id, student_no, student_name, student_phone, password, education, grade_year, school, major, teaching_mode, class_id, status, created_at, updated_at
+        id, student_no, student_name, student_phone, password, education, grade_year, school, major, teaching_mode, class_id, student_tag, status, created_at, updated_at
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
@@ -35,6 +36,7 @@
             major,
             teaching_mode,
             class_id,
+            student_tag,
             status,
             created_at,
             updated_at
@@ -50,6 +52,7 @@
             #{major},
             #{teachingMode},
             #{classId},
+            #{studentTag},
             #{status},
             #{createdAt},
             #{updatedAt}
@@ -104,6 +107,9 @@
             <if test="teachingMode != null and teachingMode != ''">
                 and teaching_mode = #{teachingMode}
             </if>
+            <if test="studentTag != null and studentTag != ''">
+                and student_tag = #{studentTag}
+            </if>
             <if test="status != null and status != ''">
                 and status = #{status}
             </if>
@@ -114,6 +120,13 @@
     <update id="updateClassId">
         update student
         set class_id = #{classId},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateStudentTag">
+        update student
+        set student_tag = #{studentTag},
             updated_at = now()
         where id = #{id}
     </update>

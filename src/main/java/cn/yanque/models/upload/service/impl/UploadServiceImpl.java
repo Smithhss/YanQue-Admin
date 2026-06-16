@@ -27,6 +27,8 @@ public class UploadServiceImpl implements UploadService {
 
     private static final String HOMEWORK_SUBMISSION_PREFIX = "homework/submission/";
 
+    private static final String STUDENT_SOP_PREFIX = "student/sop/";
+
     @Autowired
     private TosProperties tosProperties;
 
@@ -36,9 +38,7 @@ public class UploadServiceImpl implements UploadService {
     @Override
     public UploadPresignRes createUploadPresign(UploadPresignReq req) {
         String objectKey = normalizeAndValidateObjectKey(req.getObjectKey());
-        if (!objectKey.toLowerCase().endsWith(".md")) {
-            throw BusinessException.DateError.newInstance("当前仅支持md文件上传");
-        }
+        validateUploadFileType(objectKey);
         validateTosConfig();
         Long expires = getUploadExpireSeconds();
 
@@ -88,10 +88,28 @@ public class UploadServiceImpl implements UploadService {
         if (normalizedObjectKey.startsWith("/") || normalizedObjectKey.contains("..")
                 || (!normalizedObjectKey.startsWith(HOMEWORK_CONTENT_PREFIX)
                 && !normalizedObjectKey.startsWith(HOMEWORK_ANSWER_PREFIX)
-                && !normalizedObjectKey.startsWith(HOMEWORK_SUBMISSION_PREFIX))) {
+                && !normalizedObjectKey.startsWith(HOMEWORK_SUBMISSION_PREFIX)
+                && !normalizedObjectKey.startsWith(STUDENT_SOP_PREFIX))) {
             throw BusinessException.DateError.newInstance("对象Key不允许访问");
         }
         return normalizedObjectKey;
+    }
+
+    private void validateUploadFileType(String objectKey) {
+        String lowerObjectKey = objectKey.toLowerCase();
+        if (lowerObjectKey.startsWith(STUDENT_SOP_PREFIX)) {
+            if (!lowerObjectKey.endsWith(".mp4")
+                    && !lowerObjectKey.endsWith(".mov")
+                    && !lowerObjectKey.endsWith(".m4v")
+                    && !lowerObjectKey.endsWith(".webm")) {
+                throw BusinessException.DateError.newInstance("SOP只支持视频文件上传");
+            }
+            return;
+        }
+
+        if (!lowerObjectKey.endsWith(".md")) {
+            throw BusinessException.DateError.newInstance("当前仅支持md文件上传");
+        }
     }
 
     private Long getUploadExpireSeconds() {

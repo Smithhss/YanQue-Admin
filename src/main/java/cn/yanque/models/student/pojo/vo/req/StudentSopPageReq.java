@@ -5,11 +5,11 @@ import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 /**
- * 学生分页查询请求。
+ * 学生入学SOP分页查询请求。
  */
 @Data
-@Schema(description = "学生分页查询请求")
-public class StudentPageReq {
+@Schema(description = "学生入学SOP分页查询请求")
+public class StudentSopPageReq {
 
     @Schema(description = "学生姓名")
     private String studentName;
@@ -17,19 +17,10 @@ public class StudentPageReq {
     @Schema(description = "手机号")
     private String studentPhone;
 
-    @Schema(description = "学历")
-    private String education;
+    @Schema(description = "导师ID")
+    private Long mentorId;
 
-    @Schema(description = "学校")
-    private String school;
-
-    @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
-    private String teachingMode;
-
-    @Schema(description = "学生标签")
-    private String studentTag;
-
-    @Schema(description = "状态：ACTIVE启用，INACTIVE停用")
+    @Schema(description = "状态：ASSIGNED已分配，CANCELED已取消")
     private String status;
 
     @Min(value = 1, message = "页码不能小于1")

@@ -39,6 +39,7 @@ values
     (@teaching_id, 'teaching:homework', '作业管理', 'MENU', null, 2040, '作业管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2050, '值班管理页面', 'ACTIVE', now(), now()),
     (@student_id, 'student:list', '学生列表', 'MENU', null, 3010, '学生列表页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:sop', 'SOP管理', 'MENU', null, 3020, '学生入学SOP管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:payment', '订单管理', 'MENU', null, 3030, '支付订单管理页面', 'ACTIVE', now(), now()),
@@ -64,6 +65,7 @@ set @course_menu_id := (select id from sys_permission where permission_code = 't
 set @class_menu_id := (select id from sys_permission where permission_code = 'teaching:class' limit 1);
 set @homework_menu_id := (select id from sys_permission where permission_code = 'teaching:homework' limit 1);
 set @student_menu_id := (select id from sys_permission where permission_code = 'student:list' limit 1);
+set @student_sop_menu_id := (select id from sys_permission where permission_code = 'student:sop' limit 1);
 set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
 set @product_menu_id := (select id from sys_permission where permission_code = 'order:product' limit 1);
 set @prepay_order_menu_id := (select id from sys_permission where permission_code = 'order:prepay' limit 1);
@@ -143,6 +145,11 @@ values
 
     (@student_menu_id, 'api:student:page', '分页查询学生', 'API', '/yq-admin/api/students', 2156, '分页查询学生接口', 'ACTIVE', now(), now()),
     (@student_menu_id, 'api:student:assign-class', '学生分配班级', 'API', '/yq-admin/api/students/{id}/class', 2157, '给线下学生分配班级接口', 'ACTIVE', now(), now()),
+    (@student_menu_id, 'api:student:tag-options', '查询学生标签选项', 'API', '/yq-admin/api/students/tag-options', 2158, '查询学生标签选项接口', 'ACTIVE', now(), now()),
+    (@student_menu_id, 'api:student:update-tag', '修改学生标签', 'API', '/yq-admin/api/students/{id}/tag', 2159, '修改学生标签接口', 'ACTIVE', now(), now()),
+    (@student_menu_id, 'api:student:assign-sop', '分配学生入学SOP', 'API', '/yq-admin/api/students/{id}/sop', 2160, '给线上学生分配入学SOP接口', 'ACTIVE', now(), now()),
+    (@student_sop_menu_id, 'api:student-sop:page', '分页查询学生入学SOP', 'API', '/yq-admin/api/studentSops', 2168, '分页查询学生入学SOP接口', 'ACTIVE', now(), now()),
+    (@student_sop_menu_id, 'api:student-sop:complete', '完成学生入学SOP', 'API', '/yq-admin/api/studentSops/{id}/complete', 2169, '完成学生入学SOP接口', 'ACTIVE', now(), now()),
 
     (@duty_menu_id, 'api:class-duty:page', '分页查询值班', 'API', '/yq-admin/api/classDuties', 2161, '分页查询值班接口', 'ACTIVE', now(), now()),
     (@duty_menu_id, 'api:class-duty:detail', '查询值班详情', 'API', '/yq-admin/api/classDuties/{id}', 2162, '查询值班详情接口', 'ACTIVE', now(), now()),

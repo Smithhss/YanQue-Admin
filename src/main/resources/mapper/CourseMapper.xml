@@ -6,25 +6,27 @@
         <id property="id" column="id"/>
         <result property="courseName" column="course_name"/>
         <result property="courseDays" column="course_days"/>
+        <result property="teachingMode" column="teaching_mode"/>
         <result property="materialPath" column="material_path"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
     <sql id="BaseColumns">
-        id, course_name, course_days, material_path, created_at, updated_at
+        id, course_name, course_days, teaching_mode, material_path, created_at, updated_at
     </sql>
 
     <!-- 新增课程，时间字段由服务层传入。 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        insert into sys_course (course_name, course_days, material_path, created_at, updated_at)
-        values (#{courseName}, #{courseDays}, #{materialPath}, #{createdAt}, #{updatedAt})
+        insert into sys_course (course_name, course_days, teaching_mode, material_path, created_at, updated_at)
+        values (#{courseName}, #{courseDays}, #{teachingMode}, #{materialPath}, #{createdAt}, #{updatedAt})
     </insert>
 
     <update id="updateById">
         update sys_course
         set course_name = #{courseName},
             course_days = #{courseDays},
+            teaching_mode = #{teachingMode},
             material_path = #{materialPath},
             updated_at = #{updatedAt}
         where id = #{id}

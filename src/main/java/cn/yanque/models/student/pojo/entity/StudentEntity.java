@@ -43,6 +43,9 @@ public class StudentEntity {
     /** 班级ID，线下班必填 */
     private Long classId;
 
+    /** 学生标签 */
+    private String studentTag;
+
     /** 状态 */
     private String status;
 

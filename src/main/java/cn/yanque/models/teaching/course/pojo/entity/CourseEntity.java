@@ -19,6 +19,9 @@ public class CourseEntity {
     /** 课程天数 */
     private Integer courseDays;
 
+    /** 上课方式：ONLINE线上，OFFLINE线下 */
+    private String teachingMode;
+
     /** 课程资料路径 */
     private String materialPath;
 

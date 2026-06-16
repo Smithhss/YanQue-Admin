@@ -10,6 +10,7 @@ create table if not exists student (
     major varchar(100) null comment '专业',
     teaching_mode varchar(20) not null default 'ONLINE' comment '上课方式：ONLINE线上，OFFLINE线下',
     class_id bigint null comment '班级ID，线下班必填',
+    student_tag varchar(50) null comment '学生标签',
     status varchar(30) not null default 'ACTIVE' comment '状态：ACTIVE启用，INACTIVE停用',
     created_at datetime not null default current_timestamp comment '创建时间',
     updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
@@ -17,5 +18,6 @@ create table if not exists student (
     unique key uk_student_phone (student_phone),
     key idx_teaching_mode (teaching_mode),
     key idx_class_id (class_id),
+    key idx_student_tag (student_tag),
     key idx_status (status)
 ) comment '学生表';
