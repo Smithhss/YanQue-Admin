@@ -3,7 +3,7 @@
 
     <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="yanque-admin"/>
 
-    <property name="LOG_PATH" value="${LOG_PATH:-/data/logs/yanque-admin}"/>
+    <property name="LOG_PATH" value="${LOG_PATH:-/data/yanque-admin/logs}"/>
     <property name="CONSOLE_PATTERN"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} [guid=%X{guid}] - %msg%n%ex{full}"/>
     <property name="FILE_PATTERN"
