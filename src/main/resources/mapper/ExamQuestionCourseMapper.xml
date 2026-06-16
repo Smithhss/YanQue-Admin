@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.exam.question.mapper.ExamQuestionCourseMapper">
+
+    <resultMap id="ExamQuestionCourseMap" type="cn.yanque.models.exam.question.pojo.entity.ExamQuestionCourseEntity">
+        <id property="questionId" column="question_id"/>
+        <id property="courseId" column="course_id"/>
+        <id property="stageName" column="stage_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insertBatch">
+        insert into exam_question_course (question_id, course_id, stage_name, created_at)
+        values
+        <foreach collection="relations" item="item" separator=",">
+            (#{item.questionId}, #{item.courseId}, #{item.stageName}, #{item.createdAt})
+        </foreach>
+    </insert>
+
+    <select id="selectByQuestionId" resultMap="ExamQuestionCourseMap">
+        select question_id, course_id, stage_name, created_at
+        from exam_question_course
+        where question_id = #{questionId}
+        order by course_id asc, stage_name asc
+    </select>
+
+    <select id="selectByQuestionIds" resultMap="ExamQuestionCourseMap">
+        select question_id, course_id, stage_name, created_at
+        from exam_question_course
+        where question_id in
+        <foreach collection="questionIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        order by question_id asc, course_id asc, stage_name asc
+    </select>
+
+    <delete id="deleteByQuestionId">
+        delete from exam_question_course where question_id = #{questionId}
+    </delete>
+</mapper>
