@@ -88,6 +88,15 @@
         where order_no = #{orderNo}
     </select>
 
+    <select id="selectLatestSuccessByStudentPhone" resultMap="OrderMap">
+        select <include refid="BaseColumns"/>
+        from order_payment
+        where student_phone = #{studentPhone}
+          and status = 'SUCCESS'
+        order by id desc
+        limit 1
+    </select>
+
     <select id="selectPage" resultMap="OrderMap">
         select <include refid="BaseColumns"/>
         from order_payment

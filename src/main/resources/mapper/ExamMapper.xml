@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.exam.exam.mapper.ExamMapper">
+
+    <resultMap id="ExamMap" type="cn.yanque.models.exam.exam.pojo.entity.ExamEntity">
+        <id property="id" column="id"/>
+        <result property="paperId" column="paper_id"/>
+        <result property="classId" column="class_id"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="durationMinutes" column="duration_minutes"/>
+        <result property="invigilatorUserId" column="invigilator_user_id"/>
+        <result property="answerVisible" column="answer_visible"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, paper_id, class_id, start_time, end_time, duration_minutes, invigilator_user_id, answer_visible, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into exam
+            (paper_id, class_id, start_time, end_time, duration_minutes, invigilator_user_id, answer_visible, created_at, updated_at)
+        values
+            (#{paperId}, #{classId}, #{startTime}, #{endTime}, #{durationMinutes}, #{invigilatorUserId}, #{answerVisible}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updateById">
+        update exam
+        set paper_id = #{paperId},
+            class_id = #{classId},
+            start_time = #{startTime},
+            end_time = #{endTime},
+            duration_minutes = #{durationMinutes},
+            invigilator_user_id = #{invigilatorUserId},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <update id="updateAnswerVisible">
+        update exam
+        set answer_visible = #{answerVisible},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="ExamMap">
+        select <include refid="BaseColumns"/>
+        from exam
+        where id = #{id}
+    </select>
+
+    <select id="selectPage" resultMap="ExamMap">
+        select <include refid="BaseColumns"/>
+        from exam
+        <where>
+            <if test="paperId != null">
+                and paper_id = #{paperId}
+            </if>
+            <if test="classId != null">
+                and class_id = #{classId}
+            </if>
+            <if test="invigilatorUserId != null">
+                and invigilator_user_id = #{invigilatorUserId}
+            </if>
+        </where>
+        order by start_time desc, id desc
+    </select>
+
+    <select id="selectStudentPage" resultMap="ExamMap">
+        select <include refid="BaseColumns"/>
+        from exam
+        where class_id = #{classId}
+        order by start_time desc, id desc
+    </select>
+
+    <select id="countClassTimeOverlap" resultType="int">
+        select count(1)
+        from exam
+        where class_id = #{classId}
+        and start_time &lt; #{endTime}
+        and end_time &gt; #{startTime}
+        <if test="id != null">
+            and id != #{id}
+        </if>
+    </select>
+
+    <delete id="deleteById">
+        delete from exam where id = #{id}
+    </delete>
+</mapper>

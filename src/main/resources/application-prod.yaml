@@ -1,0 +1,39 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${YQ_DB_HOST:127.0.0.1}:${YQ_DB_PORT:3306}/${YQ_DB_NAME:yanque}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${YQ_DB_USERNAME:root}
+    password: ${YQ_DB_PASSWORD:}
+    hikari:
+      minimum-idle: ${YQ_DB_POOL_MIN_IDLE:5}
+      maximum-pool-size: ${YQ_DB_POOL_MAX_SIZE:20}
+      connection-timeout: ${YQ_DB_CONNECTION_TIMEOUT:30000}
+      idle-timeout: ${YQ_DB_IDLE_TIMEOUT:600000}
+      max-lifetime: ${YQ_DB_MAX_LIFETIME:1800000}
+
+  data:
+    redis:
+      host: ${YQ_REDIS_HOST:127.0.0.1}
+      port: ${YQ_REDIS_PORT:6379}
+      password: ${YQ_REDIS_PASSWORD:}
+      database: ${YQ_REDIS_DATABASE:0}
+      timeout: ${YQ_REDIS_TIMEOUT:3000ms}
+
+logging:
+  level:
+    root: INFO
+    cn.yanque: ${YQ_LOG_LEVEL:INFO}
+
+yeepay:
+  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:}
+  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:}
+  pay-success-notify-url: ${YQ_YEEPAY_PAY_SUCCESS_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/paySuccess}
+  pay-success-return-url: ${YQ_YEEPAY_PAY_SUCCESS_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  refund-notify-url: ${YQ_YEEPAY_REFUND_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/refund}
+
+tos:
+  endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
+  region: ${YQ_TOS_REGION:cn-shanghai}
+  bucket: ${YQ_TOS_BUCKET:}
+  access-key: ${YQ_TOS_ACCESS_KEY:}
+  secret-key: ${YQ_TOS_SECRET_KEY:}

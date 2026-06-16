@@ -63,6 +63,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public OrderEntity selectLatestSuccessByStudentPhone(String studentPhone) {
+        return orderMapper.selectLatestSuccessByStudentPhone(studentPhone);
+    }
+
+    @Override
     public PageResult<OrderPageRes> pageOrder(OrderPageReq req) {
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();

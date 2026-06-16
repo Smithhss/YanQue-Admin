@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.exam.question.mapper.ExamQuestionOptionMapper">
+
+    <resultMap id="ExamQuestionOptionMap" type="cn.yanque.models.exam.question.pojo.entity.ExamQuestionOptionEntity">
+        <id property="id" column="id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="optionKey" column="option_key"/>
+        <result property="optionContent" column="option_content"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, question_id, option_key, option_content, created_at, updated_at
+    </sql>
+
+    <insert id="insertBatch">
+        insert into exam_question_option
+            (question_id, option_key, option_content, created_at, updated_at)
+        values
+        <foreach collection="options" item="item" separator=",">
+            (#{item.questionId}, #{item.optionKey}, #{item.optionContent}, #{item.createdAt}, #{item.updatedAt})
+        </foreach>
+    </insert>
+
+    <select id="selectByQuestionId" resultMap="ExamQuestionOptionMap">
+        select <include refid="BaseColumns"/>
+        from exam_question_option
+        where question_id = #{questionId}
+        order by option_key asc, id asc
+    </select>
+
+    <select id="selectByQuestionIds" resultMap="ExamQuestionOptionMap">
+        select <include refid="BaseColumns"/>
+        from exam_question_option
+        where question_id in
+        <foreach collection="questionIds" item="questionId" open="(" separator="," close=")">
+            #{questionId}
+        </foreach>
+        order by question_id asc, option_key asc, id asc
+    </select>
+
+    <delete id="deleteByQuestionId">
+        delete from exam_question_option where question_id = #{questionId}
+    </delete>
+</mapper>

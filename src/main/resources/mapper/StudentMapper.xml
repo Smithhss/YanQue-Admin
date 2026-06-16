@@ -78,6 +78,13 @@
         </foreach>
     </select>
 
+    <select id="selectByClassId" resultMap="StudentMap">
+        select <include refid="BaseColumns"/>
+        from student
+        where class_id = #{classId}
+        order by id desc
+    </select>
+
     <select id="selectPage" resultMap="StudentMap">
         select <include refid="BaseColumns"/>
         from student

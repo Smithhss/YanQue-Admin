@@ -10,7 +10,9 @@ import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.product.mapper.ProductMapper;
 import cn.yanque.models.order.product.pojo.entity.ProductEntity;
 import cn.yanque.models.order.prepay.mapper.PrepayOrderMapper;
+import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
 import cn.yanque.models.order.prepay.pojo.entity.PrepayOrderEntity;
+import cn.yanque.models.order.prepay.service.OrderService;
 import cn.yanque.models.student.mapper.StudentMapper;
 import cn.yanque.models.student.pojo.entity.StudentEntity;
 import cn.yanque.studentFront.pojo.req.StudentLoginReq;
@@ -39,6 +41,9 @@ public class StudentFrontServiceImpl implements StudentFrontService {
 
     @Autowired
     private PrepayOrderMapper prepayOrderMapper;
+
+    @Autowired
+    private OrderService orderService;
 
     @Autowired
     private ProductMapper productMapper;
@@ -70,9 +75,22 @@ public class StudentFrontServiceImpl implements StudentFrontService {
             }
             StudentLoginRes res = new StudentLoginRes();
             res.setNeedPay(false);
+            res.setNeedCompleteProfile(false);
             res.setToken(studentFrontAuthService.createToken(student));
             res.setSignSecret(studentFrontAuthService.createSignSecret(student));
             res.setStudent(studentFrontAuthService.buildStudentInfo(student));
+            return res;
+        }
+
+        // 学生没账号 且支付成功 跳转到注册学生信息页面
+        OrderEntity paidOrder = orderService.selectLatestSuccessByStudentPhone(req.getPhone());
+        if (paidOrder != null) {
+            StudentLoginRes res = new StudentLoginRes();
+            res.setNeedPay(false);
+            res.setNeedCompleteProfile(true);
+            res.setPaymentOrderNo(paidOrder.getOrderNo());
+            res.setStudent(buildStudentInfo(paidOrder));
+            fillPaidProfileAuth(res, paidOrder);
             return res;
         }
 
@@ -81,6 +99,7 @@ public class StudentFrontServiceImpl implements StudentFrontService {
         if (pendingOrder != null) {
             StudentLoginRes res = new StudentLoginRes();
             res.setNeedPay(true);
+            res.setNeedCompleteProfile(false);
             fillPendingPayAuth(res, pendingOrder);
             res.setStudent(buildStudentInfo(pendingOrder));
             res.setPendingOrder(buildPendingOrderRes(pendingOrder));
@@ -99,7 +118,22 @@ public class StudentFrontServiceImpl implements StudentFrontService {
         res.setPendingPaySignSecret(signSecret);
     }
 
+    private void fillPaidProfileAuth(StudentLoginRes res, OrderEntity paidOrder) {
+        PrepayOrderEntity prepayOrder = prepayOrderMapper.selectByOrderNo(paidOrder.getPrepayOrderNo());
+        if (prepayOrder == null) {
+            return;
+        }
+        fillPendingPayAuth(res, prepayOrder);
+    }
+
     private StudentInfoRes buildStudentInfo(PrepayOrderEntity order) {
+        StudentInfoRes res = new StudentInfoRes();
+        res.setName(order.getStudentName());
+        res.setPhone(order.getStudentPhone());
+        return res;
+    }
+
+    private StudentInfoRes buildStudentInfo(OrderEntity order) {
         StudentInfoRes res = new StudentInfoRes();
         res.setName(order.getStudentName());
         res.setPhone(order.getStudentPhone());

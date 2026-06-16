@@ -1,0 +1,120 @@
+-- 修复 JAVA+AI 100道种子题的课程阶段关系。
+-- 适用于题目已经插入，但 exam_question_course 没有插入或没有 stage_name 的情况。
+
+insert ignore into exam_question_course (question_id, course_id, stage_name, created_at)
+select id, 1, 'BASIC', now()
+from exam_question
+where question_content in (
+    'Java中用于定义类的关键字是？',
+    'Java程序的入口方法通常是？',
+    '下面哪个类型用于表示整数？',
+    '下面哪个类型用于表示真假值？',
+    'Java中字符串常用的引用类型是？',
+    '下面哪个符号用于单行注释？',
+    '下面哪个关键字用于创建对象？',
+    'Java中数组下标从几开始？',
+    '下面哪个访问修饰符表示同包和子类可访问？',
+    'private修饰的成员主要表示什么？',
+    'Java中用于继承类的关键字是？',
+    'Java中用于实现接口的关键字是？',
+    '下面哪个集合允许元素按索引访问？',
+    'HashMap主要存储什么结构的数据？',
+    '下面哪个集合不允许重复元素？',
+    'Java异常处理中用于捕获异常的关键字是？',
+    'finally代码块的特点通常是？',
+    '面向对象三大特征不包括下面哪一项？',
+    '方法重载主要看什么不同？',
+    '方法重写通常发生在什么关系中？',
+    'static修饰的方法属于谁？',
+    'final修饰变量时通常表示什么？',
+    '接口中的抽象方法默认具有什么访问级别？',
+    '下面哪个关键字用于判断对象类型？',
+    'StringBuilder相比String更适合哪种场景？',
+    'Java中包声明使用哪个关键字？',
+    'Java中导入其他包类使用哪个关键字？',
+    '构造方法的名称必须和什么一致？',
+    '抽象类使用哪个关键字声明？',
+    'Java中所有类默认直接或间接继承哪个类？',
+    'HashMap查询平均时间复杂度通常认为是？',
+    'ArrayList底层主要基于什么实现？',
+    'LinkedList更适合哪类操作场景？',
+    'Java中 == 比较引用类型时主要比较什么？',
+    'equals方法默认来自Object时比较什么？'
+);
+
+insert ignore into exam_question_course (question_id, course_id, stage_name, created_at)
+select id, 1, 'SPRING', now()
+from exam_question
+where question_content in (
+    'Spring中用于声明组件类的常用注解是？',
+    'Spring MVC中声明控制器常用注解是？',
+    'Spring中声明业务服务类常用注解是？',
+    'Spring Boot启动类通常使用哪个注解？',
+    '下面哪个注解用于GET请求映射？',
+    '下面哪个注解用于POST请求映射？',
+    '@RequestBody主要用于接收什么数据？',
+    '@PathVariable主要用于接收什么参数？',
+    '@RequestParam主要用于接收什么参数？',
+    'Spring容器管理对象通常称为什么？',
+    '依赖注入的主要目的是什么？',
+    '@Autowired默认按什么注入依赖？',
+    '@Configuration通常表示什么？',
+    '@Bean通常写在什么类中？',
+    'Spring中@Transactional主要用于什么？',
+    'MyBatis中Mapper接口主要负责什么？',
+    'MyBatis XML中select标签通常用于什么？',
+    'PageHelper.startPage应放在什么位置？',
+    'REST接口中PUT通常表示什么操作？',
+    'REST接口中DELETE通常表示什么操作？',
+    '统一响应对象的好处是什么？',
+    '参数校验中@NotBlank主要用于校验什么？',
+    '参数校验中@NotNull主要用于校验什么？',
+    'Controller层最适合承担什么职责？',
+    'Service层通常不应该直接依赖什么？',
+    'Mapper XML中的where标签有什么作用？',
+    'Spring Boot配置文件常见名称是？',
+    'AOP主要适合处理哪类逻辑？',
+    '拦截器Interceptor常用于什么场景？',
+    'Spring事务默认对哪类异常更容易触发回滚？',
+    'MyBatis中resultMap主要解决什么问题？',
+    '避免列表SQL复杂join的一种做法是什么？',
+    '接口幂等通常关注什么？',
+    '权限校验中AntPathMatcher适合做什么？',
+    'HMAC签名校验主要用于防止什么问题？'
+);
+
+insert ignore into exam_question_course (question_id, course_id, stage_name, created_at)
+select id, 1, 'AI', now()
+from exam_question
+where question_content in (
+    '人工智能中AI通常指什么？',
+    '机器学习主要让计算机从什么中学习规律？',
+    '监督学习通常需要什么数据？',
+    '分类任务的输出通常是什么？',
+    '回归任务的输出通常是什么？',
+    '训练集主要用于什么？',
+    '测试集主要用于什么？',
+    '过拟合通常表示什么？',
+    '欠拟合通常表示什么？',
+    '特征工程主要关注什么？',
+    '向量化表示的核心作用是什么？',
+    'Embedding通常表示什么？',
+    '大语言模型常用于什么任务？',
+    'Prompt在大模型使用中主要是什么？',
+    'RAG中的检索步骤主要做什么？',
+    '向量数据库常用于支持什么能力？',
+    '余弦相似度通常用于衡量什么？',
+    '模型评估中的准确率表示什么？',
+    '混淆矩阵常用于分析什么任务？',
+    '数据清洗主要解决什么问题？',
+    'Token在大语言模型中通常指什么？',
+    '上下文窗口限制影响什么？',
+    '温度temperature参数通常影响什么？',
+    '微调Fine-tuning主要指什么？',
+    '梯度下降主要用于什么？',
+    '损失函数的作用是什么？',
+    '正则化常用于缓解什么问题？',
+    '召回率更关注什么？',
+    '精确率更关注什么？',
+    '在RAG系统中，召回内容质量差最可能导致什么？'
+);
