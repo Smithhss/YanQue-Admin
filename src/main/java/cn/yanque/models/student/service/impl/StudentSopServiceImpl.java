@@ -2,10 +2,12 @@ package cn.yanque.models.student.service.impl;
 
 import cn.yanque.common.api.PageResult;
 import cn.yanque.common.exception.BusinessException;
+import cn.yanque.models.student.mapper.StudentLearningPlanMapper;
 import cn.yanque.models.student.mapper.StudentMapper;
 import cn.yanque.models.student.mapper.StudentSopMapper;
 import cn.yanque.models.student.pojo.bo.QueryStudentSopBo;
 import cn.yanque.models.student.pojo.entity.StudentEntity;
+import cn.yanque.models.student.pojo.entity.StudentLearningPlanEntity;
 import cn.yanque.models.student.pojo.entity.StudentSopEntity;
 import cn.yanque.models.student.pojo.vo.req.StudentSopCompleteReq;
 import cn.yanque.models.student.pojo.vo.req.StudentSopPageReq;
@@ -42,6 +44,9 @@ public class StudentSopServiceImpl implements StudentSopService {
     @Autowired
     private SysUserMapper sysUserMapper;
 
+    @Autowired
+    private StudentLearningPlanMapper learningPlanMapper;
+
     @Override
     public PageResult<StudentSopPageRes> pageStudentSop(StudentSopPageReq req) {
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
@@ -54,8 +59,9 @@ public class StudentSopServiceImpl implements StudentSopService {
 
         Map<Long, StudentEntity> studentMap = buildStudentMap(list);
         Map<Long, SysUserEntity> mentorMap = buildMentorMap(list);
+        Map<Long, StudentLearningPlanEntity> learningPlanMap = buildLearningPlanMap(list);
         List<StudentSopPageRes> records = list.stream()
-                .map(item -> buildPageRes(item, studentMap, mentorMap))
+                .map(item -> buildPageRes(item, studentMap, mentorMap, learningPlanMap))
                 .toList();
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
     }
@@ -111,16 +117,32 @@ public class StudentSopServiceImpl implements StudentSopService {
                 .collect(Collectors.toMap(SysUserEntity::getId, item -> item));
     }
 
+    private Map<Long, StudentLearningPlanEntity> buildLearningPlanMap(List<StudentSopEntity> list) {
+        List<Long> studentIds = list.stream()
+                .map(StudentSopEntity::getStudentId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (studentIds.isEmpty()) {
+            return Map.of();
+        }
+        return learningPlanMapper.selectActiveByStudentIds(studentIds).stream()
+                .collect(Collectors.toMap(StudentLearningPlanEntity::getStudentId, item -> item, (first, second) -> first));
+    }
+
     private StudentSopPageRes buildPageRes(StudentSopEntity studentSop,
                                            Map<Long, StudentEntity> studentMap,
-                                           Map<Long, SysUserEntity> mentorMap) {
+                                           Map<Long, SysUserEntity> mentorMap,
+                                           Map<Long, StudentLearningPlanEntity> learningPlanMap) {
         StudentSopPageRes res = new StudentSopPageRes();
         BeanUtils.copyProperties(studentSop, res);
         StudentEntity student = studentMap.get(studentSop.getStudentId());
         if (student != null) {
             res.setStudentName(student.getStudentName());
             res.setStudentPhone(student.getStudentPhone());
+            res.setTeachingMode(student.getTeachingMode());
         }
+        res.setLearningPlanCreated(learningPlanMap.containsKey(studentSop.getStudentId()));
         res.setMentorName(getUserShowName(mentorMap.get(studentSop.getMentorId())));
         return res;
     }

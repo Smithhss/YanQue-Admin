@@ -24,6 +24,9 @@ public class StudentSopPageRes {
     @Schema(description = "学生手机号")
     private String studentPhone;
 
+    @Schema(description = "学生上课方式")
+    private String teachingMode;
+
     @Schema(description = "导师ID")
     private Long mentorId;
 
@@ -41,6 +44,9 @@ public class StudentSopPageRes {
 
     @Schema(description = "状态")
     private String status;
+
+    @Schema(description = "是否已创建线上学习计划")
+    private Boolean learningPlanCreated;
 
     @Schema(description = "备注")
     private String remark;

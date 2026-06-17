@@ -27,6 +27,8 @@ public class UploadServiceImpl implements UploadService {
 
     private static final String HOMEWORK_SUBMISSION_PREFIX = "homework/submission/";
 
+    private static final String COURSE_HOMEWORK_TEMPLATE_PREFIX = "course/homework-template/";
+
     private static final String STUDENT_SOP_PREFIX = "student/sop/";
 
     @Autowired
@@ -89,6 +91,7 @@ public class UploadServiceImpl implements UploadService {
                 || (!normalizedObjectKey.startsWith(HOMEWORK_CONTENT_PREFIX)
                 && !normalizedObjectKey.startsWith(HOMEWORK_ANSWER_PREFIX)
                 && !normalizedObjectKey.startsWith(HOMEWORK_SUBMISSION_PREFIX)
+                && !normalizedObjectKey.startsWith(COURSE_HOMEWORK_TEMPLATE_PREFIX)
                 && !normalizedObjectKey.startsWith(STUDENT_SOP_PREFIX))) {
             throw BusinessException.DateError.newInstance("对象Key不允许访问");
         }
