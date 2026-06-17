@@ -5513,22 +5513,35 @@ public class CourseHomeworkTemplateEntity {
 
 **学生标签的作用：**
 
-为学生添加自定义标签，用于分类和筛选。
+为学生添加自定义标签，用于分类和筛选。每个学生只能有一个标签，标签值从预定义选项中选择。
 
 **更新学生标签：**
 
 ```java
-public StudentTagUpdateRes updateStudentTags(Long studentId, StudentTagUpdateReq req) {
-    // 先删后插：删除旧标签，插入新标签
-    studentTagMapper.deleteByStudentId(studentId);
-    if (req.getTagNames() != null && !req.getTagNames().isEmpty()) {
-        List<StudentTagEntity> tags = req.getTagNames().stream()
-            .map(tagName -> buildTagEntity(studentId, tagName))
-            .toList();
-        studentTagMapper.batchInsert(tags);
+@Override
+@Transactional(rollbackFor = Exception.class)
+public StudentTagUpdateRes updateStudentTag(Long id, StudentTagUpdateReq req) {
+    if (studentMapper.selectById(id) == null) {
+        throw BusinessException.DateError.newInstance("学生不存在");
     }
+
+    String studentTag = normalizeStudentTag(req.getStudentTag());
+    if (studentTag != null && !parseStudentTagOptions().contains(studentTag)) {
+        throw BusinessException.DateError.newInstance("学生标签不在配置范围内");
+    }
+
+    studentMapper.updateStudentTag(id, studentTag);
+    StudentTagUpdateRes res = new StudentTagUpdateRes();
+    res.setStudentId(id);
+    res.setStudentTag(studentTag);
+    return res;
 }
 ```
+
+**标签配置来源：**
+- `parseStudentTagOptions()` 从系统配置中读取预定义标签选项
+- 标签值必须在配置范围内，否则抛出异常
+- `normalizeStudentTag()` 处理空字符串转 null
 
 **标签使用场景：**
 - 标记学生学习状态：`积极`、`需关注`、`优秀`
@@ -5544,7 +5557,7 @@ public StudentTagUpdateRes updateStudentTags(Long studentId, StudentTagUpdateReq
 public class StudentEntity {
     // ... 原有字段
     private String teachingMode;   // ONLINE/OFFLINE（线上/线下）
-    private String tags;           // 学生标签（逗号分隔）
+    private String studentTag;     // 学生标签（单选）
 }
 ```
 
@@ -5555,7 +5568,7 @@ public class StudentEntity {
 public class StudentPageReq {
     // ... 原有字段
     private String teachingMode;   // 按教学模式筛选
-    private String tag;            // 按标签筛选
+    private String studentTag;     // 按标签筛选
 }
 ```
 
@@ -5676,8 +5689,7 @@ public class StudentPageReq {
 
 | 方法 | 作用 | 使用场景 |
 |------|------|----------|
-| `StudentTagMapper.deleteByStudentId` | 删除学生标签 | 更新标签 |
-| `StudentTagMapper.batchInsert` | 批量插入标签 | 更新标签 |
+| `StudentMapper.updateStudentTag` | 更新学生标签 | 修改学生标签 |
 
 ---
 
@@ -5720,8 +5732,7 @@ public class StudentPageReq {
 │   │   └── question/               ← 题库管理（题目、选项、课程关联）
 │   ├── student/                    ← 学生管理（后台）
 │   │   ├── sop/                    ← 学生 SOP（标准操作流程）
-│   │   ├── learning-plan/          ← 学生学习计划
-│   │   └── tag/                    ← 学生标签
+│   │   └── learning-plan/          ← 学生学习计划
 │   ├── teaching/                   ← 教学模块
 │   │   ├── campus/                 ← 校区管理
 │   │   ├── clazz/                  ← 班级管理
