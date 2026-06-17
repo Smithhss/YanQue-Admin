@@ -1900,6 +1900,76 @@ flowchart TD
 - 如果超级管理员也受权限控制，可能出现"没有任何权限的管理员"的死锁
 - `SUPER_ADMIN` 角色代码是约定，不会被删除
 
+**为什么权限不足返回 403 而非 401？**
+- 401 = 未认证（没有登录或 token 无效）
+- 403 = 已认证但无权限（登录了但没权限访问该接口）
+- 本项目中 JWT/签名校验失败返回 401，权限校验失败返回 403，语义清晰
+
+**`@NoAuthCheck` 支持两种标注方式：**
+```java
+// 方式 1：标注在方法上，只跳过该方法的权限校验
+@NoAuthCheck
+@GetMapping("/public")
+public ApiResponse<String> publicApi() { ... }
+
+// 方式 2：标注在类上，跳过该 Controller 所有方法的权限校验
+@NoAuthCheck
+@RestController
+@RequestMapping("/api/open")
+public class OpenController { ... }
+```
+
+权限拦截器会同时检查两种标注：
+```java
+method.hasMethodAnnotation(NoAuthCheck.class)           // 方法级
+    || method.getBeanType().isAnnotationPresent(NoAuthCheck.class)  // 类级
+```
+
+### 5.5 RBAC 管理 API
+
+RBAC 体系提供三个管理接口，分别管理用户、角色、权限：
+
+**用户管理（SysUserController）：**
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/sysUser` | POST | 新增用户 |
+| `/api/sysUser/{id}` | PUT | 修改用户 |
+| `/api/sysUser/{id}` | DELETE | 删除用户 |
+| `/api/sysUser/{id}` | GET | 查询用户详情 |
+| `/api/sysUser` | GET | 分页查询用户 |
+| `/api/sysUser/{id}/roles` | PUT | 给用户分配角色 |
+
+**角色管理（SysRoleController）：**
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/sysRole` | POST | 新增角色 |
+| `/api/sysRole/{id}` | PUT | 修改角色 |
+| `/api/sysRole/{id}` | DELETE | 删除角色 |
+| `/api/sysRole/{id}` | GET | 查询角色详情 |
+| `/api/sysRole` | GET | 分页查询角色 |
+| `/api/sysRole/{id}/permissions` | PUT | 给角色分配权限 |
+
+**权限管理（SysPermissionController）：**
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/sysPermission` | POST | 新增权限 |
+| `/api/sysPermission/{id}` | PUT | 修改权限 |
+| `/api/sysPermission/{id}` | DELETE | 删除权限 |
+| `/api/sysPermission/{id}` | GET | 查询权限详情 |
+| `/api/sysPermission` | GET | 分页查询权限 |
+
+**RBAC 操作流程：**
+```
+1. 创建权限 → sysPermission（定义菜单、接口、按钮）
+2. 创建角色 → sysRole（如 TEACHER、ADMIN）
+3. 给角色分配权限 → PUT /api/sysRole/{id}/permissions
+4. 给用户分配角色 → PUT /api/sysUser/{id}/roles
+5. 用户登录后 → 自动拥有对应角色的所有权限
+```
+
 ---
 
 ## 第 6 章：业务模块 CRUD 实现模式
