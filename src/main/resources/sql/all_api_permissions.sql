@@ -39,8 +39,9 @@ values
     (@teaching_id, 'teaching:homework', '作业管理', 'MENU', null, 2040, '作业管理页面', 'ACTIVE', now(), now()),
     (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2050, '值班管理页面', 'ACTIVE', now(), now()),
     (@student_id, 'student:list', '学生列表', 'MENU', null, 3010, '学生列表页面', 'ACTIVE', now(), now()),
-    (@student_id, 'student:sop', 'SOP管理', 'MENU', null, 3020, '学生入学SOP管理页面', 'ACTIVE', now(), now()),
-    (@student_id, 'student:learning-plan', '线上学习计划', 'MENU', null, 3030, '线上学员学习计划页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:followup-tag', '回访标签管理', 'MENU', null, 3020, '学生回访标签管理页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:sop', 'SOP管理', 'MENU', null, 3030, '学生入学SOP管理页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:learning-plan', '线上学习计划', 'MENU', null, 3040, '线上学员学习计划页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:payment', '订单管理', 'MENU', null, 3030, '支付订单管理页面', 'ACTIVE', now(), now()),
@@ -66,6 +67,7 @@ set @course_menu_id := (select id from sys_permission where permission_code = 't
 set @class_menu_id := (select id from sys_permission where permission_code = 'teaching:class' limit 1);
 set @homework_menu_id := (select id from sys_permission where permission_code = 'teaching:homework' limit 1);
 set @student_menu_id := (select id from sys_permission where permission_code = 'student:list' limit 1);
+set @student_followup_tag_menu_id := (select id from sys_permission where permission_code = 'student:followup-tag' limit 1);
 set @student_sop_menu_id := (select id from sys_permission where permission_code = 'student:sop' limit 1);
 set @student_learning_plan_menu_id := (select id from sys_permission where permission_code = 'student:learning-plan' limit 1);
 set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
@@ -155,6 +157,11 @@ values
     (@student_menu_id, 'api:student:tag-options', '查询学生标签选项', 'API', '/yq-admin/api/students/tag-options', 2158, '查询学生标签选项接口', 'ACTIVE', now(), now()),
     (@student_menu_id, 'api:student:update-tag', '修改学生标签', 'API', '/yq-admin/api/students/{id}/tag', 2159, '修改学生标签接口', 'ACTIVE', now(), now()),
     (@student_menu_id, 'api:student:assign-sop', '分配学生入学SOP', 'API', '/yq-admin/api/students/{id}/sop', 2160, '给线上学生分配入学SOP接口', 'ACTIVE', now(), now()),
+    (@student_followup_tag_menu_id, 'api:student-followup-tag:page', '分页查询回访标签配置', 'API', '/yq-admin/api/studentFollowupTags', 2161, '分页查询学生回访标签配置接口', 'ACTIVE', now(), now()),
+    (@student_followup_tag_menu_id, 'api:student-followup-tag:detail', '查询回访标签配置详情', 'API', '/yq-admin/api/studentFollowupTags/{id}', 2162, '查询学生回访标签配置详情接口', 'ACTIVE', now(), now()),
+    (@student_followup_tag_menu_id, 'api:student-followup-tag:create', '新增回访标签配置', 'API', '/yq-admin/api/studentFollowupTags', 2163, '新增学生回访标签配置接口', 'ACTIVE', now(), now()),
+    (@student_followup_tag_menu_id, 'api:student-followup-tag:update', '修改回访标签配置', 'API', '/yq-admin/api/studentFollowupTags/{id}', 2164, '修改学生回访标签配置接口', 'ACTIVE', now(), now()),
+    (@student_followup_tag_menu_id, 'api:student-followup-tag:delete', '删除回访标签配置', 'API', '/yq-admin/api/studentFollowupTags/{id}', 2165, '删除学生回访标签配置接口', 'ACTIVE', now(), now()),
     (@student_sop_menu_id, 'api:student-sop:page', '分页查询学生入学SOP', 'API', '/yq-admin/api/studentSops', 2168, '分页查询学生入学SOP接口', 'ACTIVE', now(), now()),
     (@student_sop_menu_id, 'api:student-sop:complete', '完成学生入学SOP', 'API', '/yq-admin/api/studentSops/{id}/complete', 2169, '完成学生入学SOP接口', 'ACTIVE', now(), now()),
     (@student_learning_plan_menu_id, 'api:student-learning-plan:create', '创建线上学习计划', 'API', '/yq-admin/api/studentLearningPlans', 2170, '创建线上学习计划接口', 'ACTIVE', now(), now()),
