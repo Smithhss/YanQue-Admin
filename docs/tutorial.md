@@ -487,109 +487,133 @@ java -jar app.jar
 
 ```mermaid
 graph TB
-    subgraph 前端
-        BF[后台管理前端]
-        SF[学生端前端]
+    subgraph Frontend["前端"]
+        BF["后台管理前端"]
+        SF["学生端前端"]
     end
 
-    subgraph Spring Boot 应用
-        subgraph Filter 层
-            GF[RequestGuidFilter<br/>分配请求唯一ID]
+    subgraph App["Spring Boot 应用"]
+        subgraph Filter["Filter 层"]
+            GF["RequestGuidFilter"]
         end
 
-        subgraph 管理端拦截器链 /admin/**
-            JI[JwtAuthInterceptor<br/>JWT 身份认证]
-            SI[SignInterceptor<br/>签名校验]
-            PI[PermissionInterceptor<br/>RBAC 权限校验]
+        subgraph AdminInterceptor["管理端拦截器链"]
+            JI["JwtAuth - JWT认证"]
+            SI["Sign - 签名校验"]
+            PI["Permission - 权限校验"]
         end
 
-        subgraph 学生端拦截器链 /student/**
-            SJI[StudentJwtAuthInterceptor<br/>学生 JWT 认证]
+        subgraph StuInterceptor["学生端拦截器链"]
+            SJI["StudentJwtAuth - 学生JWT"]
         end
 
-        subgraph Controller 层 — 按业务域分组
-            subgraph 系统管理
-                UC[UserController]
-                DCC[DataConfigController]
+        subgraph Ctrl["Controller 层"]
+            subgraph SysCtrl["系统管理"]
+                UC["UserController"]
+                DCC["DataConfigController"]
             end
-            subgraph 教学管理
-                CC[CampusController]
-                CLC[ClazzController]
-                CRC[CourseController]
-                SC[ScheduleController]
-                DC[DutyController]
-                HC[HomeworkController]
+            subgraph TeachCtrl["教学管理"]
+                CC["CampusController"]
+                CLC["ClazzController"]
+                CRC["CourseController"]
+                SC["ScheduleController"]
+                DC["DutyController"]
+                HC["HomeworkController"]
             end
-            subgraph 订单管理
-                OC[OrderController]
-                RFC[RefundController]
+            subgraph OrderCtrl["订单管理"]
+                OC["OrderController"]
+                RFC["RefundController"]
             end
-            subgraph 考试管理
-                QC[QuestionController]
-                PC[PaperController]
-                EC[ExamController]
+            subgraph ExamCtrl["考试管理"]
+                QC["QuestionController"]
+                PC["PaperController"]
+                EC["ExamController"]
             end
-            subgraph 学生管理（后台）
-                STC[StudentController]
-                SFC[StudentFollowupController]
-                SLC[StudentLearningPlanController]
+            subgraph StuCtrl["学生管理"]
+                STC["StudentController"]
+                SFC["StudentFollowupController"]
+                SLC["StudentLearningPlanController"]
             end
-            subgraph 学生前台 /studentFront/**
-                SFB[StudentFrontBiz]
+            subgraph FrontCtrl["学生前台"]
+                SFB["StudentFrontBiz"]
             end
-            subgraph 文件服务
-                UPC[UploadController]
+            subgraph UploadCtrl["文件服务"]
+                UPC["UploadController"]
             end
         end
 
-        subgraph Service 层
-            SVC[各模块 ServiceImpl<br/>业务逻辑 · 事务 · VO 转换]
+        subgraph Svc["Service 层"]
+            SVC["ServiceImpl - 业务逻辑/事务/VO转换"]
         end
 
-        subgraph Mapper 层
-            MAP[各模块 Mapper + XML<br/>SQL 执行 · 结果映射]
+        subgraph MapperLayer["Mapper 层"]
+            MAP["Mapper + XML - SQL执行"]
         end
 
-        subgraph 定时任务
-            XXL[XXL-Job 执行器<br/>回访记录自动生成]
+        subgraph Job["定时任务"]
+            XXL["XXL-Job 执行器"]
         end
     end
 
-    subgraph 数据存储
-        DB[(MySQL<br/>业务数据)]
-        RD[(Redis<br/>缓存 / 签名密钥)]
-        TOS[(TOS 对象存储<br/>文件 / 视频 / 图片)]
+    subgraph Storage["数据存储"]
+        DB[("MySQL")]
+        RD[("Redis")]
+        TOS[("TOS对象存储")]
     end
 
-    subgraph 第三方服务
-        YEEPAY[易宝支付<br/>支付 · 退款 · 回调]
+    subgraph ThirdParty["第三方服务"]
+        YEEPAY["易宝支付"]
     end
 
     BF --> GF
     SF --> GF
     GF --> JI
     GF --> SJI
-    JI --> SI --> PI
+    JI --> SI
+    SI --> PI
 
-    PI --> UC & DCC
-    PI --> CC & CLC & CRC & SC & DC & HC
-    PI --> OC & RFC
-    PI --> QC & PC & EC
-    PI --> STC & SFC & SLC
+    PI --> UC
+    PI --> DCC
+    PI --> CC
+    PI --> CLC
+    PI --> CRC
+    PI --> SC
+    PI --> DC
+    PI --> HC
+    PI --> OC
+    PI --> RFC
+    PI --> QC
+    PI --> PC
+    PI --> EC
+    PI --> STC
+    PI --> SFC
+    PI --> SLC
     PI --> UPC
     SJI --> SFB
 
-    UC & DCC --> SVC
-    CC & CLC & CRC & SC & DC & HC --> SVC
-    OC & RFC --> SVC
-    QC & PC & EC --> SVC
-    STC & SFC & SLC --> SVC
+    UC --> SVC
+    DCC --> SVC
+    CC --> SVC
+    CLC --> SVC
+    CRC --> SVC
+    SC --> SVC
+    DC --> SVC
+    HC --> SVC
+    OC --> SVC
+    RFC --> SVC
+    QC --> SVC
+    PC --> SVC
+    EC --> SVC
+    STC --> SVC
+    SFC --> SVC
+    SLC --> SVC
     SFB --> SVC
     UPC --> SVC
 
     SVC --> MAP
     MAP --> DB
-    JI & SI --> RD
+    JI --> RD
+    SI --> RD
     SVC --> RD
     SVC --> TOS
     SVC --> YEEPAY
