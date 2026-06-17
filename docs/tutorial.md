@@ -1026,171 +1026,99 @@ loginRes.setPermissionDetailResList(... userInfo.getSysPermissionEntityList() ..
 
 ### 3.1 ApiResponse 统一响应格式
 
-```java
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class ApiResponse<T> {
-    private Integer code;
-    private String message;
-    private T data;
+所有接口统一返回 `ApiResponse<T>`，包含三个字段：
+- `code`：状态码，200 表示成功，其他表示失败
+- `message`：提示信息，给用户看
+- `data`：业务数据，泛型支持任意类型
 
-    // 有数据的成功响应
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(200, "success", data);
-    }
+**success() 重载：**
 
-    // 无数据的成功响应（如删除、更新操作）
-    public static <T> ApiResponse<T> success() {
-        return new ApiResponse<>(200, "success", null);
-    }
+| 方法 | 场景 | 示例 |
+|------|------|------|
+| `success()` | 无数据返回（增删改） | 删除成功 |
+| `success(T data)` | 查询返回数据 | 学生列表 |
+| `success(String message)` | 自定义提示 | "创建成功" |
+| `success(String message, T data)` | 自定义提示 + 数据 | "创建成功" + 新学生 |
 
-    // 自定义消息的成功响应
-    public static <T> ApiResponse<T> success(String message) {
-        return new ApiResponse<>(200, message, null);
-    }
+**fail() 方法：**
+- `fail(Integer code, String message)` → 返回错误码和提示
 
-    // 自定义消息 + 数据的成功响应
-    public static <T> ApiResponse<T> success(String message, T data) {
-        return new ApiResponse<>(200, message, data);
-    }
-
-    // 失败响应
-    public static <T> ApiResponse<T> fail(Integer code, String message) {
-        return new ApiResponse<>(code, message, null);
-    }
-}
-```
-
-**使用场景：**
-```java
-// 查询 → 返回数据
-return ApiResponse.success(studentList);
-
-// 新增/修改 → 无数据
-return ApiResponse.success();
-
-// 新增成功 → 自定义提示
-return ApiResponse.success("创建成功", newStudent);
-
-// 删除 → 自定义提示
-return ApiResponse.success("删除成功");
-
-// 失败
-return ApiResponse.fail(10002, "用户不存在");
-```
-
-**前端收到的 JSON：**
-```json
-// 成功
-{"code": 200, "message": "success", "data": {...}}
-
-// 失败
-{"code": 10002, "message": "用户不存在", "data": null}
-```
-
-**为什么这样设计？**
-- 前端只需判断 `code === 200` 就知道请求是否成功
-- `message` 给用户看的提示，`code` 给程序判断的标识
-- `data` 泛型支持任意返回类型
-- 多个 `success()` 重载覆盖不同场景，避免传 null
+**前端判断逻辑：** `code === 200` 即成功，其他均为失败。
 
 ### 3.2 PageResult 分页响应
 
-```java
-@Data
-public class PageResult<T> {
-    private Long total;
-    private Integer pageNum;
-    private Integer pageSize;
-    private List<T> records;
-}
-```
+分页查询返回 `PageResult<T>`，包含：
+- `total`：总记录数（用于计算总页数）
+- `pageNum`：当前页码
+- `pageSize`：每页条数
+- `records`：当前页数据列表
 
 **为什么不直接用 `ApiResponse<List<T>>`？**
-- 分页需要 `total`（总记录数）来计算总页数
+- 分页需要 `total` 来计算总页数
 - 前端需要 `pageNum`、`pageSize` 来渲染分页组件
 - 单独封装分页结果，语义更清晰
 
 ### 3.3 BusinessException 业务异常体系
 
-```java
-@Getter
-public class BusinessException extends RuntimeException {
-    private final Integer code;
+继承 `RuntimeException`，包含 `code`（错误码）和 `message`（错误消息）。
 
-    // ===== 用户模块 =====
-    public static final BusinessException UserExist = new BusinessException(10001, "用户已存在");
-    public static final BusinessException UserNotExist = new BusinessException(10002, "用户不存在");
+**预定义静态实例（共 17 个）：**
 
-    // ===== 权限模块 =====
-    public static final BusinessException PermissionExist = new BusinessException(11001, "权限已存在");
-    public static final BusinessException PermissionNotExist = new BusinessException(11002, "权限不存在");
-    public static final BusinessException PasswordError = new BusinessException(11003, "密码错误");
-    public static final BusinessException DateError = new BusinessException(11004, "数据错误");
-    public static final BusinessException ParamsError = new BusinessException(11005, "参数异常");
-    public static final BusinessException DateExist = new BusinessException(11006, "数据已存在");
-
-    // ===== 角色模块 =====
-    public static final BusinessException RoleExist = new BusinessException(12001, "角色已存在");
-    public static final BusinessException RoleNotExist = new BusinessException(12002, "角色不存在");
-
-    // ===== 系统配置 =====
-    public static final BusinessException ConfigExist = new BusinessException(13001, "配置已存在");
-    public static final BusinessException ConfigNotExist = new BusinessException(13002, "配置不存在");
-
-    // ===== 校区模块 =====
-    public static final BusinessException CampusNotExist = new BusinessException(14001, "校区不存在");
-
-    // ===== 课程模块 =====
-    public static final BusinessException CourseNotExist = new BusinessException(15001, "课程不存在");
-    public static final BusinessException CourseDetailNotExist = new BusinessException(15002, "课程详情不存在");
-
-    // ===== 班级模块 =====
-    public static final BusinessException ClazzNotExist = new BusinessException(16001, "班级不存在");
-
-    // ===== 订单模块 =====
-    public static final BusinessException ProductNotExist = new BusinessException(17001, "产品不存在");
-    public static final BusinessException PrepayOrderNotExist = new BusinessException(17002, "预支付订单不存在");
-    public static final BusinessException RemoteError = new BusinessException(17003, "远程调用异常");
-
-    // 复用错误码，自定义消息
-    public BusinessException newInstance(String message) {
-        return new BusinessException(this.getCode(), message);
-    }
-}
-```
+| 错误码 | 实例名 | 消息 |
+|--------|--------|------|
+| **用户模块** | | |
+| 10001 | UserExist | 用户已存在 |
+| 10002 | UserNotExist | 用户不存在 |
+| **权限/通用** | | |
+| 11001 | PermissionExist | 权限已存在 |
+| 11002 | PermissionNotExist | 权限不存在 |
+| 11003 | PasswordError | 密码错误 |
+| 11004 | DateError | 数据错误 |
+| 11005 | ParamsError | 参数异常 |
+| 11006 | DateExist | 数据已存在 |
+| **角色模块** | | |
+| 12001 | RoleExist | 角色已存在 |
+| 12002 | RoleNotExist | 角色不存在 |
+| **系统配置** | | |
+| 13001 | ConfigExist | 配置已存在 |
+| 13002 | ConfigNotExist | 配置不存在 |
+| **校区模块** | | |
+| 14001 | CampusNotExist | 校区不存在 |
+| **课程模块** | | |
+| 15001 | CourseNotExist | 课程不存在 |
+| 15002 | CourseDetailNotExist | 课程详情不存在 |
+| **班级模块** | | |
+| 16001 | ClazzNotExist | 班级不存在 |
+| **订单模块** | | |
+| 17001 | ProductNotExist | 产品不存在 |
+| 17002 | PrepayOrderNotExist | 预支付订单不存在 |
+| 17003 | RemoteError | 远程调用异常 |
 
 **错误码分段设计：**
-| 范围 | 模块 | 预定义实例 |
-|------|------|-----------|
-| 10xxx | 用户 | UserExist、UserNotExist |
-| 11xxx | 权限/通用 | PermissionExist、PermissionNotExist、PasswordError、DateError、ParamsError、DateExist |
-| 12xxx | 角色 | RoleExist、RoleNotExist |
-| 13xxx | 系统配置 | ConfigExist、ConfigNotExist |
-| 14xxx | 校区 | CampusNotExist |
-| 15xxx | 课程 | CourseNotExist、CourseDetailNotExist |
-| 16xxx | 班级 | ClazzNotExist |
-| 17xxx | 订单 | ProductNotExist、PrepayOrderNotExist、RemoteError |
+
+| 范围 | 模块 |
+|------|------|
+| 10xxx | 用户 |
+| 11xxx | 权限/通用 |
+| 12xxx | 角色 |
+| 13xxx | 系统配置 |
+| 14xxx | 校区 |
+| 15xxx | 课程 |
+| 16xxx | 班级 |
+| 17xxx | 订单 |
+
+**`newInstance()` 方法：** 复用错误码，自定义消息。例如 `DateError` 的错误码是 11004，但不同场景需要不同消息（"第3行数据有字段为空"、"导入文件不能为空"）。
+
+**注意 `DateError` 和 `DateExist` 的命名：** 这里的 `Date` 不是"日期"，而是"数据"（Data 的简写），用于通用的数据校验场景。
 
 **为什么用静态实例而非每次 new？**
-- 错误码和消息是固定的，静态实例避免重复创建对象
-- 语义更清晰：`throw BusinessException.UserNotExist` 比 `throw new BusinessException(10002, "用户不存在")` 更易读
+- 错误码和消息固定，避免重复创建对象
+- 语义更清晰：`throw BusinessException.UserNotExist` 比数字更易读
 - 错误码集中管理，不会出现散落的魔法数字
 
-**为什么需要 `newInstance()` 方法？**
-```java
-// 同一个错误码，不同场景需要不同消息
-throw BusinessException.DateError.newInstance("第3行数据有字段为空");
-throw BusinessException.DateError.newInstance("导入文件不能为空");
-```
-
-**注意 `DateError` 和 `DateExist` 的命名：**
-- 这里的 `Date` 不是"日期"，而是"数据"（Data 的简写）
-- `DateError` = 数据错误，`DateExist` = 数据已存在
-- 用于通用的数据校验场景，不属于特定模块
-
 ### 3.4 GlobalExceptionHandler 全局异常捕获
+
+使用 `@RestControllerAdvice` 统一拦截异常，返回标准 `ApiResponse` 格式。
 
 **异常处理流程图：**
 
@@ -1200,178 +1128,41 @@ flowchart TD
 
     B -- BusinessException --> C[业务异常]
     C --> D[返回 code + message]
-    D --> E["{code: 10002, message: '用户不存在'}"]
+    D --> E["{code: 10002, message: 用户不存在}"]
 
     B -- MethodArgumentNotValidException --> F[参数校验失败]
     F --> G[提取字段错误信息]
-    G --> H["{code: 400, message: 'xxx不能为空; yyy格式错误'}"]
+    G --> H["{code: 400, message: xxx不能为空}"]
 
     B -- BindException --> I[参数绑定失败]
-    I --> J["{code: 400, message: '请求参数格式不正确'}"]
+    I --> J["{code: 400, message: 请求参数格式不正确}"]
 
     B -- ConstraintViolationException --> K[约束校验失败]
-    K --> L["{code: 400, message: '请求参数校验失败'}"]
+    K --> L["{code: 400, message: 请求参数校验失败}"]
+
+    B -- HttpMessageNotReadableException --> N[请求体解析失败]
+    N --> O["{code: 400, message: 参数解析失败}"]
 
     B -- Exception --> M[未知异常]
-    M --> N["{code: 500, message: '系统开小差了'}"]
-```
-
-**文字流程图：**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      异常处理流程                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  Controller 抛异常  │
-                   └─────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────┴────────────────────┐
-         │                                         │
-         ▼                                         │
-┌─────────────────────┐                            │
-│  @RestControllerAdvice │                         │
-│  全局异常处理器      │                            │
-└─────────────────────┘                            │
-         │                                         │
-         ▼                                         │
-┌─────────────────────────────────────────────────────────────────┐
-│                      异常类型匹配                                │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────┐    ┌─────────────────┐                    │
-│  │ BusinessException │    │ MethodArgument  │                    │
-│  │ 业务异常         │    │ NotValidException│                    │
-│  │                  │    │ 参数校验异常     │                    │
-│  └────────┬────────┘    └────────┬────────┘                    │
-│           │                      │                              │
-│           ▼                      ▼                              │
-│  ┌─────────────────┐    ┌─────────────────┐                    │
-│  │ code: 自定义    │    │ code: 400       │                    │
-│  │ message: 业务消息│    │ message: 字段错误│                    │
-│  └─────────────────┘    └─────────────────┘                    │
-│                                                                 │
-│  ┌─────────────────┐    ┌─────────────────┐                    │
-│  │ BindException   │    │ Constraint      │                    │
-│  │ 参数绑定异常     │    │ Violation       │                    │
-│  │                  │    │ 约束校验异常     │                    │
-│  └────────┬────────┘    └────────┬────────┘                    │
-│           │                      │                              │
-│           ▼                      ▼                              │
-│  ┌─────────────────┐    ┌─────────────────┐                    │
-│  │ code: 400       │    │ code: 400       │                    │
-│  │ message: 格式错误│    │ message: 校验失败│                    │
-│  └─────────────────┘    └─────────────────┘                    │
-│                                                                 │
-│  ┌─────────────────┐                                           │
-│  │ Exception        │                                           │
-│  │ 兜底异常         │                                           │
-│  └────────┬────────┘                                           │
-│           │                                                     │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ code: 500       │                                           │
-│  │ message: 系统错误│                                           │
-│  └─────────────────┘                                           │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  返回 ApiResponse   │
-                   │  统一 JSON 格式     │
-                   └─────────────────────┘
-```
-
-```java
-@Slf4j
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-
-    // 业务异常 → 返回业务错误码和消息
-    @ExceptionHandler(BusinessException.class)
-    public ApiResponse<Void> handleBusinessException(BusinessException ex) {
-        log.error("业务异常: code={}, message={}", ex.getCode(), ex.getMessage(), ex);
-        return ApiResponse.fail(ex.getCode(), ex.getMessage());
-    }
-
-    // @Valid 校验失败 → 提取字段错误信息拼接
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ApiResponse<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining("; "));
-        log.error("请求参数校验异常: {}", message, ex);
-        return ApiResponse.fail(400, message);
-    }
-
-    // 参数绑定失败（如类型不匹配）
-    @ExceptionHandler(BindException.class)
-    public ApiResponse<Void> handleBindException(BindException ex) {
-        String message = buildValidationMessage(ex.getBindingResult().getFieldErrors(), "请求参数格式不正确");
-        log.error("参数绑定异常: {}", message, ex);
-        return ApiResponse.fail(400, message);
-    }
-
-    // 约束校验失败（如 @RequestParam 校验）
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ApiResponse<Void> handleConstraintViolationException(ConstraintViolationException ex) {
-        log.error("约束校验异常: {}", ex.getMessage(), ex);
-        return ApiResponse.fail(400, "请求参数校验失败");
-    }
-
-    // 请求体解析失败（如 JSON 格式错误）
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ApiResponse<Void> httpMessageNotReadableException(HttpMessageNotReadableException ex) {
-        log.error("参数转换异常", ex);
-        return ApiResponse.fail(400, "参数解析失败");
-    }
-
-    // 兜底：未预期的异常
-    @ExceptionHandler(Exception.class)
-    public ApiResponse<Void> handleException(Exception ex) {
-        log.error("系统异常", ex);
-        return ApiResponse.fail(500, "系统开小差了，请稍后重试");
-    }
-
-    private String buildValidationMessage(List<FieldError> fieldErrors, String defaultMessage) {
-        String message = fieldErrors.stream()
-                .map(FieldError::getDefaultMessage)
-                .filter(value -> value != null && !value.isBlank())
-                .distinct()
-                .collect(Collectors.joining("; "));
-        return message.isBlank() ? defaultMessage : message;
-    }
-}
+    M --> P["{code: 500, message: 系统开小差了}"]
 ```
 
 **异常处理优先级（从精确到宽泛）：**
-1. `BusinessException` → 返回业务错误码和消息
-2. `MethodArgumentNotValidException` → `@Valid` 校验失败，返回 400 + 字段错误拼接
-3. `BindException` → 参数绑定失败（类型不匹配），返回 400
-4. `ConstraintViolationException` → `@RequestParam` 等约束校验失败，返回 400
-5. `HttpMessageNotReadableException` → 请求体 JSON 格式错误，返回 400
-6. `Exception` → 兜底，返回 500，不暴露内部错误
 
-**为什么每个处理器都有 `log.error()`？**
-- 业务异常也需要记录日志，方便排查问题
-- 日志包含异常堆栈（最后一个参数 `ex`），便于定位根因
-- 生产环境通过日志系统（如 ELK）收集和检索
+| 优先级 | 异常类型 | 触发场景 | 返回 |
+|--------|----------|----------|------|
+| 1 | BusinessException | 业务逻辑错误 | 业务错误码 + 消息 |
+| 2 | MethodArgumentNotValidException | @Valid 校验失败 | 400 + 字段错误拼接 |
+| 3 | BindException | 参数绑定失败（类型不匹配） | 400 |
+| 4 | ConstraintViolationException | @RequestParam 等约束校验失败 | 400 |
+| 5 | HttpMessageNotReadableException | 请求体 JSON 格式错误 | 400 |
+| 6 | Exception | 兜底，未预期的异常 | 500 |
 
-**为什么最后要兜底 `Exception`？**
-- 防止未预期的异常导致前端收到 500 但没有 message
-- 兜底返回通用提示"系统开小差了"，用户体验更好
-- 生产环境不应该暴露堆栈信息给前端
-
-**`buildValidationMessage()` 工具方法的作用：**
-- 从 `FieldError` 列表提取所有字段错误消息
-- 用 `; ` 拼接成一条消息，前端可直接展示
-- 过滤空消息 + 去重，避免重复提示
-- 如果所有字段错误消息都为空，返回默认消息
+**关键设计点：**
+- 每个处理器都有 `log.error()` 记录日志，包含异常堆栈，便于定位根因
+- 最后兜底 `Exception`，防止未预期异常导致前端收到空 message
+- 兜底返回"系统开小差了"，不暴露堆栈信息给前端
+- `MethodArgumentNotValidException` 处理器会提取所有字段错误，用 `; ` 拼接成一条消息
 
 ---
 
