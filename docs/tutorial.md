@@ -153,54 +153,82 @@ public class YanqueApplication {
 **application.yaml 主配置：**
 
 ```yaml
+# ==================== 服务器配置 ====================
 server:
-  port: 8080
+  port: 8080                                    # 应用端口
   servlet:
-    context-path: /yq-admin
+    context-path: /yq-admin                     # URL 前缀，所有接口都以 /yq-admin 开头
 
+# ==================== Spring 配置 ====================
 spring:
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:dev}       # 激活的环境：dev(开发) / prod(生产)
+                                                # 优先使用环境变量，没有则默认 dev
+
+  # Redis 配置（使用 Lettuce 连接池）
   data:
     redis:
       lettuce:
         pool:
-          max-active: 8            # 最大连接数
-          max-idle: 8              # 最大空闲连接
-          min-idle: 0              # 最小空闲连接
-          max-wait: 2000ms         # 获取连接最大等待时间
+          max-active: 8                         # 最大连接数（并发上限）
+          max-idle: 8                           # 最大空闲连接（空闲时保留的连接数）
+          min-idle: 0                           # 最小空闲连接（空闲时不保留连接）
+          max-wait: 2000ms                      # 获取连接最大等待时间（超时抛异常）
 
+# ==================== MyBatis 配置 ====================
 mybatis:
   configuration:
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
-    map-underscore-to-camel-case: true
-  mapper-locations: classpath*:/mapper/**/*.xml
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl   # SQL 日志输出到 SLF4J
+    map-underscore-to-camel-case: true                     # 下划线转驼峰：student_name → studentName
+  mapper-locations: classpath*:/mapper/**/*.xml            # Mapper XML 文件路径（支持多模块）
 
+# ==================== 易宝支付配置 ====================
 yeepay:
-  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:10093003553}
-  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:10093003553}
+  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:10093003553}  # 父商户号
+  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:10093003553}                # 商户号
   pay-success-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
-  pay-success-return-url: "xxxxx"
+                                                                   # 支付成功回调地址（易宝通知）
+  pay-success-return-url: "xxxxx"                                  # 支付成功页面跳转地址
   refund-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/refund"
+                                                                   # 退款成功回调地址
 
+# ==================== TOS 对象存储配置 ====================
+# TOS 是火山引擎的对象存储服务（类似阿里云 OSS）
+# 用于存储文件：作业附件、视频、图片等
 tos:
-  endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
-  region: ${YQ_TOS_REGION:cn-shanghai}
-  bucket: ${YQ_TOS_BUCKET:yq-admin-11-dev}
-  access-key: ${YQ_TOS_ACCESS_KEY:}
-  secret-key: ${YQ_TOS_SECRET_KEY:}
+  endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}  # 服务端点（上海区域）
+  region: ${YQ_TOS_REGION:cn-shanghai}                      # 区域
+  bucket: ${YQ_TOS_BUCKET:yq-admin-11-dev}                  # 存储桶名称
+  access-key: ${YQ_TOS_ACCESS_KEY:}                         # 访问密钥（通过环境变量注入）
+  secret-key: ${YQ_TOS_SECRET_KEY:}                         # 私密密钥（通过环境变量注入）
 
+# ==================== XXL-Job 定时任务配置 ====================
+# XXL-Job 是分布式定时任务调度平台
+# 用于：自动生成回访记录等定时任务
 xxl:
   job:
-    enabled: ${YQ_XXL_JOB_ENABLED:false}
+    enabled: ${YQ_XXL_JOB_ENABLED:false}                           # 是否启用（默认关闭）
     admin-addresses: ${YQ_XXL_JOB_ADMIN_ADDRESSES:http://xxx.xxx.xxx.xxx:9000/xxl-job-admin}
-    access-token: ${YQ_XXL_JOB_ACCESS_TOKEN:default_token}
-    app-name: ${YQ_XXL_JOB_APP_NAME:yanque-admin}
-    address: ${YQ_XXL_JOB_ADDRESS:}
-    ip: ${YQ_XXL_JOB_IP:}
-    port: ${YQ_XXL_JOB_PORT:9999}
-    log-path: ${YQ_XXL_JOB_LOG_PATH:/tmp/yanque-admin/xxl-job}
-    log-retention-days: ${YQ_XXL_JOB_LOG_RETENTION_DAYS:30}
+                                                                   # 调度中心地址
+    access-token: ${YQ_XXL_JOB_ACCESS_TOKEN:default_token}        # 访问令牌（与调度中心一致）
+    app-name: ${YQ_XXL_JOB_APP_NAME:yanque-admin}                 # 应用名称（在调度中心注册）
+    address: ${YQ_XXL_JOB_ADDRESS:}                                # 执行器地址（自动获取）
+    ip: ${YQ_XXL_JOB_IP:}                                          # 执行器 IP（自动获取）
+    port: ${YQ_XXL_JOB_PORT:9999}                                  # 执行器端口（调度中心通过此端口触发任务）
+    log-path: ${YQ_XXL_JOB_LOG_PATH:/tmp/yanque-admin/xxl-job}    # 任务日志路径
+    log-retention-days: ${YQ_XXL_JOB_LOG_RETENTION_DAYS:30}        # 日志保留天数
+
+# ==================== 配置优先级说明 ====================
+# 环境变量 > 配置文件默认值
+#
+# 示例：
+#   export YQ_XXL_JOB_ENABLED=true    → 覆盖默认的 false
+#   export YQ_TOS_ACCESS_KEY=xxx      → 设置 TOS 访问密钥
+#
+# 好处：
+#   1. 安全：敏感信息（密钥、密码）不提交到代码仓库
+#   2. 灵活：不同环境使用不同配置
+#   3. 方便：本地开发有默认值，生产环境通过环境变量覆盖
 ```
 
 **配置文件结构说明：**
@@ -228,6 +256,117 @@ xxl:
 - 数据库字段使用下划线命名：`student_name`
 - Java 实体使用驼峰命名：`studentName`
 - 开启后自动转换，无需手动写 `@Result` 注解
+
+**配置块详细说明：**
+
+**1. 服务器配置（server）**
+```yaml
+server:
+  port: 8080                    # 应用端口
+  servlet:
+    context-path: /yq-admin     # URL 前缀
+```
+- 所有接口都以 `/yq-admin` 开头
+- 例如：`http://localhost:8080/yq-admin/api/students`
+
+**2. Spring 配置（spring）**
+```yaml
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}  # 环境选择
+```
+- `${SPRING_PROFILES_ACTIVE:dev}`：优先使用环境变量，没有则默认 `dev`
+- 会加载对应的 `application-dev.yaml` 或 `application-prod.yaml`
+
+**3. Redis 连接池配置**
+```yaml
+spring:
+  data:
+    redis:
+      lettuce:
+        pool:
+          max-active: 8         # 最大连接数（并发上限）
+          max-idle: 8           # 最大空闲连接
+          min-idle: 0           # 最小空闲连接
+          max-wait: 2000ms      # 获取连接最大等待时间
+```
+- `max-active=8`：最多同时 8 个连接，超过则等待
+- `max-wait=2000ms`：等待超过 2 秒抛异常
+
+**4. MyBatis 配置**
+```yaml
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl   # SQL 日志
+    map-underscore-to-camel-case: true                     # 下划线转驼峰
+  mapper-locations: classpath*:/mapper/**/*.xml            # Mapper 路径
+```
+- `log-impl`：使用 SLF4J 打印 SQL 日志
+- `map-underscore-to-camel-case`：`student_name` → `studentName`
+- `mapper-locations`：扫描所有 mapper XML 文件
+
+**5. 易宝支付配置（yeepay）**
+```yaml
+yeepay:
+  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:10093003553}  # 父商户号
+  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:10093003553}                # 商户号
+  pay-success-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
+                                                                   # 支付成功回调地址
+  pay-success-return-url: "xxxxx"                                  # 支付成功跳转页
+  refund-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/refund"
+                                                                   # 退款成功回调地址
+```
+- `parent-merchant-no` / `merchant-no`：易宝支付的商户标识
+- `pay-success-notify-url`：支付成功后易宝回调的地址（内网穿透地址）
+- `refund-notify-url`：退款成功后易宝回调的地址
+
+**6. TOS 对象存储配置（tos）**
+```yaml
+tos:
+  endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}  # 服务端点
+  region: ${YQ_TOS_REGION:cn-shanghai}                      # 区域
+  bucket: ${YQ_TOS_BUCKET:yq-admin-11-dev}                  # 存储桶名称
+  access-key: ${YQ_TOS_ACCESS_KEY:}                         # 访问密钥
+  secret-key: ${YQ_TOS_SECRET_KEY:}                         # 私密密钥
+```
+- TOS 是火山引擎的对象存储服务（类似阿里云 OSS）
+- 用于存储文件（作业、视频、图片等）
+- `access-key` 和 `secret-key` 通过环境变量注入，不硬编码
+
+**7. XXL-Job 定时任务配置（xxl.job）**
+```yaml
+xxl:
+  job:
+    enabled: ${YQ_XXL_JOB_ENABLED:false}                           # 是否启用
+    admin-addresses: ${YQ_XXL_JOB_ADMIN_ADDRESSES:http://xxx.xxx.xxx.xxx:9000/xxl-job-admin}
+                                                                   # 调度中心地址
+    access-token: ${YQ_XXL_JOB_ACCESS_TOKEN:default_token}        # 访问令牌
+    app-name: ${YQ_XXL_JOB_APP_NAME:yanque-admin}                 # 应用名称
+    address: ${YQ_XXL_JOB_ADDRESS:}                                # 执行器地址
+    ip: ${YQ_XXL_JOB_IP:}                                          # 执行器 IP
+    port: ${YQ_XXL_JOB_PORT:9999}                                  # 执行器端口
+    log-path: ${YQ_XXL_JOB_LOG_PATH:/tmp/yanque-admin/xxl-job}    # 日志路径
+    log-retention-days: ${YQ_XXL_JOB_LOG_RETENTION_DAYS:30}        # 日志保留天数
+```
+- XXL-Job 是分布式定时任务调度平台
+- `admin-addresses`：调度中心地址
+- `app-name`：本应用在调度中心的名称
+- `port: 9999`：执行器监听端口，调度中心通过这个端口触发任务
+- 用于自动生成回访记录等定时任务
+
+**配置优先级说明：**
+```
+环境变量 > 配置文件默认值
+
+示例：
+  export YQ_XXL_JOB_ENABLED=true    → 覆盖默认的 false
+  export YQ_TOS_ACCESS_KEY=xxx      → 设置 TOS 访问密钥
+```
+
+这种设计的好处：
+1. **安全**：敏感信息（密钥、密码）不提交到代码仓库
+2. **灵活**：不同环境使用不同配置
+3. **方便**：本地开发有默认值，生产环境通过环境变量覆盖
 
 **application-dev.yaml 开发环境配置：**
 
