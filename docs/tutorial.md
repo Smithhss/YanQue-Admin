@@ -5280,6 +5280,287 @@ sequenceDiagram
 
 ---
 
+## 第 17 章：学生 SOP 与学习计划 — 标准化流程与个性化规划
+
+> 本章讲解学生 SOP（标准操作流程）和学习计划的设计，展示如何为学生建立标准化的入学流程和个性化的学习路径。
+
+### 17.1 学生 SOP（StudentSop）
+
+**什么是学生 SOP？**
+
+SOP（Standard Operating Procedure）是学生入学的标准操作流程，包括：
+- 观看入学视频
+- 完成 SOP 录制
+- 分配导师
+- 建立学习计划
+
+**SOP 状态机：**
+
+```mermaid
+stateDiagram-v2
+    [*] --> ASSIGNED: 管理员分配SOP
+    ASSIGNED --> COMPLETED: 学生完成SOP
+
+    note right of ASSIGNED: 分配导师、设置SOP视频
+    note right of COMPLETED: 上传完成视频、记录时间
+```
+
+**SOP 实体：**
+
+```java
+@Data
+public class StudentSopEntity {
+    private Long id;
+    private Long studentId;         // 学生ID
+    private Long mentorId;          // 导师ID
+    private String status;          // ASSIGNED/COMPLETED
+    private String sopVideoObjectKey;   // SOP视频文件（OSS）
+    private String sopVideoFileName;    // 视频文件名
+    private Date sopTime;           // SOP完成时间
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**为什么需要 SOP？**
+- 标准化学生入学流程，确保每个学生都完成必要的准备
+- 导师可以跟踪学生 SOP 完成状态
+- SOP 完成后才能创建学习计划
+
+### 17.2 学习计划（StudentLearningPlan）
+
+**学习计划是什么？**
+
+为线上学生制定个性化的学习路径，将课程拆分为多个阶段，每个阶段分配天数。
+
+**核心实体关系：**
+
+```mermaid
+erDiagram
+    StudentSop ||--o| StudentLearningPlan : "完成后可创建"
+    StudentLearningPlan ||--o{ StudentLearningCalendar : "生成日历"
+    StudentLearningPlan }o--|| Course : "关联课程"
+    StudentLearningPlan }o--|| Student : "关联学生"
+
+    StudentLearningPlan {
+        Long id
+        Long studentId
+        Long courseId
+        Long sopId
+        Date startDate
+        String status
+    }
+
+    StudentLearningCalendar {
+        Long id
+        Long planId
+        Date studyDate
+        String stageName
+        Integer dayIndex
+        String status
+    }
+```
+
+**学习计划创建流程图：**
+
+```mermaid
+flowchart TD
+    A[管理员创建学习计划] --> B[校验SOP已完成]
+    B --> C{SOP状态?}
+    C -- 未完成 --> D[抛异常: 只有完成SOP后才能定制学习计划]
+    C -- 已完成 --> E[校验学生是线上学员]
+
+    E --> F{是线上学员?}
+    F -- 否 --> G[抛异常: 只有线上学员可以定制学习计划]
+    F -- 是 --> H{已有生效计划?}
+
+    H -- 是 --> I[抛异常: 该学员已有生效学习计划]
+    H -- 否 --> J[校验课程是线上课程]
+
+    J --> K[校验阶段配置]
+    K --> L[创建学习计划]
+    L --> M[生成学习日历]
+    M --> N[返回计划ID和日历数量]
+```
+
+**为什么学习计划只针对线上学员？**
+- 线下学员有固定的上课时间表，不需要额外的学习计划
+- 线上学员需要自主安排学习进度，学习计划提供指导
+
+### 17.3 学习日历生成算法
+
+**核心逻辑：**
+
+```java
+private List<StudentLearningCalendarEntity> buildCalendars(
+        StudentLearningPlanEntity plan, 
+        List<StudentLearningPlanStageReq> stages) {
+    List<StudentLearningCalendarEntity> list = new ArrayList<>();
+    int dayIndex = 1;
+    for (StudentLearningPlanStageReq stage : stages) {
+        for (int stageDayIndex = 1; stageDayIndex <= stage.getStageDays(); stageDayIndex++) {
+            StudentLearningCalendarEntity calendar = new StudentLearningCalendarEntity();
+            calendar.setPlanId(plan.getId());
+            calendar.setStudentId(plan.getStudentId());
+            calendar.setStudyDate(addDays(plan.getStartDate(), dayIndex - 1));
+            calendar.setStageName(stage.getStageName());
+            calendar.setDayIndex(dayIndex);           // 全局天序号
+            calendar.setStageDayIndex(stageDayIndex); // 阶段内天序号
+            calendar.setStatus("TODO");
+            list.add(calendar);
+            dayIndex++;
+        }
+    }
+    return list;
+}
+```
+
+**示例：**
+
+假设课程有 3 个阶段：
+- Java 基础：10 天
+- 数据库：5 天
+- 项目实战：15 天
+
+学习开始日期：2026-06-17
+
+生成的日历：
+
+| dayIndex | stageName | stageDayIndex | studyDate |
+|----------|-----------|---------------|-----------|
+| 1 | Java 基础 | 1 | 2026-06-17 |
+| 2 | Java 基础 | 2 | 2026-06-18 |
+| ... | ... | ... | ... |
+| 10 | Java 基础 | 10 | 2026-06-26 |
+| 11 | 数据库 | 1 | 2026-06-27 |
+| ... | ... | ... | ... |
+| 15 | 数据库 | 5 | 2026-07-01 |
+| 16 | 项目实战 | 1 | 2026-07-02 |
+| ... | ... | ... | ... |
+| 30 | 项目实战 | 15 | 2026-07-16 |
+
+**为什么用 dayIndex 和 stageDayIndex 两个序号？**
+- `dayIndex`：全局序号，用于展示"学习第几天"
+- `stageDayIndex`：阶段内序号，用于展示"当前阶段第几天"
+
+### 17.4 阶段校验逻辑
+
+**校验规则：**
+
+```java
+private List<StudentLearningPlanStageReq> validateStages(Long courseId, List<StudentLearningPlanStageReq> stages) {
+    // 1. 查询课程的所有阶段
+    List<String> courseStages = courseDetailMapper.selectByCourseId(courseId).stream()
+        .map(CourseDetailEntity::getStageName)
+        .filter(Objects::nonNull)
+        .distinct()
+        .toList();
+
+    // 2. 校验阶段名称必须属于课程
+    for (StudentLearningPlanStageReq item : stages) {
+        if (!courseStages.contains(item.getStageName())) {
+            throw BusinessException.DateError.newInstance("阶段不属于所选课程：" + item.getStageName());
+        }
+    }
+
+    // 3. 按课程阶段顺序排列（防止前端传参顺序错误）
+    List<StudentLearningPlanStageReq> normalizedStages = new ArrayList<>();
+    for (String courseStage : courseStages) {
+        StudentLearningPlanStageReq stage = stageMap.get(courseStage);
+        if (stage == null) {
+            throw BusinessException.DateError.newInstance("请填写阶段学习天数：" + courseStage);
+        }
+        normalizedStages.add(stage);
+    }
+    return normalizedStages;
+}
+```
+
+**为什么按课程阶段顺序排列？**
+- 前端传参顺序可能和课程阶段顺序不一致
+- 学习日历必须按课程阶段顺序生成
+- 后端强制按课程阶段顺序，保证数据一致性
+
+### 17.5 课程作业模板（CourseHomeworkTemplate）
+
+**什么是课程作业模板？**
+
+为课程的每个阶段预设作业模板，教师发布作业时可以快速引用。
+
+**实体设计：**
+
+```java
+@Data
+public class CourseHomeworkTemplateEntity {
+    private Long id;
+    private Long courseId;          // 课程ID
+    private String teachingMode;    // ONLINE/OFFLINE
+    private String stageName;       // 阶段名称
+    private Integer dayNumber;      // 第几天
+    private String contentObjectKey;  // 作业内容文件（OSS）
+    private String contentFileName;   // 文件名
+    private String status;          // ENABLED/DISABLED
+    private String remark;          // 备注
+}
+```
+
+**为什么需要课程作业模板？**
+- 同一门课程的作业内容相对固定
+- 模板化后，教师发布作业时只需选择模板，不用重复上传
+- 支持按阶段和天数组织，与学习计划对应
+
+### 17.6 学生标签（StudentTag）
+
+**学生标签的作用：**
+
+为学生添加自定义标签，用于分类和筛选。
+
+**更新学生标签：**
+
+```java
+public StudentTagUpdateRes updateStudentTags(Long studentId, StudentTagUpdateReq req) {
+    // 先删后插：删除旧标签，插入新标签
+    studentTagMapper.deleteByStudentId(studentId);
+    if (req.getTagNames() != null && !req.getTagNames().isEmpty()) {
+        List<StudentTagEntity> tags = req.getTagNames().stream()
+            .map(tagName -> buildTagEntity(studentId, tagName))
+            .toList();
+        studentTagMapper.batchInsert(tags);
+    }
+}
+```
+
+**标签使用场景：**
+- 标记学生学习状态：`积极`、`需关注`、`优秀`
+- 标记学生来源：`线上`、`线下`、`转介绍`
+- 标记特殊需求：`VIP`、`团报`、`优惠`
+
+### 17.7 学生管理增强
+
+**新增的学生字段：**
+
+```java
+@Data
+public class StudentEntity {
+    // ... 原有字段
+    private String teachingMode;   // ONLINE/OFFLINE（线上/线下）
+    private String tags;           // 学生标签（逗号分隔）
+}
+```
+
+**学生列表新增筛选：**
+
+```java
+@Data
+public class StudentPageReq {
+    // ... 原有字段
+    private String teachingMode;   // 按教学模式筛选
+    private String tag;            // 按标签筛选
+}
+```
+
+---
+
 ## 附录 B：新模块 Mapper 方法汇总
 
 ### 订单模块
@@ -5369,6 +5650,35 @@ sequenceDiagram
 | `StudentExamRecordMapper.updateSubmit` | 更新提交状态 | 交卷 |
 | `StudentExamRecordMapper.updateGrade` | 更新批改结果 | 教师批改 |
 
+### 学生 SOP 与学习计划模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `StudentSopMapper.selectPage` | 分页查询 SOP | SOP 列表 |
+| `StudentSopMapper.selectById` | 查询 SOP 详情 | SOP 详情 |
+| `StudentSopMapper.completeSop` | 完成 SOP | 学生完成 SOP |
+| `StudentLearningPlanMapper.insert` | 插入学习计划 | 创建学习计划 |
+| `StudentLearningPlanMapper.selectPage` | 分页查询计划 | 计划列表 |
+| `StudentLearningPlanMapper.selectActiveByStudentId` | 查询学生生效计划 | 校验重复 |
+| `StudentLearningCalendarMapper.batchInsert` | 批量插入日历 | 生成学习日历 |
+| `StudentLearningCalendarMapper.selectByPlanId` | 查询计划日历 | 日历展示 |
+
+### 课程作业模板模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `CourseHomeworkTemplateMapper.insert` | 插入模板 | 创建模板 |
+| `CourseHomeworkTemplateMapper.updateById` | 更新模板 | 修改模板 |
+| `CourseHomeworkTemplateMapper.deleteById` | 删除模板 | 删除模板 |
+| `CourseHomeworkTemplateMapper.selectPage` | 分页查询 | 模板列表 |
+
+### 学生标签模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `StudentTagMapper.deleteByStudentId` | 删除学生标签 | 更新标签 |
+| `StudentTagMapper.batchInsert` | 批量插入标签 | 更新标签 |
+
 ---
 
 ## 附录 C：项目完整模块结构
@@ -5409,6 +5719,9 @@ sequenceDiagram
 │   │   ├── paper/                  ← 试卷管理（组卷）
 │   │   └── question/               ← 题库管理（题目、选项、课程关联）
 │   ├── student/                    ← 学生管理（后台）
+│   │   ├── sop/                    ← 学生 SOP（标准操作流程）
+│   │   ├── learning-plan/          ← 学生学习计划
+│   │   └── tag/                    ← 学生标签
 │   ├── teaching/                   ← 教学模块
 │   │   ├── campus/                 ← 校区管理
 │   │   ├── clazz/                  ← 班级管理
