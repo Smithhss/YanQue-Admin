@@ -5732,7 +5732,8 @@ public class StudentPageReq {
 │   │   └── question/               ← 题库管理（题目、选项、课程关联）
 │   ├── student/                    ← 学生管理（后台）
 │   │   ├── sop/                    ← 学生 SOP（标准操作流程）
-│   │   └── learning-plan/          ← 学生学习计划
+│   │   ├── learning-plan/          ← 学生学习计划
+│   │   └── followup/               ← 学生回访（标签配置 + 回访记录）
 │   ├── teaching/                   ← 教学模块
 │   │   ├── campus/                 ← 校区管理
 │   │   ├── clazz/                  ← 班级管理
@@ -5746,3 +5747,463 @@ public class StudentPageReq {
     ├── controller/                 ← 学生端接口
     ├── pojo/                       ← 请求/响应对象
     └── service/                    ← 学生端服务
+
+---
+
+## 第 18 章：学生回访系统 — 自动化跟进与标签驱动
+
+> 本章讲解学生回访系统的设计，展示如何基于学生标签自动生成回访任务，实现学员跟进的自动化管理。
+
+### 18.1 回访标签配置（StudentFollowupTag）
+
+**什么是回访标签配置？**
+
+为不同的学生标签配置回访规则，包括回访间隔天数，系统会根据配置自动生成回访任务。
+
+**核心实体：**
+
+```java
+@Data
+public class StudentFollowupTagEntity {
+    private Long id;
+    private String studentTag;          // 学生标签（关联学生表的 studentTag）
+    private Integer followupIntervalDays; // 回访间隔天数
+    private String status;              // ACTIVE/INACTIVE
+    private String remark;
+    private Date createdAt;
+    private Date updatedAt;
+}
+```
+
+**回访标签配置流程：**
+
+```mermaid
+flowchart TD
+    A[管理员配置回访标签] --> B[选择学生标签]
+    B --> C[设置回访间隔天数]
+    C --> D[校验标签是否在系统配置范围内]
+    D --> E{标签有效?}
+    E -- 否 --> F[抛异常: 学生标签不在配置范围内]
+    E -- 是 --> G[保存配置]
+    G --> H[返回配置ID]
+```
+
+**为什么需要回访标签配置？**
+- 不同标签的学生需要不同的回访频率
+- 例如：`需关注` 标签的学生可能需要更频繁的回访
+- 例如：`已就业` 标签的学生可能不需要回访
+
+### 18.2 回访记录生成算法
+
+**核心逻辑：**
+
+```java
+@Override
+@Transactional(rollbackFor = Exception.class)
+public StudentFollowupRecordGenerateRes generateDueRecords(Date generateDate) {
+    Date today = DateUtil.beginOfDay(generateDate == null ? new Date() : generateDate);
+
+    // 1. 查询所有可回访的学生（线上、启用、有标签）
+    List<StudentEntity> students = studentMapper.selectFollowupCandidates();
+    if (students.isEmpty()) {
+        return buildGenerateRes(0);
+    }
+
+    // 2. 获取启用的回访标签配置
+    Map<String, StudentFollowupTagEntity> followupTagMap = studentFollowupTagMapper.selectActiveList().stream()
+            .collect(Collectors.toMap(StudentFollowupTagEntity::getStudentTag, Function.identity(), (a, b) -> a));
+
+    // 3. 获取每个学生最新的回访记录
+    Map<Long, StudentFollowupRecordEntity> latestRecordMap = buildLatestRecordMap(students.stream()
+            .map(StudentEntity::getId)
+            .toList());
+
+    int generatedCount = 0;
+    Date now = new Date();
+    for (StudentEntity student : students) {
+        // 4. 只生成线上、启用、有标签的学生
+        if (!canGenerate(student)) {
+            continue;
+        }
+
+        StudentFollowupRecordEntity latestRecord = latestRecordMap.get(student.getId());
+        // 5. 如果学生最新记录是待回访状态，跳过
+        if (latestRecord != null && RECORD_STATUS_NEED_FOLLOWUP.equals(latestRecord.getStatus())) {
+            continue;
+        }
+
+        // 6. 获取学生当前标签对应的回访规则
+        StudentFollowupTagEntity rule = followupTagMap.get(student.getStudentTag());
+        if (rule == null || rule.getFollowupIntervalDays() == null || rule.getFollowupIntervalDays() <= 0) {
+            continue;
+        }
+
+        // 7. 计算回访截止日期
+        Date enrollDate = DateUtil.beginOfDay(student.getCreatedAt());
+        Date baseDate = latestRecord == null ? enrollDate : getLatestFollowupBaseDate(latestRecord);
+        Date dueDate = DateUtil.offsetDay(DateUtil.beginOfDay(baseDate), rule.getFollowupIntervalDays());
+
+        // 8. 如果截止日期 <= 今天，生成回访记录
+        if (!dueDate.after(today)) {
+            StudentFollowupRecordEntity record = buildRecord(student, rule, enrollDate, latestRecord, dueDate, now);
+            generatedCount += studentFollowupRecordMapper.insertIgnore(record);
+        }
+    }
+    return buildGenerateRes(generatedCount);
+}
+```
+
+**回访记录生成规则：**
+
+```mermaid
+flowchart TD
+    A[定时任务触发] --> B[查询所有可回访学生]
+    B --> C[获取回访标签配置]
+    C --> D[获取学生最新回访记录]
+    D --> E{遍历每个学生}
+
+    E --> F{是线上学员?}
+    F -- 否 --> G[跳过]
+    F -- 是 --> H{学生启用?}
+
+    H -- 否 --> G
+    H -- 是 --> I{学生有标签?}
+
+    I -- 否 --> G
+    I -- 是 --> J{最新记录状态?}
+
+    J -- 待回访 --> G
+    J -- 无记录/已回访 --> K[获取标签配置]
+
+    K --> L{配置存在?}
+    L -- 否 --> G
+    L -- 是 --> M[计算截止日期]
+
+    M --> N{截止日期 <= 今天?}
+    N -- 否 --> G
+    N -- 是 --> O[生成回访记录]
+```
+
+**为什么使用 insertIgnore？**
+- `student_followup_record` 表有 `(student_id, due_date)` 唯一键
+- 重复触发任务时不会重复生成记录
+- 保证数据一致性
+
+### 18.3 回访记录状态机
+
+**状态流转：**
+
+```mermaid
+stateDiagram-v2
+    [*] --> NEED_FOLLOWUP: 自动生成
+    NEED_FOLLOWUP --> COMPLETED: 完成回访
+    NEED_FOLLOWUP --> CANCELED: 取消回访
+
+    note right of NEED_FOLLOWUP: 待回访状态
+    note right of COMPLETED: 已完成，记录回访内容
+    note right of CANCELED: 已取消，记录取消原因
+```
+
+**完成回访：**
+
+```java
+@Override
+@Transactional(rollbackFor = Exception.class)
+public StudentFollowupRecordUpdateRes complete(Long id, StudentFollowupRecordCompleteReq req) {
+    StudentFollowupRecordEntity record = getRecord(id);
+    if (!RECORD_STATUS_NEED_FOLLOWUP.equals(record.getStatus())) {
+        throw BusinessException.DateError.newInstance("只有待回访的记录可以完成");
+    }
+
+    StudentFollowupRecordEntity update = new StudentFollowupRecordEntity();
+    update.setId(id);
+    update.setFollowupTime(new Date());
+    update.setFollowupContent(req.getFollowupContent().trim());
+    update.setFollowupVideoObjectKey(normalizeBlank(req.getFollowupVideoObjectKey()));
+    update.setFollowupVideoFileName(normalizeBlank(req.getFollowupVideoFileName()));
+    update.setStatus(RECORD_STATUS_COMPLETED);
+    update.setUpdatedAt(new Date());
+
+    int rows = studentFollowupRecordMapper.updateById(update);
+    if (rows == 0) {
+        throw BusinessException.DateError.newInstance("回访记录不存在");
+    }
+
+    StudentFollowupRecordUpdateRes res = new StudentFollowupRecordUpdateRes();
+    res.setId(id);
+    return res;
+}
+```
+
+### 18.4 回访统计
+
+**统计今日回访数据：**
+
+```java
+@Override
+public StudentFollowupRecordStatsRes stats() {
+    Date todayStart = DateUtil.beginOfDay(new Date());
+    Date tomorrowStart = DateUtil.offsetDay(todayStart, 1);
+    StudentFollowupRecordStatsBo stats = studentFollowupRecordMapper.selectStats(todayStart, tomorrowStart);
+    return buildStatsRes(stats);
+}
+```
+
+**统计内容：**
+- 今日待回访数量
+- 今日已完成数量
+- 今日取消数量
+
+### 18.5 XXL-Job 定时任务配置
+
+**为什么使用 XXL-Job？**
+- 回访记录需要每天自动生成
+- XXL-Job 提供可视化的任务管理界面
+- 支持任务调度、日志查看、失败重试
+
+**配置类：**
+
+```java
+@Slf4j
+@Configuration
+public class XxlJobConfig {
+
+    @Bean
+    @ConditionalOnProperty(prefix = "xxl.job", name = "enabled", havingValue = "true")
+    public XxlJobSpringExecutor xxlJobExecutor(XxlJobProperties properties) {
+        log.info("Init XXL-Job executor, appName={}", properties.getAppName());
+        XxlJobSpringExecutor executor = new XxlJobSpringExecutor();
+        executor.setAdminAddresses(properties.getAdminAddresses());
+        executor.setAccessToken(properties.getAccessToken());
+        executor.setAppname(properties.getAppName());
+        executor.setAddress(properties.getAddress());
+        executor.setIp(properties.getIp());
+        executor.setPort(properties.getPort());
+        executor.setLogPath(properties.getLogPath());
+        executor.setLogRetentionDays(properties.getLogRetentionDays());
+        return executor;
+    }
+}
+```
+
+**回访任务处理器：**
+
+```java
+@Component
+public class StudentFollowupRecordJob {
+
+    @Autowired
+    private StudentFollowupRecordService studentFollowupRecordService;
+
+    @XxlJob("generateFollowupRecordsJobHandler")
+    public void generateFollowupRecords() {
+        StudentFollowupRecordGenerateRes res = studentFollowupRecordService.generateDueRecords(null);
+        XxlJobHelper.log("生成回访记录完成，数量: {}", res.getGeneratedCount());
+    }
+}
+```
+
+---
+
+## 第 19 章：请求字段枚举验证 — 自定义校验注解
+
+> 本章讲解如何使用自定义注解实现请求字段的枚举值验证，确保接口参数的合法性。
+
+### 19.1 自定义枚举验证注解
+
+**为什么需要枚举验证？**
+- 接口参数需要限制在特定枚举范围内
+- 例如：`teachingMode` 只能是 `ONLINE` 或 `OFFLINE`
+- 使用注解可以减少重复的校验代码
+
+**注解定义：**
+
+```java
+@Documented
+@Constraint(validatedBy = {EnumValueValidator.class})
+@Target({ElementType.FIELD})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface EnumValue {
+    String message() default "字段值不符传入要求";
+    Class<? extends Enum<?>> enumClass();
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+```
+
+**验证器实现：**
+
+```java
+public class EnumValueValidator implements ConstraintValidator<EnumValue, String> {
+
+    private Class<? extends Enum<?>> enumClass;
+
+    @Override
+    public void initialize(EnumValue constraintAnnotation) {
+        enumClass = constraintAnnotation.enumClass();
+    }
+
+    @Override
+    public boolean isValid(String s, ConstraintValidatorContext constraintValidatorContext) {
+        if (StrUtil.isEmpty(s)) {
+            return true;  // 空值由其他注解处理
+        }
+        Enum<?>[] enumConstants = enumClass.getEnumConstants();
+        for (Enum<?> enumConstant : enumConstants) {
+            if (enumConstant.name().equals(s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+```
+
+### 19.2 教学模式枚举
+
+**枚举定义：**
+
+```java
+@AllArgsConstructor
+public enum TeachingModeEnum {
+    ONLINE("线上"),
+    OFFLINE("线下");
+
+    @Getter
+    private final String desc;
+}
+```
+
+**使用示例：**
+
+```java
+@Data
+public class CourseCreateReq {
+    @NotBlank(message = "课程名称不能为空")
+    private String courseName;
+
+    @NotNull(message = "课程天数不能为空")
+    @Min(value = 1, message = "课程天数不能小于1")
+    private Integer courseDays;
+
+    @NotBlank(message = "上课方式不能为空")
+    @EnumValue(enumClass = TeachingModeEnum.class, message = "上课方式只能是ONLINE或OFFLINE")
+    private String teachingMode;
+}
+```
+
+**为什么用 `enumClass` 参数？**
+- 一个注解可以验证任意枚举类
+- 不需要为每个枚举写一个专门的注解
+- 代码复用性高
+
+---
+
+## 第 20 章：学生端学习计划 — 前台接口设计
+
+> 本章讲解学生端学习计划的前台接口设计，展示如何为学生提供个性化的学习进度展示。
+
+### 20.1 学生端学习计划接口
+
+**为什么需要学生端学习计划接口？**
+- 学生需要查看自己的学习进度
+- 学生需要查看今日学习任务
+- 学生需要查看完整的学习日历
+
+**获取当前学习计划：**
+
+```java
+@Override
+public StudentLearningPlanCurrentRes current() {
+    StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
+    StudentLearningPlanEntity plan = learningPlanMapper.selectActiveByStudentId(student.getId());
+    StudentLearningPlanCurrentRes res = new StudentLearningPlanCurrentRes();
+    if (plan == null) {
+        res.setHasPlan(false);
+        res.setTotalDays(0);
+        return res;
+    }
+
+    List<StudentLearningCalendarEntity> calendars = calendarMapper.selectByPlanId(plan.getId());
+    res.setHasPlan(true);
+    res.setId(plan.getId());
+    res.setStartDate(plan.getStartDate());
+    res.setStatus(plan.getStatus());
+    res.setTotalDays(calendars.size());
+    if (!calendars.isEmpty()) {
+        res.setEndDate(calendars.get(calendars.size() - 1).getStudyDate());
+    }
+
+    CourseEntity course = courseMapper.selectById(plan.getCourseId());
+    if (course != null) {
+        res.setCourseName(course.getCourseName());
+    }
+
+    Date today = truncateDate(new Date());
+    calendars.stream()
+            .filter(item -> sameDay(item.getStudyDate(), today))
+            .findFirst()
+            .ifPresent(item -> {
+                res.setCurrentDayIndex(item.getDayIndex());
+                res.setTodayStageName(item.getStageName());
+            });
+    return res;
+}
+```
+
+**返回内容：**
+- 是否有学习计划
+- 计划开始/结束日期
+- 总学习天数
+- 今日学习进度（第几天、当前阶段）
+
+### 20.2 学习日历接口
+
+**获取学习日历：**
+
+```java
+@Override
+public List<StudentLearningCalendarFrontRes> calendar() {
+    StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
+    StudentLearningPlanEntity plan = learningPlanMapper.selectActiveByStudentId(student.getId());
+    if (plan == null) {
+        return List.of();
+    }
+    return calendarMapper.selectByPlanId(plan.getId()).stream()
+            .map(this::buildCalendarRes)
+            .toList();
+}
+```
+
+**日历内容：**
+- 每天的学习日期
+- 阶段名称
+- 全局天序号
+- 阶段内天序号
+- 学习状态
+
+---
+
+## 附录 D：新模块 Mapper 方法汇总
+
+### 回访模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `StudentFollowupTagMapper.insert` | 插入回访标签配置 | 创建配置 |
+| `StudentFollowupTagMapper.updateById` | 更新回访标签配置 | 修改配置 |
+| `StudentFollowupTagMapper.deleteById` | 删除回访标签配置 | 删除配置 |
+| `StudentFollowupTagMapper.selectById` | 查询配置详情 | 配置详情 |
+| `StudentFollowupTagMapper.selectPage` | 分页查询配置 | 配置列表 |
+| `StudentFollowupTagMapper.selectActiveList` | 查询所有启用配置 | 生成回访记录 |
+| `StudentFollowupRecordMapper.insertIgnore` | 插入回访记录（忽略重复） | 自动生成 |
+| `StudentFollowupRecordMapper.updateById` | 更新回访记录 | 完成/取消回访 |
+| `StudentFollowupRecordMapper.selectPage` | 分页查询记录 | 记录列表 |
+| `StudentFollowupRecordMapper.selectStats` | 统计回访数据 | 今日统计 |
+
+### 学生端学习计划模块
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `StudentLearningPlanMapper.selectActiveByStudentId` | 查询学生生效计划 | 学生端展示 |
+| `StudentLearningCalendarMapper.selectByPlanId` | 查询计划日历 | 学习日历 |
