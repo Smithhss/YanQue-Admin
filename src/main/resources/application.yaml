@@ -36,3 +36,15 @@ tos:
   bucket: ${YQ_TOS_BUCKET:yq-admin-11-dev}
   access-key: ${YQ_TOS_ACCESS_KEY:}
   secret-key: ${YQ_TOS_SECRET_KEY:}
+
+xxl:
+  job:
+    enabled: ${YQ_XXL_JOB_ENABLED:false}
+    admin-addresses: ${YQ_XXL_JOB_ADMIN_ADDRESSES:http://115.190.191.2:9000/xxl-job-admin}
+    access-token: ${YQ_XXL_JOB_ACCESS_TOKEN:default_token}
+    app-name: ${YQ_XXL_JOB_APP_NAME:yanque-admin}
+    address: ${YQ_XXL_JOB_ADDRESS:}
+    ip: ${YQ_XXL_JOB_IP:}
+    port: ${YQ_XXL_JOB_PORT:9999}
+    log-path: ${YQ_XXL_JOB_LOG_PATH:/tmp/yanque-admin/xxl-job}
+    log-retention-days: ${YQ_XXL_JOB_LOG_RETENTION_DAYS:30}

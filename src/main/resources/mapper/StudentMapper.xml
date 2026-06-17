@@ -88,6 +88,16 @@
         order by id desc
     </select>
 
+    <select id="selectFollowupCandidates" resultMap="StudentMap">
+        select <include refid="BaseColumns"/>
+        from student
+        where teaching_mode = 'ONLINE'
+          and status = 'ACTIVE'
+          and student_tag is not null
+          and student_tag != ''
+        order by id asc
+    </select>
+
     <select id="selectPage" resultMap="StudentMap">
         select <include refid="BaseColumns"/>
         from student

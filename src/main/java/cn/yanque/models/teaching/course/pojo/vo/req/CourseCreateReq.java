@@ -1,5 +1,7 @@
 package cn.yanque.models.teaching.course.pojo.vo.req;
 
+import cn.yanque.common.annotations.EnumValue;
+import cn.yanque.common.enums.TeachingModeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -27,6 +29,7 @@ public class CourseCreateReq {
     /** 上课方式 */
     @NotBlank(message = "上课方式不能为空")
     @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
+    @EnumValue(enumClass = TeachingModeEnum.class)
     private String teachingMode;
 
     /** 课程资料路径 */

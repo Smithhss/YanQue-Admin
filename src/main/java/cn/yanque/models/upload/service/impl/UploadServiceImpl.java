@@ -31,6 +31,8 @@ public class UploadServiceImpl implements UploadService {
 
     private static final String STUDENT_SOP_PREFIX = "student/sop/";
 
+    private static final String STUDENT_FOLLOWUP_PREFIX = "student/followup/";
+
     @Autowired
     private TosProperties tosProperties;
 
@@ -92,7 +94,8 @@ public class UploadServiceImpl implements UploadService {
                 && !normalizedObjectKey.startsWith(HOMEWORK_ANSWER_PREFIX)
                 && !normalizedObjectKey.startsWith(HOMEWORK_SUBMISSION_PREFIX)
                 && !normalizedObjectKey.startsWith(COURSE_HOMEWORK_TEMPLATE_PREFIX)
-                && !normalizedObjectKey.startsWith(STUDENT_SOP_PREFIX))) {
+                && !normalizedObjectKey.startsWith(STUDENT_SOP_PREFIX)
+                && !normalizedObjectKey.startsWith(STUDENT_FOLLOWUP_PREFIX))) {
             throw BusinessException.DateError.newInstance("对象Key不允许访问");
         }
         return normalizedObjectKey;
@@ -100,12 +103,12 @@ public class UploadServiceImpl implements UploadService {
 
     private void validateUploadFileType(String objectKey) {
         String lowerObjectKey = objectKey.toLowerCase();
-        if (lowerObjectKey.startsWith(STUDENT_SOP_PREFIX)) {
+        if (lowerObjectKey.startsWith(STUDENT_SOP_PREFIX) || lowerObjectKey.startsWith(STUDENT_FOLLOWUP_PREFIX)) {
             if (!lowerObjectKey.endsWith(".mp4")
                     && !lowerObjectKey.endsWith(".mov")
                     && !lowerObjectKey.endsWith(".m4v")
                     && !lowerObjectKey.endsWith(".webm")) {
-                throw BusinessException.DateError.newInstance("SOP只支持视频文件上传");
+                throw BusinessException.DateError.newInstance("只支持视频文件上传");
             }
             return;
         }
