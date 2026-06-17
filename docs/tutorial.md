@@ -907,16 +907,95 @@ LoginRes（响应对象 — 返回给前端，脱敏）
 | BO | pojo/bo/ | Service→Mapper 查询条件 | QueryUserBo |
 | Info | pojo/info/ | Service 内部聚合数据 | UserInfo |
 
-**BO（Business Object）**：Service 层传给 Mapper 层的查询参数封装。
-```java
-@Data
-public class QueryUserBo {
-    private List<Long> ids;
-    // 以后扩展：private String status; private String keyword;
-}
+#### BO — 查询条件封装
+
+**作用：** 把前端的查询参数从 VO 转成 Mapper 能用的查询条件。
+
+**典型流程：**
 ```
-- 直接传 `List<Long>` 也能用，但查询条件变多时就要改方法签名，所有调用方都要改
-- 用 BO 封装，加条件只需加字段，Mapper 方法签名不变
+前端请求 → StudentPageReq（VO）→ BeanUtils.copyProperties → QueryStudentBo（BO）→ Mapper.selectPage(bo)
+```
+
+**实例：**
+
+```java
+// 前端传来的 VO（含分页参数 + 查询条件）
+@Data
+public class StudentPageReq {
+    private Integer pageNum;
+    private Integer pageSize;
+    private String studentName;   // 按姓名搜
+    private String studentPhone;  // 按手机搜
+    private String status;        // 按状态筛
+}
+
+// BO（只有查询条件，不含分页）
+@Data
+public class QueryStudentBo {
+    private String studentName;
+    private String studentPhone;
+    private String status;
+}
+
+// Service 里转换
+QueryStudentBo query = new QueryStudentBo();
+BeanUtils.copyProperties(req, query);  // VO → BO，自动匹配同名字段
+studentMapper.selectPage(query);       // BO 传给 Mapper
+```
+
+**为什么不直接传 VO 给 Mapper？**
+- VO 里有 `pageNum`、`pageSize` 这些分页参数，Mapper 不需要
+- 以后加查询条件只需改 BO，Mapper 方法签名不变
+- 职责分离：VO 是"前端想查什么"，BO 是"Mapper 需要什么"
+
+#### Info — 内部聚合数据
+
+**作用：** Service 内部组装多表数据，不返回前端，只在方法间传递。
+
+**典型场景：** 登录时需要同时查用户、角色、权限三张表：
+
+```java
+// Info 聚合三张表的数据
+@Data
+public class UserInfo {
+    private SysUserEntity sysUserEntity;                    // 用户表
+    private List<SysRoleEntity> sysRoleEntityList;          // 角色表
+    private List<SysPermissionEntity> sysPermissionEntityList; // 权限表
+}
+
+// Service 里组装
+public UserInfo getUserInfo(Long id) {
+    UserInfo userInfo = new UserInfo();
+
+    // 1. 查用户
+    SysUserEntity user = sysUserMapper.selectById(id);
+    userInfo.setSysUserEntity(user);
+
+    // 2. 查角色
+    List<Long> roleIds = sysUserMapper.selectRoleIdsByUserId(id);
+    List<SysRoleEntity> roles = sysRoleMapper.selectList(...);
+    userInfo.setSysRoleEntityList(roles);
+
+    // 3. 查权限
+    List<Long> permissionIds = sysRoleMapper.selectPermissionIdsByRoleId(roleIds);
+    List<SysPermissionEntity> permissions = ...;
+    userInfo.setSysPermissionEntityList(permissions);
+
+    return userInfo;  // 一次性返回所有数据
+}
+
+// 登录方法里使用
+UserInfo userInfo = getUserInfo(userId);
+// 从 Info 里取出各部分，转成 VO 返回给前端
+loginRes.setUserDetailRes(... BeanUtils.copyProperties(userInfo.getSysUserEntity(), ...));
+loginRes.setRoleDetailResList(... userInfo.getSysRoleEntityList() ...);
+loginRes.setPermissionDetailResList(... userInfo.getSysPermissionEntityList() ...);
+```
+
+**为什么不用 Map 或直接返回 Entity？**
+- `Map<String, Object>` 没有类型安全，取值要强转，容易出错
+- 直接返回单个 Entity 无法表达"多表聚合"的语义
+- Info 是自描述的：看 `UserInfo` 类就知道登录需要查哪些表
 
 ---
 
