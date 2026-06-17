@@ -48,8 +48,32 @@ public class StudentPageRes {
     @Schema(description = "产品内容")
     private String productContent;
 
+    @Schema(description = "学生标签")
+    private String studentTag;
+
     @Schema(description = "状态")
     private String status;
+
+    @Schema(description = "是否已分配入学SOP")
+    private Boolean sopAssigned;
+
+    @Schema(description = "SOP记录ID")
+    private Long sopId;
+
+    @Schema(description = "SOP导师ID")
+    private Long sopMentorId;
+
+    @Schema(description = "SOP导师名称")
+    private String sopMentorName;
+
+    @Schema(description = "SOP视频对象Key")
+    private String sopVideoObjectKey;
+
+    @Schema(description = "SOP视频文件名")
+    private String sopVideoFileName;
+
+    @Schema(description = "SOP时间")
+    private Date sopTime;
 
     @Schema(description = "创建时间")
     private Date createdAt;

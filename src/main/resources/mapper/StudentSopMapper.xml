@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.student.mapper.StudentSopMapper">
+
+    <resultMap id="StudentSopMap" type="cn.yanque.models.student.pojo.entity.StudentSopEntity">
+        <id property="id" column="id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="mentorId" column="mentor_id"/>
+        <result property="sopVideoObjectKey" column="sop_video_object_key"/>
+        <result property="sopVideoFileName" column="sop_video_file_name"/>
+        <result property="sopTime" column="sop_time"/>
+        <result property="status" column="status"/>
+        <result property="remark" column="remark"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, student_id, mentor_id, sop_video_object_key, sop_video_file_name, sop_time, status, remark, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into student_sop (
+            student_id,
+            mentor_id,
+            sop_video_object_key,
+            sop_video_file_name,
+            sop_time,
+            status,
+            remark,
+            created_at,
+            updated_at
+        )
+        values (
+            #{studentId},
+            #{mentorId},
+            #{sopVideoObjectKey},
+            #{sopVideoFileName},
+            #{sopTime},
+            #{status},
+            #{remark},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="StudentSopMap">
+        select <include refid="BaseColumns"/>
+        from student_sop
+        where id = #{id}
+    </select>
+
+    <select id="selectActiveByStudentId" resultMap="StudentSopMap">
+        select <include refid="BaseColumns"/>
+        from student_sop
+        where student_id = #{studentId}
+          and status in ('ASSIGNED', 'COMPLETED')
+        order by id desc
+        limit 1
+    </select>
+
+    <select id="selectActiveByStudentIds" resultMap="StudentSopMap">
+        select <include refid="BaseColumns"/>
+        from student_sop
+        where status in ('ASSIGNED', 'COMPLETED')
+          and student_id in
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+        order by id desc
+    </select>
+
+    <select id="selectPage" resultMap="StudentSopMap">
+        select <include refid="BaseColumns"/>
+        from student_sop
+        <where>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+            <if test="mentorId != null">
+                and mentor_id = #{mentorId}
+            </if>
+            <if test="studentName != null and studentName != ''">
+                and exists (
+                    select 1
+                    from student s
+                    where s.id = student_sop.student_id
+                      and s.student_name like concat('%', #{studentName}, '%')
+                )
+            </if>
+            <if test="studentPhone != null and studentPhone != ''">
+                and exists (
+                    select 1
+                    from student s
+                    where s.id = student_sop.student_id
+                      and s.student_phone like concat('%', #{studentPhone}, '%')
+                )
+            </if>
+        </where>
+        order by id desc
+    </select>
+
+    <update id="completeSop">
+        update student_sop
+        set sop_video_object_key = #{sopVideoObjectKey},
+            sop_video_file_name = #{sopVideoFileName},
+            sop_time = #{sopTime},
+            status = #{status},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+</mapper>

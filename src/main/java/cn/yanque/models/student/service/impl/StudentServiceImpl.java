@@ -4,22 +4,32 @@ import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.dataConfig.service.SysConfig;
+import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.common.enums.ActiveEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.product.mapper.ProductMapper;
 import cn.yanque.models.order.product.pojo.entity.ProductEntity;
 import cn.yanque.models.student.mapper.StudentMapper;
 import cn.yanque.models.student.mapper.StudentProductMapper;
+import cn.yanque.models.student.mapper.StudentSopMapper;
 import cn.yanque.models.student.pojo.bo.QueryStudentBo;
 import cn.yanque.models.student.pojo.entity.StudentEntity;
 import cn.yanque.models.student.pojo.entity.StudentProductEntity;
+import cn.yanque.models.student.pojo.entity.StudentSopEntity;
 import cn.yanque.models.student.pojo.vo.req.StudentAssignClassReq;
 import cn.yanque.models.student.pojo.vo.req.StudentPageReq;
+import cn.yanque.models.student.pojo.vo.req.StudentSopAssignReq;
+import cn.yanque.models.student.pojo.vo.req.StudentTagUpdateReq;
 import cn.yanque.models.student.pojo.vo.res.StudentAssignClassRes;
 import cn.yanque.models.student.pojo.vo.res.StudentPageRes;
+import cn.yanque.models.student.pojo.vo.res.StudentSopAssignRes;
+import cn.yanque.models.student.pojo.vo.res.StudentTagUpdateRes;
 import cn.yanque.models.student.service.StudentService;
 import cn.yanque.models.teaching.clazz.mapper.ClazzMapper;
 import cn.yanque.models.teaching.clazz.pojo.entity.ClazzEntity;
+import cn.yanque.models.users.mapper.SysUserMapper;
+import cn.yanque.models.users.pojo.entity.SysUserEntity;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
@@ -28,10 +38,13 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +52,8 @@ public class StudentServiceImpl implements StudentService {
 
     private static final String TEACHING_MODE_ONLINE = "ONLINE";
     private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
+    private static final String SOP_STATUS_ASSIGNED = "ASSIGNED";
+    private static final String ROLE_CODE_ADVISOR = "ADVISOR";
 
     @Autowired
     private StudentMapper studentMapper;
@@ -47,10 +62,19 @@ public class StudentServiceImpl implements StudentService {
     private StudentProductMapper studentProductMapper;
 
     @Autowired
+    private StudentSopMapper studentSopMapper;
+
+    @Autowired
     private ProductMapper productMapper;
 
     @Autowired
     private ClazzMapper clazzMapper;
+
+    @Autowired
+    private SysUserMapper sysUserMapper;
+
+    @Autowired
+    private SysConfigService sysConfigService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -82,8 +106,17 @@ public class StudentServiceImpl implements StudentService {
 
         Map<Long, String> productContentMap = buildProductContentMap(list);
         Map<Long, String> classPeriodMap = buildClassPeriodMap(list);
-        List<StudentPageRes> records = list.stream().map(student -> buildStudentPageRes(student, productContentMap, classPeriodMap)).toList();
+        Map<Long, StudentSopEntity> sopMap = buildStudentSopMap(list);
+        Map<Long, String> mentorNameMap = buildMentorNameMap(sopMap);
+        List<StudentPageRes> records = list.stream()
+                .map(student -> buildStudentPageRes(student, productContentMap, classPeriodMap, sopMap, mentorNameMap))
+                .toList();
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
+    }
+
+    @Override
+    public List<String> listStudentTagOptions() {
+        return parseStudentTagOptions();
     }
 
     @Override
@@ -104,6 +137,57 @@ public class StudentServiceImpl implements StudentService {
         StudentAssignClassRes res = new StudentAssignClassRes();
         res.setStudentId(id);
         res.setClassId(req.getClassId());
+        return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public StudentSopAssignRes assignSop(Long id, StudentSopAssignReq req) {
+        StudentEntity student = studentMapper.selectById(id);
+        if (student == null) {
+            throw BusinessException.DateError.newInstance("学生不存在");
+        }
+        if (!TEACHING_MODE_ONLINE.equals(student.getTeachingMode())) {
+            throw BusinessException.DateError.newInstance("只有线上学生需要分配入学SOP");
+        }
+        if (!isActiveAdvisor(req.getMentorId())) {
+            throw BusinessException.UserNotExist.newInstance("导师不存在");
+        }
+        if (studentSopMapper.selectActiveByStudentId(id) != null) {
+            throw BusinessException.DateError.newInstance("该学生已分配入学SOP");
+        }
+
+        Date now = new Date();
+        StudentSopEntity studentSop = new StudentSopEntity();
+        studentSop.setStudentId(id);
+        studentSop.setMentorId(req.getMentorId());
+        studentSop.setStatus(SOP_STATUS_ASSIGNED);
+        studentSop.setCreatedAt(now);
+        studentSop.setUpdatedAt(now);
+        studentSopMapper.insert(studentSop);
+
+        StudentSopAssignRes res = new StudentSopAssignRes();
+        res.setId(studentSop.getId());
+        res.setStudentId(id);
+        return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public StudentTagUpdateRes updateStudentTag(Long id, StudentTagUpdateReq req) {
+        if (studentMapper.selectById(id) == null) {
+            throw BusinessException.DateError.newInstance("学生不存在");
+        }
+
+        String studentTag = normalizeStudentTag(req.getStudentTag());
+        if (studentTag != null && !parseStudentTagOptions().contains(studentTag)) {
+            throw BusinessException.DateError.newInstance("学生标签不在配置范围内");
+        }
+
+        studentMapper.updateStudentTag(id, studentTag);
+        StudentTagUpdateRes res = new StudentTagUpdateRes();
+        res.setStudentId(id);
+        res.setStudentTag(studentTag);
         return res;
     }
 
@@ -162,12 +246,90 @@ public class StudentServiceImpl implements StudentService {
                 .collect(Collectors.toMap(ClazzEntity::getId, ClazzEntity::getClassPeriod));
     }
 
-    private StudentPageRes buildStudentPageRes(StudentEntity student, Map<Long, String> productContentMap, Map<Long, String> classPeriodMap) {
+    private StudentPageRes buildStudentPageRes(StudentEntity student,
+                                               Map<Long, String> productContentMap,
+                                               Map<Long, String> classPeriodMap,
+                                               Map<Long, StudentSopEntity> sopMap,
+                                               Map<Long, String> mentorNameMap) {
         StudentPageRes res = new StudentPageRes();
         BeanUtils.copyProperties(student, res);
         res.setProductContent(productContentMap.get(student.getId()));
         res.setClassPeriod(student.getClassId() == null ? null : classPeriodMap.get(student.getClassId()));
+        StudentSopEntity studentSop = sopMap.get(student.getId());
+        res.setSopAssigned(studentSop != null);
+        if (studentSop != null) {
+            res.setSopId(studentSop.getId());
+            res.setSopMentorId(studentSop.getMentorId());
+            res.setSopMentorName(mentorNameMap.get(studentSop.getMentorId()));
+            res.setSopVideoObjectKey(studentSop.getSopVideoObjectKey());
+            res.setSopVideoFileName(studentSop.getSopVideoFileName());
+            res.setSopTime(studentSop.getSopTime());
+        }
         return res;
+    }
+
+    private Map<Long, StudentSopEntity> buildStudentSopMap(List<StudentEntity> students) {
+        List<Long> studentIds = students.stream().map(StudentEntity::getId).toList();
+        if (studentIds.isEmpty()) {
+            return Map.of();
+        }
+        return studentSopMapper.selectActiveByStudentIds(studentIds).stream()
+                .collect(Collectors.toMap(StudentSopEntity::getStudentId, item -> item, (oldItem, newItem) -> oldItem));
+    }
+
+    private Map<Long, String> buildMentorNameMap(Map<Long, StudentSopEntity> sopMap) {
+        List<Long> mentorIds = sopMap.values().stream()
+                .map(StudentSopEntity::getMentorId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (mentorIds.isEmpty()) {
+            return Map.of();
+        }
+        return sysUserMapper.selectByIds(mentorIds).stream()
+                .collect(Collectors.toMap(SysUserEntity::getId, this::getUserShowName));
+    }
+
+    private String getUserShowName(SysUserEntity user) {
+        if (user == null) {
+            return null;
+        }
+        if (user.getRealName() != null && !user.getRealName().isBlank()) {
+            return user.getRealName();
+        }
+        if (user.getNickname() != null && !user.getNickname().isBlank()) {
+            return user.getNickname();
+        }
+        return user.getUsername();
+    }
+
+    private boolean isActiveAdvisor(Long mentorId) {
+        if (mentorId == null) {
+            return false;
+        }
+        return sysUserMapper.selectPage(null, ActiveEnum.ACTIVE.name(), ROLE_CODE_ADVISOR).stream()
+                .anyMatch(user -> mentorId.equals(user.getId()));
+    }
+
+    private List<String> parseStudentTagOptions() {
+        String value = sysConfigService.get(SysConfig.studentTagOptions);
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+
+        // 支持逗号、顿号、分号、换行分隔，便于在系统配置里维护。
+        Set<String> options = Arrays.stream(value.split("[,，、;；\\n\\r]+"))
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        return List.copyOf(options);
+    }
+
+    private String normalizeStudentTag(String studentTag) {
+        if (studentTag == null || studentTag.isBlank()) {
+            return null;
+        }
+        return studentTag.trim();
     }
 
     private String createStudentNo() {

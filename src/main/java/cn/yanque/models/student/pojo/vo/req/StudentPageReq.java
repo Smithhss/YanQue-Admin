@@ -26,6 +26,9 @@ public class StudentPageReq {
     @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
     private String teachingMode;
 
+    @Schema(description = "学生标签")
+    private String studentTag;
+
     @Schema(description = "状态：ACTIVE启用，INACTIVE停用")
     private String status;
 

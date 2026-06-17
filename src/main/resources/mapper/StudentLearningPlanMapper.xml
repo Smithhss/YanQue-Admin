@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.student.mapper.StudentLearningPlanMapper">
+
+    <resultMap id="StudentLearningPlanMap" type="cn.yanque.models.student.pojo.entity.StudentLearningPlanEntity">
+        <id property="id" column="id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="courseId" column="course_id"/>
+        <result property="sopId" column="sop_id"/>
+        <result property="startDate" column="start_date"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, student_id, course_id, sop_id, start_date, status, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into student_learning_plan
+        (student_id, course_id, sop_id, start_date, status, created_at, updated_at)
+        values
+        (#{studentId}, #{courseId}, #{sopId}, #{startDate}, #{status}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <select id="selectById" resultMap="StudentLearningPlanMap">
+        select <include refid="BaseColumns"/>
+        from student_learning_plan
+        where id = #{id}
+    </select>
+
+    <select id="selectActiveByStudentId" resultMap="StudentLearningPlanMap">
+        select <include refid="BaseColumns"/>
+        from student_learning_plan
+        where student_id = #{studentId}
+          and status = 'ACTIVE'
+        order by id desc
+        limit 1
+    </select>
+
+    <select id="selectActiveByStudentIds" resultMap="StudentLearningPlanMap">
+        select <include refid="BaseColumns"/>
+        from student_learning_plan
+        where status = 'ACTIVE'
+          and student_id in
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+        order by id desc
+    </select>
+
+    <select id="selectPage" resultMap="StudentLearningPlanMap">
+        select <include refid="BaseColumns"/>
+        from student_learning_plan
+        <where>
+            <if test="courseId != null">
+                and course_id = #{courseId}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+            <if test="studentName != null and studentName != ''">
+                and exists (
+                    select 1 from student s
+                    where s.id = student_learning_plan.student_id
+                      and s.student_name like concat('%', #{studentName}, '%')
+                )
+            </if>
+            <if test="studentPhone != null and studentPhone != ''">
+                and exists (
+                    select 1 from student s
+                    where s.id = student_learning_plan.student_id
+                      and s.student_phone like concat('%', #{studentPhone}, '%')
+                )
+            </if>
+        </where>
+        order by id desc
+    </select>
+</mapper>

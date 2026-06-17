@@ -23,6 +23,9 @@ public class QueryStudentBo {
     /** 上课方式：ONLINE线上，OFFLINE线下 */
     private String teachingMode;
 
+    /** 学生标签 */
+    private String studentTag;
+
     /** 状态 */
     private String status;
 }

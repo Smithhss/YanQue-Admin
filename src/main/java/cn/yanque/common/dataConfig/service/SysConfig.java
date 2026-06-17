@@ -17,4 +17,9 @@ public class SysConfig {
 
     public static SystemConfigItem<Long> tosPreviewExpireSeconds = new SystemConfigItem<>("tos.preview.expire.seconds", 300L, Long.class);
 
+    public static SystemConfigItem<String> studentTagOptions = new SystemConfigItem<>(
+            "student.tag.options",
+            "普通学员,摆烂学员,失联学员,已就业学员,高潜力学员,持续关注学员",
+            String.class);
+
 }
