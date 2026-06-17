@@ -2049,7 +2049,86 @@ sequenceDiagram
 8. 定义 Response VO（出参控制）
 ```
 
-### 6.2 Entity — 数据库映射
+### 6.2 Controller 层模式
+
+```java
+@RestController
+@RequestMapping("/api/campus")
+@Tag(name = "CampusController", description = "校区管理")       // Swagger 分组
+public class CampusController {
+
+    @Autowired
+    private CampusService campusService;
+
+    @PostMapping                                                     // POST 新增
+    @Operation(description = "添加校区")                            // Swagger 接口描述
+    public ApiResponse<CampusCreateRes> addCampus(
+            @Valid @RequestBody CampusCreateReq req) {               // @Valid 校验 + @RequestBody 接收 JSON
+        return ApiResponse.success(campusService.addCampus(req));
+    }
+
+    @PutMapping("{id}")                                              // PUT 修改，ID 在路径中
+    @Operation(description = "修改校区")
+    public ApiResponse<CampusUpdateRes> updateCampus(
+            @Parameter(description = "校区ID") @PathVariable Long id,  // @PathVariable 取路径参数
+            @Valid @RequestBody CampusUpdateReq req) {
+        req.setId(id);                                               // 把路径 ID 设到 req 对象中
+        return ApiResponse.success(campusService.updateCampus(req));
+    }
+
+    @DeleteMapping("{id}")                                           // DELETE 删除
+    @Operation(description = "删除校区")
+    public ApiResponse<CampusDeleteRes> deleteCampus(
+            @Parameter(description = "校区ID") @PathVariable Long id) {
+        return ApiResponse.success(campusService.deleteCampus(id));
+    }
+
+    @GetMapping("{id}")                                              // GET 单个查询
+    @Operation(description = "根据ID查询校区")
+    public ApiResponse<CampusDetailRes> getCampusById(
+            @Parameter(description = "校区ID") @PathVariable Long id) {
+        return ApiResponse.success(campusService.getCampusById(id));
+    }
+
+    @GetMapping                                                      // GET 分页查询
+    @Operation(description = "分页查询校区")
+    public ApiResponse<PageResult<CampusPageRes>> pageCampus(
+            @Valid @ModelAttribute CampusPageReq req) {              // @ModelAttribute 绑定查询参数
+        return ApiResponse.success(campusService.pageCampus(req));
+    }
+}
+```
+
+**Controller 层关键注解：**
+
+| 注解 | 位置 | 作用 |
+|------|------|------|
+| `@RestController` | 类 | 壳：`@Controller` + `@ResponseBody`，返回值自动序列化 JSON |
+| `@RequestMapping("/api/campus")` | 类 | URL 前缀，所有接口都以 `/api/campus` 开头 |
+| `@PostMapping` / `@PutMapping` / `@DeleteMapping` / `@GetMapping` | 方法 | HTTP 方法 + 路径 |
+| `@Valid` | 参数 | 触发 Request VO 上的校验注解（`@NotBlank` 等） |
+| `@RequestBody` | 参数 | 从请求体解析 JSON，用于 POST/PUT |
+| `@ModelAttribute` | 参数 | 从 URL 查询参数绑定，用于 GET 分页查询 |
+| `@PathVariable` | 参数 | 从 URL 路径取参数（如 `{id}`） |
+| `@Tag` / `@Operation` / `@Parameter` | 类/方法/参数 | Swagger 文档注解 |
+
+**为什么 GET 分页用 `@ModelAttribute` 而非 `@RequestBody`？**
+- GET 请求没有请求体，参数在 URL 里：`/api/campus?pageNum=1&pageSize=10&keyword=xxx`
+- `@ModelAttribute` 自动将查询参数绑定到 VO 对象的同名字段
+- POST/PUT 用 `@RequestBody` 从请求体解析 JSON
+
+**为什么修改接口要把路径 ID 设到 req 里？**
+```java
+@PutMapping("{id}")
+public ApiResponse<CampusUpdateRes> updateCampus(
+        @PathVariable Long id,           // ID 从路径取：/api/campus/123
+        @RequestBody CampusUpdateReq req) {  // 其他字段从请求体取
+    req.setId(id);  // 合并到一个对象里传给 Service
+```
+- ID 在路径中（RESTful 规范），其他字段在请求体中
+- 合并到 req 对象，Service 层只需一个参数
+
+### 6.3 Entity — 数据库映射
 
 ```java
 @Data
@@ -2067,7 +2146,7 @@ public class CampusEntity {
 - MyBatis 默认开启 `mapUnderscoreToCamelCase`，自动转换
 - 或者在 Mapper XML 的 `<resultMap>` 里手动映射
 
-### 6.3 Mapper 接口 + XML
+### 6.4 Mapper 接口 + XML
 
 **接口：**
 ```java
@@ -2108,7 +2187,7 @@ public interface CampusMapper {
 - 插入后自动把数据库生成的主键 ID 回填到 Entity 的 `id` 字段
 - 这样插入后可以直接 `campus.getId()` 获取 ID，无需再查一次
 
-### 6.4 Service 实现 — 分页查询
+### 6.5 Service 实现 — 分页查询
 
 ```java
 @Override
@@ -2138,7 +2217,7 @@ public PageResult<CampusPageRes> pageCampus(CampusPageReq req) {
 - 只影响**紧跟其后的第一条 SQL**
 - 如果中间有其他 SQL（如先查总数再查列表），分页会应用到错误的 SQL 上
 
-### 6.5 Service 实现 — 新增
+### 6.6 Service 实现 — 新增
 
 ```java
 @Override
@@ -2168,7 +2247,7 @@ public CampusCreateRes addCampus(CampusCreateReq req) {
 - `rollbackFor = Exception.class` 让所有异常都回滚，更安全
 - 写操作（insert/update/delete）都应该加事务
 
-### 6.6 Service 实现 — 修改和删除
+### 6.7 Service 实现 — 修改和删除
 
 ```java
 // 修改：检查影响行数
@@ -2189,7 +2268,7 @@ if (rows == 0) {
 - 前端以为删除成功了，但数据本来就不在，可能导致业务逻辑错误
 - 检查后抛异常，前端可以明确知道"数据不存在"
 
-### 6.7 唯一约束与 DuplicateKeyException
+### 6.8 唯一约束与 DuplicateKeyException
 
 ```java
 try {
@@ -2206,7 +2285,7 @@ try {
 - 直接插入 + 捕获异常更简洁，数据库唯一索引是最终保障
 - 这叫**乐观策略**：先做，失败了再处理
 
-### 6.8 先删后插：角色权限分配
+### 6.9 先删后插：角色权限分配
 
 ```java
 public void resetRolePermissions(Long roleId, List<Long> permissionIds) {
@@ -2228,7 +2307,7 @@ public void resetRolePermissions(Long roleId, List<Long> permissionIds) {
 - 重新生成课表（`deleteByClassId` + `batchInsert`）
 - 值班按日期保存（`deleteByDutyDate` + 逐条 insert）
 
-### 6.9 主从表级联：课程与课程详情
+### 6.10 主从表级联：课程与课程详情
 
 ```java
 // 删除课程时，先删课程详情
