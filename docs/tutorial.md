@@ -1669,15 +1669,15 @@ PendingPaySignInterceptor → StudentJwtAuthInterceptor → StudentSignIntercept
 // ===== 后台管理拦截器 =====
 registry.addInterceptor(jwtAuthInterceptor)          // 1. 先解析 JWT，拿到 userId
     .addPathPatterns("/api/**")
-    .excludePathPatterns("/api/sysUser/login", ...);
+    .excludePathPatterns("/api/sysUser/login", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**");
 
 registry.addInterceptor(signInterceptor)              // 2. 再验签（需要 userId）
     .addPathPatterns("/api/**")
-    .excludePathPatterns("/api/sysUser/login", ...);
+    .excludePathPatterns("/api/sysUser/login", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**");
 
 registry.addInterceptor(permissionInterceptor)        // 3. 最后检查权限（需要 userId）
     .addPathPatterns("/api/**")
-    .excludePathPatterns("/api/sysUser/login", ...);
+    .excludePathPatterns("/api/sysUser/login", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**");
 
 // ===== 学生端拦截器 =====
 registry.addInterceptor(pendingPaySignInterceptor)    // 4. 待支付接口单独验签（无JWT）
@@ -1698,11 +1698,64 @@ registry.addInterceptor(studentSignInterceptor)        // 6. 学生端验签
 | `/api/sysUser/login` | 登录时还没有 token 和签名密钥 |
 | `/student/login` | 学生登录没有 token |
 | `/student/pending/**` | 待支付接口单独处理（只有验签，没有 JWT） |
-| `/swagger-ui/**` | 本地开发调试接口文档 |
+| `/v3/api-docs/**` | Swagger API 文档 |
+| `/swagger-ui.html` | Swagger 首页 |
+| `/swagger-ui/**` | Swagger 静态资源 |
+
+**PermissionInterceptor 的两种放行机制：**
+
+除了路径排除，权限拦截器还有两种特殊放行：
+
+1. **超级管理员放行：** 角色代码为 `SUPER_ADMIN` 的用户直接跳过权限校验，方便后台初始化和教学演示
+2. **`@NoAuthCheck` 注解放行：** 标注了该注解的方法或类跳过权限校验，适合少量公开接口
+
+```java
+// @NoAuthCheck 注解定义
+@Target({ ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface NoAuthCheck {}
+```
+
+**StudentJwtAuthInterceptor 的 ThreadLocal 机制：**
+
+学生端拦截器除了验证 JWT，还会将学生信息存入 `StudentThreadLocal`，供后续 Service 层直接使用：
+
+```java
+// 前置：验证通过后存入 ThreadLocal
+StudentEntity student = studentService.selectByStudentId(studentId);
+StudentThreadLocal.set(student);
+
+// 后置：请求完成后清理 ThreadLocal（防止内存泄漏）
+@Override
+public void afterCompletion(...) {
+    StudentThreadLocal.remove();
+}
+```
+
+Service 层通过 `StudentThreadLocal.get()` 获取当前登录学生，无需从 Controller 层传参。
+
+**PendingPaySignInterceptor — 待支付接口的特殊处理：**
+
+待支付接口（`/student/pending/**`）的学生尚未完成注册，没有正式 JWT，因此使用独立的认证机制：
+
+| Header | 说明 |
+|--------|------|
+| `X-Pending-Pay-Token` | 待支付专用 JWT（包含 phone + prepayOrderNo） |
+| `X-Timestamp` | 时间戳 |
+| `X-Nonce` | 随机数 |
+| `X-Sign` | HMAC-SHA256 签名 |
+
+验证流程：
+1. 解析 `X-Pending-Pay-Token` JWT，提取 phone 和 prepayOrderNo
+2. 从 Redis 读取待支付状态（包含 signSecret）
+3. 验证时间戳、nonce、签名
+4. 检查预支付订单状态是否为 `PENDING_PAYMENT`
+5. 通过后将 phone 和 prepayOrderNo 存入 request attribute
 
 **为什么 `/student/pending/**` 要单独处理？**
 - 学生下单前还没有 token（未注册），但需要验签防篡改
 - 所以 `pendingPaySignInterceptor` 只验签不验 JWT
+- 使用独立的 `X-Pending-Pay-Token` 而非 `Authorization`，与正式登录区分
 
 ---
 
