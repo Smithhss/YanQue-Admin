@@ -39,7 +39,7 @@ tos:
 
 xxl:
   job:
-    enabled: ${YQ_XXL_JOB_ENABLED:true}
+    enabled: ${YQ_XXL_JOB_ENABLED:false}
     admin-addresses: ${YQ_XXL_JOB_ADMIN_ADDRESSES:http://115.190.191.2:9000/xxl-job-admin}
     access-token: ${YQ_XXL_JOB_ACCESS_TOKEN:default_token}
     app-name: ${YQ_XXL_JOB_APP_NAME:yanque-admin}
