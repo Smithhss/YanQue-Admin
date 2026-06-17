@@ -2398,14 +2398,55 @@ public class ControllerLogAspect {
 **关键方法说明：**
 | 方法 | 作用 |
 |------|------|
-| `buildArgsLog()` | 格式化请求参数，方便排查 |
-| `sanitizeObject()` | 敏感字段脱敏（密码、手机号等） |
-| `toJson()` | 将返回对象转为 JSON 字符串打印 |
-| `getCurrentRequest()` | 从 Spring 上下文获取当前请求对象 |
+| `buildArgsLog()` | 格式化请求参数，过滤掉 Request/Response/MultipartFile，只保留业务参数 |
+| `sanitizeObject()` | 递归脱敏：支持数组、集合、Map、对象，遍历到父类字段 |
+| `toJson()` | 将返回对象转为 JSON 字符串，超过 4000 字符自动截断 |
+| `getCurrentRequest()` | 通过 `RequestContextHolder` 获取当前请求对象 |
+| `isSensitiveField()` | 判断字段名是否含 password/secret/token |
+| `mask()` | 脱敏处理：`13800138000` → `13****00`，短值直接 `****` |
+
+**参数过滤规则：**
+```java
+private boolean shouldIgnore(Object arg) {
+    return arg == null
+            || arg instanceof ServletRequest    // HttpServletRequest 等
+            || arg instanceof ServletResponse   // HttpServletResponse 等
+            || arg instanceof MultipartFile;    // 文件上传参数
+}
+```
+- `ServletRequest`/`ServletResponse`：框架对象，打印无意义
+- `MultipartFile`：文件内容太大，只打印文件名和大小
+
+**`sanitizeObject()` 递归脱敏逻辑：**
+```
+sanitizeObject(value)
+  ├─ null → 返回 null
+  ├─ MultipartFile → {fileName, size}
+  ├─ 基本类型/字符串/枚举 → 原值返回
+  ├─ 数组 → 递归处理每个元素
+  ├─ Iterable（List/Set）→ 递归处理每个元素
+  ├─ Map → 递归处理每个 value，key 是敏感字段则脱敏
+  ├─ Java/Spring 框架类 → toString() 直接返回
+  └─ 业务对象 → 反射遍历字段（含父类），敏感字段脱敏
+```
+
+**日志截断保护：**
+```java
+private static final int MAX_LOG_LENGTH = 4000;
+
+private String truncate(String value) {
+    if (value == null || value.length() <= MAX_LOG_LENGTH) {
+        return value;
+    }
+    return value.substring(0, MAX_LOG_LENGTH) + "...(truncated)";
+}
+```
+- 防止大对象（如列表查询返回几百条记录）撑爆日志文件
+- 超过 4000 字符自动截断，追加 `...(truncated)`
 
 **实际日志效果：**
 ```
-接口开始: uri=/api/student/login, httpMethod=POST, controller=StudentController#login, args={phone: "138****1234", password: "***"}
+接口开始: uri=/api/student/login, httpMethod=POST, controller=StudentController#login, args=[{name:"phone",value:"138****1234"},{name:"password",value:"****"}]
 接口结束: uri=/api/student/login, controller=StudentController#login, cost=58ms, result={"code":200,"data":{...}}
 ```
 
