@@ -494,168 +494,173 @@ graph TB
 
     subgraph Spring Boot 应用
         subgraph Filter 层
-            GF[RequestGuidFilter]
+            GF[RequestGuidFilter<br/>分配请求唯一ID]
         end
 
-        subgraph Interceptor 层
-            JI[JwtAuthInterceptor]
-            SI[SignInterceptor]
-            PI[PermissionInterceptor]
-            SJI[StudentJwtAuthInterceptor]
+        subgraph 管理端拦截器链 /admin/**
+            JI[JwtAuthInterceptor<br/>JWT 身份认证]
+            SI[SignInterceptor<br/>签名校验]
+            PI[PermissionInterceptor<br/>RBAC 权限校验]
         end
 
-        subgraph Controller 层
-            UC[UserController]
-            CC[CampusController]
-            CRC[CourseController]
-            SC[ScheduleController]
-            DC[DutyController]
-            HC[HomeworkController]
-            OC[OrderController]
-            EC[ExamController]
-            STC[StudentController]
-            SFC[StudentFollowupController]
-            SLC[StudentLearningPlanController]
-            UPC[UploadController]
+        subgraph 学生端拦截器链 /student/**
+            SJI[StudentJwtAuthInterceptor<br/>学生 JWT 认证]
+        end
+
+        subgraph Controller 层 — 按业务域分组
+            subgraph 系统管理
+                UC[UserController]
+                DCC[DataConfigController]
+            end
+            subgraph 教学管理
+                CC[CampusController]
+                CLC[ClazzController]
+                CRC[CourseController]
+                SC[ScheduleController]
+                DC[DutyController]
+                HC[HomeworkController]
+            end
+            subgraph 订单管理
+                OC[OrderController]
+                RFC[RefundController]
+            end
+            subgraph 考试管理
+                QC[QuestionController]
+                PC[PaperController]
+                EC[ExamController]
+            end
+            subgraph 学生管理（后台）
+                STC[StudentController]
+                SFC[StudentFollowupController]
+                SLC[StudentLearningPlanController]
+            end
+            subgraph 学生前台 /studentFront/**
+                SFB[StudentFrontBiz]
+            end
+            subgraph 文件服务
+                UPC[UploadController]
+            end
         end
 
         subgraph Service 层
-            US[UserService]
-            CS[CampusService]
-            CRS[CourseService]
-            SS[ScheduleService]
-            DS[DutyService]
-            HS[HomeworkService]
-            OS[OrderService]
-            ES[ExamService]
-            STS[StudentService]
-            SFS[StudentFollowupService]
-            SLS[StudentLearningPlanService]
-            UPS[UploadService]
+            SVC[各模块 ServiceImpl<br/>业务逻辑 · 事务 · VO 转换]
         end
 
         subgraph Mapper 层
-            UM[UserMapper]
-            CM[CampusMapper]
-            CRM[CourseMapper]
-            SM[ScheduleMapper]
-            DM[DutyMapper]
-            HM[HomeworkMapper]
-            OM[OrderMapper]
-            EM[ExamMapper]
-            STM[StudentMapper]
-            SFM[StudentFollowupMapper]
-            SLM[StudentLearningPlanMapper]
+            MAP[各模块 Mapper + XML<br/>SQL 执行 · 结果映射]
+        end
+
+        subgraph 定时任务
+            XXL[XXL-Job 执行器<br/>回访记录自动生成]
         end
     end
 
     subgraph 数据存储
-        DB[(MySQL)]
-        RD[(Redis)]
-        TOS[(TOS 对象存储)]
+        DB[(MySQL<br/>业务数据)]
+        RD[(Redis<br/>缓存 / 签名密钥)]
+        TOS[(TOS 对象存储<br/>文件 / 视频 / 图片)]
     end
 
-    BF --> JI
-    SF --> SJI
-    GF --> JI & SJI
-    JI --> SI
-    SI --> PI
-    PI --> UC & CC & CRC & SC & DC & HC & OC & EC & STC & SFC & SLC & UPC
+    subgraph 第三方服务
+        YEEPAY[易宝支付<br/>支付 · 退款 · 回调]
+    end
 
-    UC --> US
-    CC --> CS
-    CRC --> CRS
-    SC --> SS
-    DC --> DS
-    HC --> HS
-    OC --> OS
-    EC --> ES
-    STC --> STS
-    SFC --> SFS
-    SLC --> SLS
-    UPC --> UPS
+    BF --> GF
+    SF --> GF
+    GF --> JI
+    GF --> SJI
+    JI --> SI --> PI
 
-    US --> UM
-    CS --> CM
-    CRS --> CRM
-    SS --> SM
-    DS --> DM
-    HS --> HM
-    OS --> OM
-    ES --> EM
-    STS --> STM
-    SFS --> SFM
-    SLS --> SLM
+    PI --> UC & DCC
+    PI --> CC & CLC & CRC & SC & DC & HC
+    PI --> OC & RFC
+    PI --> QC & PC & EC
+    PI --> STC & SFC & SLC
+    PI --> UPC
+    SJI --> SFB
 
-    UM & CM & CRM & SM & DM & HM & OM & EM & STM & SFM & SLM --> DB
-    JI & SI & SS --> RD
-    UPS --> TOS
+    UC & DCC --> SVC
+    CC & CLC & CRC & SC & DC & HC --> SVC
+    OC & RFC --> SVC
+    QC & PC & EC --> SVC
+    STC & SFC & SLC --> SVC
+    SFB --> SVC
+    UPC --> SVC
+
+    SVC --> MAP
+    MAP --> DB
+    JI & SI --> RD
+    SVC --> RD
+    SVC --> TOS
+    SVC --> YEEPAY
+    XXL --> SVC
 ```
 
-**文字架构图：**
+**请求处理流程图：**
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    前端应用                                       │
-│  ┌──────────────────────┐  ┌──────────────────────┐            │
-│  │    后台管理前端(BF)   │  │    学生端前端(SF)     │            │
-│  └──────────────────────┘  └──────────────────────┘            │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Filter 层                                   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  RequestGuidFilter — 分配请求唯一ID                      │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Interceptor 层                                │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐       │
-│  │ JwtAuth       │→│ Sign          │→│ Permission    │       │
-│  │ (管理员JWT)   │  │ 签名验证      │  │ 权限校验      │       │
-│  └───────────────┘  └───────────────┘  └───────────────┘       │
-│  ┌───────────────────────────────────────────────────────┐     │
-│  │ StudentJwtAuth — 学生端 JWT 认证（独立拦截器链）        │     │
-│  └───────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Controller 层                                 │
-│  系统管理：User                                                │
-│  教学管理：Campus / Clazz / Course / Schedule / Duty / Homework │
-│  订单管理：Order (Prepay + Product + Refund)                   │
-│  考试管理：Exam (Question + Paper + Exam)                      │
-│  学生管理：Student / StudentFollowup / StudentLearningPlan     │
-│  文件上传：Upload                                              │
-│  学生前台：StudentFront (SOP / 学习计划 / 课程作业)            │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Service 层                                  │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  业务逻辑、事务管理、Entity↔VO 转换                      │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Mapper 层                                   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  数据访问、SQL 执行（MyBatis XML 映射）                  │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-    │    MySQL     │ │    Redis     │ │  TOS 对象存储 │
-    │  数据持久化  │ │ 缓存/签名密钥│ │  文件上传     │
-    └──────────────┘ └──────────────┘ └──────────────┘
+                          ┌─────────────────┐
+                          │     前端请求      │
+                          └────────┬────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    ▼                              ▼
+           /yq-admin/**                    /yq-admin/studentFront/**
+                    │                              │
+                    ▼                              ▼
+          ┌─────────────────┐            ┌─────────────────┐
+          │ RequestGuidFilter│            │ RequestGuidFilter│
+          │  分配请求唯一ID  │            │  分配请求唯一ID  │
+          └────────┬────────┘            └────────┬────────┘
+                   │                              │
+                   ▼                              ▼
+          ┌─────────────────┐            ┌─────────────────┐
+          │  JwtAuth        │            │ StudentJwtAuth  │
+          │  管理员身份认证  │            │ 学生身份认证     │
+          └────────┬────────┘            └────────┬────────┘
+                   │                              │
+                   ▼                              │
+          ┌─────────────────┐                     │
+          │  Sign           │                     │
+          │  签名校验       │                     │
+          └────────┬────────┘                     │
+                   │                              │
+                   ▼                              │
+          ┌─────────────────┐                     │
+          │  Permission     │                     │
+          │  RBAC 权限校验  │                     │
+          └────────┬────────┘                     │
+                   │                              │
+                   ▼                              ▼
+    ┌──────────────────────────────────────────────────────┐
+    │                    Controller 层                      │
+    │  系统：User / DataConfig                              │
+    │  教学：Campus / Clazz / Course / Schedule / Duty / HW │
+    │  订单：Order / Refund                                │
+    │  考试：Question / Paper / Exam                        │
+    │  学生：Student / Followup / LearningPlan              │
+    │  文件：Upload                                         │
+    │  前台：StudentFront                                   │
+    └────────────────────────┬─────────────────────────────┘
+                             │
+                             ▼
+    ┌──────────────────────────────────────────────────────┐
+    │                    Service 层                         │
+    │  业务逻辑 · 事务管理 · Entity ↔ VO 转换              │
+    └────────────────────────┬─────────────────────────────┘
+                             │
+                             ▼
+    ┌──────────────────────────────────────────────────────┐
+    │                    Mapper 层                          │
+    │  SQL 执行 · 结果映射（MyBatis XML）                   │
+    └────────────────────────┬─────────────────────────────┘
+                             │
+           ┌─────────────────┼─────────────────┐
+           ▼                 ▼                 ▼
+    ┌────────────┐    ┌────────────┐    ┌────────────┐
+    │   MySQL    │    │   Redis    │    │ TOS 对象存储│
+    │  业务数据  │    │ 缓存/密钥  │    │ 文件/视频  │
+    └────────────┘    └────────────┘    └────────────┘
 ```
 
 ```
