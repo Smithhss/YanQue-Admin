@@ -20,5 +20,7 @@ public interface StudentFollowupTagMapper {
 
     StudentFollowupTagEntity selectByStudentTagExcludeId(@Param("studentTag") String studentTag, @Param("id") Long id);
 
+    List<StudentFollowupTagEntity> selectActiveList();
+
     List<StudentFollowupTagEntity> selectPage(QueryStudentFollowupTagBo query);
 }

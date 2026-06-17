@@ -1,6 +1,7 @@
 package cn.yanque;
 
 import cn.hutool.core.date.DateUtil;
+import cn.yanque.models.student.followup.job.StudentFollowupRecordJob;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.AddClassSchuleReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.req.TeacherDetailReq;
 import cn.yanque.models.teaching.schedule.pojo.vo.res.TeacherDetailRes;
@@ -15,14 +16,11 @@ import java.util.List;
 public class TestClassSchedule {
 
     @Autowired
-    private ClassScheduleService classScheduleService;
+    private StudentFollowupRecordJob studentFollowupRecordJob;
 
     @Test
     public void test1() {
-        TeacherDetailReq teacherDetailReq = new TeacherDetailReq();
-        teacherDetailReq.setStartTime(DateUtil.parse("2026-05-01", "yyyy-MM-dd"));
-        teacherDetailReq.setEndTime(DateUtil.parse("2026-06-30", "yyyy-MM-dd"));
-        List<TeacherDetailRes> teacherDetailRes = classScheduleService.teacherDetail(teacherDetailReq);
+        studentFollowupRecordJob.studentFollowupGenerateJob();
     }
 
 }

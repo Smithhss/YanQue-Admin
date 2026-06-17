@@ -40,8 +40,9 @@ values
     (@teaching_id, 'teaching:duty', '值班管理', 'MENU', null, 2050, '值班管理页面', 'ACTIVE', now(), now()),
     (@student_id, 'student:list', '学生列表', 'MENU', null, 3010, '学生列表页面', 'ACTIVE', now(), now()),
     (@student_id, 'student:followup-tag', '回访标签管理', 'MENU', null, 3020, '学生回访标签管理页面', 'ACTIVE', now(), now()),
-    (@student_id, 'student:sop', 'SOP管理', 'MENU', null, 3030, '学生入学SOP管理页面', 'ACTIVE', now(), now()),
-    (@student_id, 'student:learning-plan', '线上学习计划', 'MENU', null, 3040, '线上学员学习计划页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:followup-record', '回访管理', 'MENU', null, 3030, '学生回访管理页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:sop', 'SOP管理', 'MENU', null, 3040, '学生入学SOP管理页面', 'ACTIVE', now(), now()),
+    (@student_id, 'student:learning-plan', '线上学习计划', 'MENU', null, 3050, '线上学员学习计划页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:product', '产品管理', 'MENU', null, 3010, '订单产品管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:prepay', '预支付订单管理', 'MENU', null, 3020, '预支付订单管理页面', 'ACTIVE', now(), now()),
     (@order_id, 'order:payment', '订单管理', 'MENU', null, 3030, '支付订单管理页面', 'ACTIVE', now(), now()),
@@ -68,6 +69,7 @@ set @class_menu_id := (select id from sys_permission where permission_code = 'te
 set @homework_menu_id := (select id from sys_permission where permission_code = 'teaching:homework' limit 1);
 set @student_menu_id := (select id from sys_permission where permission_code = 'student:list' limit 1);
 set @student_followup_tag_menu_id := (select id from sys_permission where permission_code = 'student:followup-tag' limit 1);
+set @student_followup_record_menu_id := (select id from sys_permission where permission_code = 'student:followup-record' limit 1);
 set @student_sop_menu_id := (select id from sys_permission where permission_code = 'student:sop' limit 1);
 set @student_learning_plan_menu_id := (select id from sys_permission where permission_code = 'student:learning-plan' limit 1);
 set @duty_menu_id := (select id from sys_permission where permission_code = 'teaching:duty' limit 1);
@@ -162,12 +164,18 @@ values
     (@student_followup_tag_menu_id, 'api:student-followup-tag:create', '新增回访标签配置', 'API', '/yq-admin/api/studentFollowupTags', 2163, '新增学生回访标签配置接口', 'ACTIVE', now(), now()),
     (@student_followup_tag_menu_id, 'api:student-followup-tag:update', '修改回访标签配置', 'API', '/yq-admin/api/studentFollowupTags/{id}', 2164, '修改学生回访标签配置接口', 'ACTIVE', now(), now()),
     (@student_followup_tag_menu_id, 'api:student-followup-tag:delete', '删除回访标签配置', 'API', '/yq-admin/api/studentFollowupTags/{id}', 2165, '删除学生回访标签配置接口', 'ACTIVE', now(), now()),
-    (@student_sop_menu_id, 'api:student-sop:page', '分页查询学生入学SOP', 'API', '/yq-admin/api/studentSops', 2168, '分页查询学生入学SOP接口', 'ACTIVE', now(), now()),
-    (@student_sop_menu_id, 'api:student-sop:complete', '完成学生入学SOP', 'API', '/yq-admin/api/studentSops/{id}/complete', 2169, '完成学生入学SOP接口', 'ACTIVE', now(), now()),
-    (@student_learning_plan_menu_id, 'api:student-learning-plan:create', '创建线上学习计划', 'API', '/yq-admin/api/studentLearningPlans', 2170, '创建线上学习计划接口', 'ACTIVE', now(), now()),
-    (@student_learning_plan_menu_id, 'api:student-learning-plan:page', '分页查询线上学习计划', 'API', '/yq-admin/api/studentLearningPlans', 2171, '分页查询线上学习计划接口', 'ACTIVE', now(), now()),
-    (@student_learning_plan_menu_id, 'api:student-learning-plan:detail', '查询线上学习计划详情', 'API', '/yq-admin/api/studentLearningPlans/{id}', 2172, '查询线上学习计划详情接口', 'ACTIVE', now(), now()),
-    (@student_learning_plan_menu_id, 'api:student-learning-plan:calendar', '查询线上学习日历', 'API', '/yq-admin/api/studentLearningPlans/{id}/calendar', 2173, '查询线上学习日历接口', 'ACTIVE', now(), now()),
+    (@student_followup_record_menu_id, 'api:student-followup-record:page', '分页查询回访记录', 'API', '/yq-admin/api/studentFollowupRecords', 2166, '分页查询学生回访记录接口', 'ACTIVE', now(), now()),
+    (@student_followup_record_menu_id, 'api:student-followup-record:stats', '查询回访统计', 'API', '/yq-admin/api/studentFollowupRecords/stats', 2166, '查询学生回访统计接口', 'ACTIVE', now(), now()),
+    (@student_followup_record_menu_id, 'api:student-followup-record:detail', '查询回访记录详情', 'API', '/yq-admin/api/studentFollowupRecords/{id}', 2167, '查询学生回访记录详情接口', 'ACTIVE', now(), now()),
+    (@student_followup_record_menu_id, 'api:student-followup-record:generate', '手动生成回访记录', 'API', '/yq-admin/api/studentFollowupRecords/generate', 2168, '手动生成学生回访记录接口', 'ACTIVE', now(), now()),
+    (@student_followup_record_menu_id, 'api:student-followup-record:complete', '完成回访记录', 'API', '/yq-admin/api/studentFollowupRecords/{id}/complete', 2169, '完成学生回访记录接口', 'ACTIVE', now(), now()),
+    (@student_followup_record_menu_id, 'api:student-followup-record:cancel', '取消回访记录', 'API', '/yq-admin/api/studentFollowupRecords/{id}/cancel', 2170, '取消学生回访记录接口', 'ACTIVE', now(), now()),
+    (@student_sop_menu_id, 'api:student-sop:page', '分页查询学生入学SOP', 'API', '/yq-admin/api/studentSops', 2171, '分页查询学生入学SOP接口', 'ACTIVE', now(), now()),
+    (@student_sop_menu_id, 'api:student-sop:complete', '完成学生入学SOP', 'API', '/yq-admin/api/studentSops/{id}/complete', 2172, '完成学生入学SOP接口', 'ACTIVE', now(), now()),
+    (@student_learning_plan_menu_id, 'api:student-learning-plan:create', '创建线上学习计划', 'API', '/yq-admin/api/studentLearningPlans', 2173, '创建线上学习计划接口', 'ACTIVE', now(), now()),
+    (@student_learning_plan_menu_id, 'api:student-learning-plan:page', '分页查询线上学习计划', 'API', '/yq-admin/api/studentLearningPlans', 2174, '分页查询线上学习计划接口', 'ACTIVE', now(), now()),
+    (@student_learning_plan_menu_id, 'api:student-learning-plan:detail', '查询线上学习计划详情', 'API', '/yq-admin/api/studentLearningPlans/{id}', 2175, '查询线上学习计划详情接口', 'ACTIVE', now(), now()),
+    (@student_learning_plan_menu_id, 'api:student-learning-plan:calendar', '查询线上学习日历', 'API', '/yq-admin/api/studentLearningPlans/{id}/calendar', 2176, '查询线上学习日历接口', 'ACTIVE', now(), now()),
 
     (@duty_menu_id, 'api:class-duty:page', '分页查询值班', 'API', '/yq-admin/api/classDuties', 2161, '分页查询值班接口', 'ACTIVE', now(), now()),
     (@duty_menu_id, 'api:class-duty:detail', '查询值班详情', 'API', '/yq-admin/api/classDuties/{id}', 2162, '查询值班详情接口', 'ACTIVE', now(), now()),

@@ -58,6 +58,13 @@
         limit 1
     </select>
 
+    <select id="selectActiveList" resultMap="StudentFollowupTagMap">
+        select <include refid="BaseColumns"/>
+        from student_followup_tag
+        where status = 'ACTIVE'
+        order by id asc
+    </select>
+
     <select id="selectPage" resultMap="StudentFollowupTagMap">
         select <include refid="BaseColumns"/>
         from student_followup_tag
