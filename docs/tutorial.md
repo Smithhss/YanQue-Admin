@@ -997,6 +997,26 @@ loginRes.setPermissionDetailResList(... userInfo.getSysPermissionEntityList() ..
 - 直接返回单个 Entity 无法表达"多表聚合"的语义
 - Info 是自描述的：看 `UserInfo` 类就知道登录需要查哪些表
 
+#### BO vs Info 核心区别
+
+| 维度 | BO | Info |
+|------|-----|------|
+| 数据方向 | 下行（Service → Mapper） | 平级/上行（Service 内部聚合，供其他方法使用） |
+| 数据来源 | 前端 Req 或 Service 默认值 | 多个 Entity、缓存、第三方接口 |
+| 核心使命 | 封装**查询条件** | 封装**业务结果**，用于内部复用 |
+| 是否含分页 | 经常包含 | 一般不含 |
+| 是否脱敏 | 不需要（仅条件） | 不需要（脱敏在 VO/Res 层做） |
+
+**使用时机：**
+- **BO**：Mapper 参数超过 3 个时封装为 BO；单表查询且参数少于 3 个时可直接用注解参数
+- **Info**：需要从多个 Mapper/服务获取数据并组装时使用；如果服务间调用频繁，可升级为 DTO 放在 API 模块
+
+**Entity vs Info：**
+- Entity 严格对应数据库单表字段
+- Info 是多表/多源聚合后的虚拟对象，字段按业务逻辑组织，不受表结构限制
+
+**关键原则：** BO 和 Info 绝不出现在 Controller 的入参和出参中，它们是维系 Service 层代码整洁的"幕后功臣"。
+
 ---
 
 ## 第 3 章：统一响应与异常处理
