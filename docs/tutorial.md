@@ -1367,11 +1367,31 @@ public class GlobalExceptionHandler {
 - 兜底返回通用提示"系统开小差了"，用户体验更好
 - 生产环境不应该暴露堆栈信息给前端
 
-**`buildValidationMessage()` 工具方法的作用：**
-- 从 `FieldError` 列表提取所有字段错误消息
-- 用 `; ` 拼接成一条消息，前端可直接展示
-- 过滤空消息 + 去重，避免重复提示
-- 如果所有字段错误消息都为空，返回默认消息
+**`buildValidationMessage()` 工具方法逐行解析：**
+
+```java
+private String buildValidationMessage(List<FieldError> fieldErrors, String defaultMessage) {
+    String message = fieldErrors.stream()                          // 1. 把所有字段错误变成流
+            .map(FieldError::getDefaultMessage)                    // 2. 只取错误消息文本（如"用户名不能为空"）
+            .filter(value -> value != null && !value.isBlank())    // 3. 过滤掉空消息
+            .distinct()                                            // 4. 去重（多个字段可能有相同错误）
+            .collect(Collectors.joining("; "));                    // 5. 用 "; " 拼接
+    return message.isBlank() ? defaultMessage : message;           // 6. 兜底：全空则返回默认消息
+}
+```
+
+**实际效果：** 前端一次提交表单，可能同时触发多个校验错误：
+
+| FieldError | getDefaultMessage() | 处理结果 |
+|------------|---------------------|----------|
+| 字段1 | "用户名不能为空" | 保留 |
+| 字段2 | "手机号格式不正确" | 保留 |
+| 字段3 | "手机号格式不正确" | 去重（distinct） |
+| 字段4 | null | 过滤（filter） |
+
+最终返回：`"用户名不能为空; 手机号格式不正确"`
+
+最后兜底：如果所有字段错误消息都是空的，返回 `defaultMessage`（"请求参数格式不正确"）。
 
 ---
 
