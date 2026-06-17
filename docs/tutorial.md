@@ -108,6 +108,87 @@ public class YanqueApplication {
 
 ### 1.5 配置文件
 
+**application.yaml 主配置：**
+
+```yaml
+server:
+  port: 8080
+  servlet:
+    context-path: /yq-admin
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  data:
+    redis:
+      lettuce:
+        pool:
+          max-active: 8            # 最大连接数
+          max-idle: 8              # 最大空闲连接
+          min-idle: 0              # 最小空闲连接
+          max-wait: 2000ms         # 获取连接最大等待时间
+
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+yeepay:
+  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:10093003553}
+  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:10093003553}
+  pay-success-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
+  pay-success-return-url: "xxxxx"
+  refund-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/refund"
+
+tos:
+  endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
+  region: ${YQ_TOS_REGION:cn-shanghai}
+  bucket: ${YQ_TOS_BUCKET:yq-admin-11-dev}
+  access-key: ${YQ_TOS_ACCESS_KEY:}
+  secret-key: ${YQ_TOS_SECRET_KEY:}
+
+xxl:
+  job:
+    enabled: ${YQ_XXL_JOB_ENABLED:false}
+    admin-addresses: ${YQ_XXL_JOB_ADMIN_ADDRESSES:http://xxx.xxx.xxx.xxx:9000/xxl-job-admin}
+    access-token: ${YQ_XXL_JOB_ACCESS_TOKEN:default_token}
+    app-name: ${YQ_XXL_JOB_APP_NAME:yanque-admin}
+    address: ${YQ_XXL_JOB_ADDRESS:}
+    ip: ${YQ_XXL_JOB_IP:}
+    port: ${YQ_XXL_JOB_PORT:9999}
+    log-path: ${YQ_XXL_JOB_LOG_PATH:/tmp/yanque-admin/xxl-job}
+    log-retention-days: ${YQ_XXL_JOB_LOG_RETENTION_DAYS:30}
+```
+
+**配置文件结构说明：**
+
+| 配置块 | 作用 | 关键配置项 |
+|--------|------|-----------|
+| `server` | 服务器配置 | 端口、上下文路径 |
+| `spring.data.redis` | Redis 连接池 | 最大连接数、等待时间 |
+| `mybatis` | MyBatis 配置 | 日志、驼峰转换、Mapper 路径 |
+| `yeepay` | 易宝支付配置 | 商户号、回调地址 |
+| `tos` | 对象存储配置 | 端点、桶、密钥 |
+| `xxl.job` | 定时任务配置 | 调度中心地址、执行器配置 |
+
+**为什么使用环境变量？**
+- 敏感信息（密钥、密码）不硬编码在配置文件中
+- 不同环境（dev/prod）使用不同配置值
+- 通过 `${VAR:default}` 语法设置默认值
+
+**为什么 Redis 连接池配置 max-active=8？**
+- 默认值通常是 8，适合大多数场景
+- 过大浪费连接，过小导致等待
+- 根据实际并发量调整
+
+**为什么 MyBatis 开启 map-underscore-to-camel-case？**
+- 数据库字段使用下划线命名：`student_name`
+- Java 实体使用驼峰命名：`studentName`
+- 开启后自动转换，无需手动写 `@Result` 注解
+
+**application-dev.yaml 开发环境配置：**
+
 ```yaml
 spring:
   data:
@@ -117,14 +198,98 @@ spring:
       password: QWer1234!!!
       database: 3
   datasource:
-    url: jdbc:mysql://mysql-xxx.rds.volces.com:3306/yanque-shiyi?...
+    url: jdbc:mysql://mysql-xxx.rds.volces.com:3306/yanque-shiyi?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root
     password: QWer1234!!!
+
+logging:
+  level:
+    cn.yanque: INFO
+
+yeepay:
+  pay-success-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
+  pay-success-return-url: "http://127.0.0.1:5174/payment-return"
+  refund-notify-url: "http://xxx.vicp.fun:8878/yq-admin/yop-callback/refund"
 ```
 
-**为什么 Redis 用 database 3 而非默认的 0？**
-- 同一个 Redis 实例可能被多个服务共享，用不同 database 隔离数据
-- database 0 通常留给开发调试，生产用 1/2/3 等
+**application-prod.yaml 生产环境配置：**
+
+```yaml
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${YQ_DB_HOST:127.0.0.1}:${YQ_DB_PORT:3306}/${YQ_DB_NAME:yanque}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${YQ_DB_USERNAME:root}
+    password: ${YQ_DB_PASSWORD:}
+    hikari:
+      minimum-idle: ${YQ_DB_POOL_MIN_IDLE:5}
+      maximum-pool-size: ${YQ_DB_POOL_MAX_SIZE:20}
+      connection-timeout: ${YQ_DB_CONNECTION_TIMEOUT:30000}
+      idle-timeout: ${YQ_DB_IDLE_TIMEOUT:600000}
+      max-lifetime: ${YQ_DB_MAX_LIFETIME:1800000}
+
+  data:
+    redis:
+      host: ${YQ_REDIS_HOST:127.0.0.1}
+      port: ${YQ_REDIS_PORT:6379}
+      password: ${YQ_REDIS_PASSWORD:}
+      database: ${YQ_REDIS_DATABASE:0}
+      timeout: ${YQ_REDIS_TIMEOUT:3000ms}
+
+logging:
+  level:
+    root: INFO
+    cn.yanque: ${YQ_LOG_LEVEL:INFO}
+
+yeepay:
+  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:}
+  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:}
+  pay-success-notify-url: ${YQ_YEEPAY_PAY_SUCCESS_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/paySuccess}
+  pay-success-return-url: ${YQ_YEEPAY_PAY_SUCCESS_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  refund-notify-url: ${YQ_YEEPAY_REFUND_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/refund}
+
+tos:
+  endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
+  region: ${YQ_TOS_REGION:cn-shanghai}
+  bucket: ${YQ_TOS_BUCKET:}
+  access-key: ${YQ_TOS_ACCESS_KEY:}
+  secret-key: ${YQ_TOS_SECRET_KEY:}
+```
+
+**环境配置对比：**
+
+| 配置项 | 开发环境（dev） | 生产环境（prod） |
+|--------|----------------|-----------------|
+| 数据库连接 | 硬编码具体地址 | 环境变量，默认 127.0.0.1 |
+| Redis 连接 | 硬编码具体地址 | 环境变量，默认 127.0.0.1 |
+| 连接池配置 | 默认值 | 自定义 HikariCP 参数 |
+| 日志级别 | INFO | 可配置，默认 INFO |
+| 易宝回调地址 | 内网穿透地址 | 环境变量，默认 127.0.0.1 |
+
+**为什么生产环境用环境变量？**
+- 敏感信息（密码、密钥）不提交到代码仓库
+- 不同部署环境（Docker、K8s）使用不同配置值
+- 通过 `${VAR:default}` 语法设置默认值，方便本地开发
+
+**为什么生产环境配置 HikariCP 连接池？**
+- `minimum-idle=5`：最小空闲连接，避免频繁创建连接
+- `maximum-pool-size=20`：最大连接数，防止数据库连接耗尽
+- `connection-timeout=30000`：获取连接超时时间，避免长时间等待
+- `idle-timeout=600000`：空闲连接超时时间，释放不用的连接
+- `max-lifetime=1800000`：连接最大生命周期，避免使用过期连接
+
+**如何切换环境？**
+```bash
+# 开发环境（默认）
+java -jar app.jar
+
+# 生产环境
+java -jar app.jar --spring.profiles.active=prod
+
+# 或通过环境变量
+export SPRING_PROFILES_ACTIVE=prod
+java -jar app.jar
+```
 
 ---
 
