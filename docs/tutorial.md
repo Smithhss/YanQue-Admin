@@ -2,7 +2,7 @@
 
 > 本教程系统讲解 YanQue-Admin 项目的架构设计和实现原理，帮助你理解"为什么这样写"而不仅仅是"怎么写"。
 >
-> 共 15 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理，第 12 章讲解学生端业务，第 13 章讲解作业系统，第 14 章讲解退款流程，第 15 章讲解 Docker 部署。
+> 共 20 章：前 8 章讲解基础架构，第 9 章深入分析排课模块，第 10 章讲解订单与支付，第 11 章讲解值班管理，第 12 章讲解学生端业务，第 13 章讲解作业系统，第 14 章讲解退款流程，第 15 章讲解 Docker 部署，第 16-20 章讲解考试系统、学生标签、回访管理、枚举校验、学生前台等功能。
 >
 > 每个核心功能都附带流程图，便于理解整体逻辑。
 
@@ -25,6 +25,11 @@
 - [第 13 章：作业系统 — 教师发布与学生提交](#第-13-章作业系统--教师发布与学生提交)
 - [第 14 章：退款流程 — 易宝退款集成](#第-14-章退款流程--易宝退款集成)
 - [第 15 章：Docker 部署 — 容器化构建与运行](#第-15-章docker-部署--容器化构建与运行)
+- [第 16 章：考试系统 — 题库、组卷与在线考试](#第-16-章考试系统--题库组卷与在线考试)
+- [第 17 章：学生 SOP 与学习计划 — 标准化流程与个性化规划](#第-17-章学生-sop-与学习计划--标准化流程与个性化规划)
+- [第 18 章：学生回访系统 — 自动化跟进与标签驱动](#第-18-章学生回访系统--自动化跟进与标签驱动)
+- [第 19 章：请求字段枚举验证 — 自定义校验注解](#第-19-章请求字段枚举验证--自定义校验注解)
+- [第 20 章：学生端学习计划 — 前台接口设计](#第-20-章学生端学习计划--前台接口设计)
 
 ---
 
@@ -483,7 +488,8 @@ java -jar app.jar
 ```mermaid
 graph TB
     subgraph 前端
-        F[前端应用]
+        BF[后台管理前端]
+        SF[学生端前端]
     end
 
     subgraph Spring Boot 应用
@@ -495,75 +501,105 @@ graph TB
             JI[JwtAuthInterceptor]
             SI[SignInterceptor]
             PI[PermissionInterceptor]
+            SJI[StudentJwtAuthInterceptor]
         end
 
         subgraph Controller 层
             UC[UserController]
-            RC[RoleController]
-            PC[PermissionController]
             CC[CampusController]
-            CLC[ClazzController]
             CRC[CourseController]
             SC[ScheduleController]
+            DC[DutyController]
+            HC[HomeworkController]
+            OC[OrderController]
+            EC[ExamController]
+            STC[StudentController]
+            SFC[StudentFollowupController]
+            SLC[StudentLearningPlanController]
+            UPC[UploadController]
         end
 
         subgraph Service 层
             US[UserService]
-            RS[RoleService]
-            PS[PermissionService]
             CS[CampusService]
-            CLS[ClazzService]
             CRS[CourseService]
             SS[ScheduleService]
+            DS[DutyService]
+            HS[HomeworkService]
+            OS[OrderService]
+            ES[ExamService]
+            STS[StudentService]
+            SFS[StudentFollowupService]
+            SLS[StudentLearningPlanService]
+            UPS[UploadService]
         end
 
         subgraph Mapper 层
             UM[UserMapper]
-            RM[RoleMapper]
-            PM[PermissionMapper]
             CM[CampusMapper]
-            CLM[ClazzMapper]
             CRM[CourseMapper]
             SM[ScheduleMapper]
+            DM[DutyMapper]
+            HM[HomeworkMapper]
+            OM[OrderMapper]
+            EM[ExamMapper]
+            STM[StudentMapper]
+            SFM[StudentFollowupMapper]
+            SLM[StudentLearningPlanMapper]
         end
     end
 
     subgraph 数据存储
         DB[(MySQL)]
         RD[(Redis)]
+        TOS[(TOS 对象存储)]
     end
 
-    F --> GF
-    GF --> JI
+    BF --> JI
+    SF --> SJI
+    GF --> JI & SJI
     JI --> SI
     SI --> PI
-    PI --> UC & RC & PC & CC & CLC & CRC & SC
+    PI --> UC & CC & CRC & SC & DC & HC & OC & EC & STC & SFC & SLC & UPC
 
     UC --> US
-    RC --> RS
-    PC --> PS
     CC --> CS
-    CLC --> CLS
     CRC --> CRS
     SC --> SS
+    DC --> DS
+    HC --> HS
+    OC --> OS
+    EC --> ES
+    STC --> STS
+    SFC --> SFS
+    SLC --> SLS
+    UPC --> UPS
 
     US --> UM
-    RS --> RM
-    PS --> PM
     CS --> CM
-    CLS --> CLM
     CRS --> CRM
     SS --> SM
+    DS --> DM
+    HS --> HM
+    OS --> OM
+    ES --> EM
+    STS --> STM
+    SFS --> SFM
+    SLS --> SLM
 
-    UM & RM & PM & CM & CLM & CRM & SM --> DB
+    UM & CM & CRM & SM & DM & HM & OM & EM & STM & SFM & SLM --> DB
     JI & SI & SS --> RD
+    UPS --> TOS
 ```
 
 **文字架构图：**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         前端应用                                  │
+│                    前端应用                                       │
+│  ┌──────────────────────┐  ┌──────────────────────┐            │
+│  │    后台管理前端(BF)   │  │    学生端前端(SF)     │            │
+│  └──────────────────────┘  └──────────────────────┘            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -579,19 +615,23 @@ graph TB
 │                    Interceptor 层                                │
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐       │
 │  │ JwtAuth       │→│ Sign          │→│ Permission    │       │
-│  │ JWT 认证      │  │ 签名验证      │  │ 权限校验      │       │
+│  │ (管理员JWT)   │  │ 签名验证      │  │ 权限校验      │       │
 │  └───────────────┘  └───────────────┘  └───────────────┘       │
+│  ┌───────────────────────────────────────────────────────┐     │
+│  │ StudentJwtAuth — 学生端 JWT 认证（独立拦截器链）        │     │
+│  └───────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Controller 层                                 │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ │
-│  │ User    │ │ Role    │ │Permission│ │ Campus  │ │ Clazz   │ │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ │
-│  ┌─────────┐ ┌─────────┐                                       │
-│  │ Course  │ │Schedule │                                       │
-│  └─────────┘ └─────────┘                                       │
+│  系统管理：User                                                │
+│  教学管理：Campus / Clazz / Course / Schedule / Duty / Homework │
+│  订单管理：Order (Prepay + Product + Refund)                   │
+│  考试管理：Exam (Question + Paper + Exam)                      │
+│  学生管理：Student / StudentFollowup / StudentLearningPlan     │
+│  文件上传：Upload                                              │
+│  学生前台：StudentFront (SOP / 学习计划 / 课程作业)            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -606,16 +646,16 @@ graph TB
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Mapper 层                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  数据访问、SQL 执行                                      │   │
+│  │  数据访问、SQL 执行（MyBatis XML 映射）                  │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                               │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-    ┌─────────────────┐             ┌─────────────────┐
-    │     MySQL       │             │     Redis       │
-    │   数据持久化    │             │  缓存/签名密钥   │
-    └─────────────────┘             └─────────────────┘
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │    MySQL     │ │    Redis     │ │  TOS 对象存储 │
+    │  数据持久化  │ │ 缓存/签名密钥│ │  文件上传     │
+    └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
 ```
@@ -634,33 +674,61 @@ graph TB
 
 ```
 cn.yanque
-├── common/                    ← 公共组件（所有模块共享）
-│   ├── annotations/           ← 自定义注解
-│   ├── api/                   ← ApiResponse、PageResult
-│   ├── aop/                   ← AOP 切面（日志）
-│   ├── dataConfig/            ← 系统配置模块
-│   ├── enums/                 ← 枚举类
-│   ├── exception/             ← 异常体系
-│   ├── filter/                ← Servlet 过滤器
-│   └── utils/                 ← 工具类
-├── config/                    ← Spring 配置（WebMvcConfig）
-└── models/                    ← 业务模块
-    ├── auth/                  ← 认证模块（拦截器）
-    ├── users/                 ← 用户模块
-    │   ├── controller/
-    │   ├── mapper/
-    │   ├── pojo/
-    │   │   ├── entity/        ← 数据库实体
-    │   │   ├── vo/req/        ← 请求 VO
-    │   │   ├── vo/res/        ← 响应 VO
-    │   │   ├── bo/            ← 业务对象（查询条件）
-    │   │   └── info/          ← 聚合信息
-    │   └── service/
-    │       └── impl/
-    └── teaching/              ← 教学模块
-        ├── campus/            ← 校区管理
-        ├── clazz/             ← 班级管理
-        └── course/            ← 课程管理
+├── common/                        ← 公共组件（所有模块共享）
+│   ├── annotations/               ← 自定义注解（@EnumValue 等）
+│   ├── api/                       ← ApiResponse、PageResult
+│   ├── aop/                       ← AOP 切面（日志）
+│   ├── dataConfig/                ← 系统配置模块（含 CRUD 全套）
+│   ├── enums/                     ← 枚举类（ActiveEnum、TeachingModeEnum 等）
+│   ├── exception/                 ← 异常体系
+│   ├── filter/                    ← Servlet 过滤器
+│   ├── threadlocal/               ← ThreadLocal（AdminThreadLocal、StudentThreadLocal）
+│   ├── validator/                 ← 自定义校验器（EnumValueValidator）
+│   └── utils/                     ← 工具类
+├── config/                        ← Spring 配置
+│   ├── WebMvcConfig.java          ← 拦截器注册
+│   └── XxlJobConfig.java          ← XXL-Job 定时任务配置
+├── integration/                   ← 第三方集成
+│   └── yeepay/                    ← 易宝支付集成
+│       ├── callback/              ← 支付回调处理
+│       ├── handle/                ← 签名/验签处理器
+│       ├── pojo/                  ← 请求/响应对象
+│       └── service/               ← 支付服务
+├── models/                        ← 业务模块
+│   ├── auth/                      ← 认证模块
+│   │   └── interceptor/           ← JWT 拦截器（Admin + Student）
+│   ├── users/                     ← 用户模块
+│   │   ├── controller/            ← 用户管理接口
+│   │   ├── mapper/                ← 用户数据访问
+│   │   ├── pojo/                  ← Entity / VO / BO / Info
+│   │   └── service/
+│   ├── teaching/                  ← 教学模块
+│   │   ├── campus/                ← 校区管理（CRUD）
+│   │   ├── clazz/                 ← 班级管理（CRUD）
+│   │   ├── course/                ← 课程管理（含课程明细/Excel 导入）
+│   │   ├── schedule/              ← 排课系统（课表生成/老师分配/冲突检测）
+│   │   ├── duty/                  ← 值班管理（晚自习/自习日排班）
+│   │   └── homework/              ← 作业系统（发布/提交/批改）
+│   ├── order/                     ← 订单模块
+│   │   ├── prepay/                ← 预支付订单
+│   │   ├── product/               ← 产品管理
+│   │   └── refund/                ← 退款管理（含退款审批流程）
+│   ├── exam/                      ← 考试模块
+│   │   ├── question/              ← 题库管理
+│   │   ├── paper/                 ← 试卷管理
+│   │   └── exam/                  ← 在线考试（含自动批改）
+│   ├── student/                   ← 学生模块
+│   │   ├── controller/            ← 学生管理接口
+│   │   ├── mapper/                ← 学生数据访问（含回访/学习计划 Mapper）
+│   │   ├── pojo/                  ← Entity / VO / BO
+│   │   ├── service/               ← 学生服务
+│   │   └── followup/              ← 回访管理（标签配置 + 自动生成回访记录）
+│   └── upload/                    ← 文件上传模块（TOS 对象存储）
+└── studentFront/                  ← 学生前台模块（独立于管理后台）
+    ├── biz/                       ← 业务逻辑层
+    ├── controller/                ← 学生端接口
+    ├── pojo/                      ← 请求/响应对象
+    └── service/                   ← 学生端服务（SOP/学习计划/课程作业）
 ```
 
 **为什么按业务模块分包而非按技术层分包？**
