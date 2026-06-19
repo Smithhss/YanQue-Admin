@@ -2643,12 +2643,13 @@ public class SystemConfigItem<T> {
 flowchart TD
     A["get(SystemConfigItem)"] --> B{本地缓存有值?}
     B -- 是 --> C["返回缓存值（内存访问，纳秒级）"]
-    B -- 否 --> D{数据库有值?}
+    B -- 否 --> D{数据库有值且 value 非 null?}
 
     D -- 是 --> E["类型转换 + 存入缓存"]
     E --> F["返回数据库值"]
 
-    D -- 否 --> G["返回 defaultValue"]
+    D -- 否 --> G["类型转换默认值 + 存入缓存"]
+    G --> H["返回默认值"]
 ```
 
 **Guava 本地缓存配置：**
@@ -2659,33 +2660,41 @@ Cache<String, Object> cache = CacheBuilder.newBuilder()
     .build();
 ```
 
+**get() 读取逻辑（核心方法）：**
 ```java
-@Component
-public class SysConfigService {
+public <T> T get(SystemConfigItem<T> item) {
+    // 1. 先查本地缓存
+    Object value = cache.getIfPresent(item.getKey());
+    if (value != null) return Convert.convert(item.getClazz(), value);
 
-    // Guava 本地缓存：10 秒过期，最大 10000 条
-    private final Cache<String, Object> cache = CacheBuilder.newBuilder()
-        .expireAfterAccess(10, TimeUnit.SECONDS)
-        .maximumSize(10000).build();
-
-    public <T> T get(SystemConfigItem<T> item) {
-        // 1. 先查本地缓存
-        Object value = cache.getIfPresent(item.getKey());
-        if (value != null) return Convert.convert(item.getClazz(), value);
-
-        // 2. 缓存没有，查数据库
-        SysConfigEntity entity = sysConfigMapper.selectByKey(item.getKey());
-        if (entity != null) {
-            T configValue = Convert.convert(item.getClazz(), entity.getV());
-            cache.put(item.getKey(), configValue);
-            return configValue;
-        }
-
-        // 3. 数据库也没有，返回默认值
-        return Convert.convert(item.getClazz(), item.getDefaultValue());
+    // 2. 缓存没有，查数据库
+    SysConfigEntity entity = sysConfigMapper.selectByKey(item.getKey());
+    if (entity != null && entity.getV() != null) {
+        T configValue = Convert.convert(item.getClazz(), entity.getV());
+        cache.put(item.getKey(), configValue);
+        return configValue;
     }
+
+    // 3. 数据库也没有，返回默认值（同时缓存默认值，避免重复查库）
+    T defaultValue = Convert.convert(item.getClazz(), item.getDefaultValue());
+    cache.put(item.getKey(), defaultValue);
+    return defaultValue;
 }
 ```
+
+> **关键细节：** 默认值也会写入缓存。这意味着如果某配置项在数据库中不存在，第一次查询后后续请求直接从缓存读默认值，不再访问数据库。
+
+**写方法缓存失效策略：**
+
+所有写操作（add / update / delete）都标注了 `@Transactional(rollbackFor = Exception.class)`，并在事务提交前清理缓存：
+
+| 操作 | 缓存失效 | 说明 |
+|------|----------|------|
+| addConfig | `cache.invalidate(req.getK())` | 新增后清理，避免读到"不存在"的旧缓存 |
+| updateConfig | `cache.invalidate(oldKey)` + `cache.invalidate(newKey)` | key 可能被修改，旧 key 和新 key 都要清理 |
+| deleteConfig | `cache.invalidate(oldKey)` | 删除后清理，避免读到已删除的旧值 |
+
+写操作还通过 `try-catch DuplicateKeyException` 处理 key 唯一约束冲突，抛出 `BusinessException.ConfigExist`。
 
 **为什么用本地缓存而非每次都查 Redis/数据库？**
 - JWT 密钥每次请求都要读（验签用），频率极高
@@ -2696,6 +2705,31 @@ public class SysConfigService {
 - Redis 有网络开销，每次请求都要网络调用
 - 本地缓存是内存访问，纳秒级
 - 两级缓存（本地 + Redis）更复杂，本项目规模不需要
+
+**CRUD 管理接口：**
+
+配置项除了被业务代码通过 `get()` 读取外，还通过 `SysConfigController` 提供管理接口：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/sysConfig` | 新增配置项 |
+| PUT | `/api/sysConfig/{id}` | 修改配置项 |
+| DELETE | `/api/sysConfig/{id}` | 删除配置项 |
+| GET | `/api/sysConfig/{id}` | 按 ID 查询 |
+| GET | `/api/sysConfig` | 分页查询（支持 keyword 搜索） |
+
+**当前系统已定义的配置项（SysConfig 类）：**
+
+| 配置项 | key | 默认值 | 用途 |
+|--------|-----|--------|------|
+| jwtSecret | jwtSecret | "1234" | JWT 签名密钥 |
+| jwtExpireTime | jwtExpireTime | 1000 (ms) | JWT 过期时间 |
+| teachingScheduleRule | teaching.schedule.rule | JSON 字符串 | 排课规则（上课日/自习日/休息日） |
+| createOrderGoodsName | createOrderGoodsName | "缴费下单" | 订单商品名称 |
+| createOrderExpireTime | createOrderExpireTime | 5 (分钟) | 订单过期时间 |
+| tosUploadExpireSeconds | tos.upload.expire.seconds | 600 | TOS 上传链接有效期 |
+| tosPreviewExpireSeconds | tos.preview.expire.seconds | 300 | TOS 预览链接有效期 |
+| studentTagOptions | student.tag.options | 逗号分隔字符串 | 学员标签选项 |
 
 ### 8.3 配置变更时清缓存
 
@@ -2708,11 +2742,6 @@ flowchart TD
     D --> F["下次读取时从数据库取最新值"]
     E --> F
 ```
-
-**为什么要清理旧 key？**
-- 如果 key 从 "jwt.secret" 改成了 "jwt.key"，旧 key 的缓存还在
-- 不清理的话，旧 key 的缓存会一直占内存直到过期
-- 新 key 也要清理，确保下次读取时从数据库取最新值
 
 ```java
 public SysConfigUpdateRes updateConfig(SysConfigUpdateReq req) {
@@ -2827,38 +2856,59 @@ flowchart TD
 ### 9.2 模块结构
 
 ```
-schedule/
-├── controller/ClassScheduleController.java    ← HTTP 接口
-├── enums/ClassScheduleTypeEnum.java           ← 课表类型枚举
-├── mapper/ClassScheduleMapper.java            ← 数据访问
+teaching/schedule/                                ← 完整包路径：cn.yanque.models.teaching.schedule
+├── controller/ClassScheduleController.java       ← HTTP 接口
+├── enums/ClassScheduleTypeEnum.java              ← 课表类型枚举（CLASS/SELF_STUDY/REST/HOLIDAY）
+├── mapper/ClassScheduleMapper.java               ← 数据访问
 ├── pojo/
-│   ├── config/ScheduleRuleConfig.java         ← 排课规则配置
-│   ├── entity/ClassScheduleEntity.java        ← 数据库实体
-│   ├── info/AddCourseInfo.java                ← 补课信息
-│   ├── info/HolidayInfo.java                  ← 节假日信息
+│   ├── config/ScheduleRuleConfig.java            ← 排课规则配置（含 validate() 校验）
+│   ├── entity/ClassScheduleEntity.java           ← 数据库实体
+│   ├── info/AddCourseInfo.java                   ← 加课信息（Service 内部传递）
+│   ├── info/HolidayInfo.java                     ← 节假日信息（外部 API 返回）
 │   ├── vo/req/
-│   │   ├── AddClassSchuleReq.java             ← 加课请求
-│   │   ├── ClassScheduleGenerateReq.java      ← 生成课表请求
-│   │   ├── ClassScheduleTeacherAssignReq.java ← 分配老师请求
-│   │   └── TeacherDetailReq.java              ← 老师详情查询请求
+│   │   ├── AddClassSchuleReq.java                ← 加课请求
+│   │   ├── ClassScheduleGenerateReq.java         ← 生成课表请求
+│   │   ├── ClassScheduleTeacherAssignReq.java    ← 分配老师请求
+│   │   └── TeacherDetailReq.java                 ← 老师详情查询请求
 │   └── vo/res/
-│       ├── ClassScheduleDateDetailRes.java    ← 当天课程详情
-│       ├── ClassScheduleGenerateRes.java      ← 生成课表响应
-│       ├── ClassScheduleItemRes.java          ← 课表列表项
-│       ├── ClassScheduleTeacherAssignRes.java ← 分配老师响应
-│       ├── ClassStageInfoRes.java             ← 阶段信息
-│       └── TeacherDetailRes.java              ← 老师上课详情
+│       ├── ClassScheduleDateDetailRes.java       ← 当天课程详情
+│       ├── ClassScheduleGenerateRes.java         ← 生成课表响应
+│       ├── ClassScheduleItemRes.java             ← 课表列表项
+│       ├── ClassScheduleTeacherAssignRes.java    ← 分配老师响应
+│       ├── ClassStageInfoRes.java                ← 阶段信息
+│       └── TeacherDetailRes.java                 ← 老师上课详情
 └── service/
-    ├── ClassScheduleService.java              ← 业务接口
-    ├── HolidayService.java                    ← 节假日服务（外部 API）
-    ├── ScheduleRuleService.java               ← 规则配置服务
-    └── impl/ClassScheduleServiceImpl.java     ← 业务实现
+    ├── ClassScheduleService.java                 ← 业务接口（7 个方法）
+    ├── HolidayService.java                       ← 节假日服务（调用 timor.tech 外部 API）
+    ├── ScheduleRuleService.java                  ← 规则配置服务（读取 + 校验）
+    └── impl/ClassScheduleServiceImpl.java        ← 业务实现（核心算法）
 ```
 
 **为什么排课模块比其他模块多这么多类？**
 - 排课涉及**日期计算**、**外部 API 调用**、**配置驱动**、**批量操作**
 - 每个职责独立成类，符合单一职责原则
 - HolidayService 和 ScheduleRuleService 可被其他模块复用
+
+**API 接口一览（ClassScheduleController）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/classes/schedules/generate` | 生成班级课表 |
+| GET | `/api/classes/schedules/{classId}` | 查询班级课表 |
+| GET | `/api/classes/schedules/{classId}/classStageInfo` | 查询班级阶段信息（含空闲老师） |
+| GET | `/api/classes/schedules/{classId}/date-detail` | 查询当天课程详情 |
+| PUT | `/api/classes/schedules/{classId}/teachers` | 按阶段分配老师 |
+| PUT | `/api/classes/schedules/{classId}/addClassSchule` | 新增临时课程（加课） |
+| POST | `/api/classes/schedules/teacher-detail` | 查询老师上课详情 |
+
+**课表类型枚举（ClassScheduleTypeEnum）：**
+
+| 枚举值 | 描述 | 是否消耗课程明细 |
+|--------|------|-----------------|
+| CLASS | 上课 | 是 |
+| SELF_STUDY | 自习 | 否 |
+| REST | 休息 | 否 |
+| HOLIDAY | 放假 | 否 |
 
 ### 9.3 配置驱动的排课规则
 
@@ -2873,10 +2923,19 @@ public static SystemConfigItem<String> teachingScheduleRule = new SystemConfigIt
 @Service
 public class ScheduleRuleService {
     public ScheduleRuleConfig getScheduleRule() {
-        String ruleJson = sysConfigService.get(SysConfig.teachingScheduleRule);
-        ScheduleRuleConfig config = JSON.parseObject(ruleJson, ScheduleRuleConfig.class);
-        config.validate();  // 校验配置合法性
-        return config;
+        try {
+            String ruleJson = sysConfigService.get(SysConfig.teachingScheduleRule);
+            ScheduleRuleConfig config = JSON.parseObject(ruleJson, ScheduleRuleConfig.class);
+            if (config == null) {
+                throw BusinessException.DateError.newInstance("课表规则配置不能为空");
+            }
+            config.validate();  // 校验配置合法性
+            return config;
+        } catch (BusinessException e) {
+            throw e;  // 业务异常直接抛出
+        } catch (Exception e) {
+            throw BusinessException.DateError.newInstance("课表规则配置格式错误");
+        }
     }
 }
 
@@ -2905,7 +2964,58 @@ public class ScheduleRuleConfig {
 - 校验上课日/休息日不能重复（同一天不能既是上课日又是休息日）
 - 校验日期范围（1-7 代表周一到周日）
 
+**validate() 校验逻辑详解：**
+```java
+public void validate() {
+    // 1. 上课日不能为空
+    if (classDays == null || classDays.isEmpty()) {
+        throw BusinessException.DateError.newInstance("课表规则至少需要配置一个上课日");
+    }
+    // 2. 校验每种日期的范围（1-7）
+    validateDays(classDays, "上课日");
+    validateDays(selfStudyDays, "自习日");
+    validateDays(restDays, "休息日");
+
+    // 3. 用 Set 检查跨类型重复（同一天不能同时是上课日和休息日）
+    Set<Integer> all = new HashSet<>();
+    addWithoutConflict(all, classDays, "上课日");
+    addWithoutConflict(all, selfStudyDays, "自习日");
+    addWithoutConflict(all, restDays, "休息日");
+
+    // 4. holidayRest 不能为空
+    if (holidayRest == null) {
+        throw BusinessException.DateError.newInstance("课表规则 holidayRest 不能为空");
+    }
+}
+```
+
+> **关键设计：** `addWithoutConflict()` 用 `Set.add()` 的返回值检测重复——如果 `add()` 返回 false，说明该星期值已在其他类型中出现过，直接抛异常。
+
 ### 9.4 核心算法：课表生成
+
+**第一步：校验第一天上课日期**
+
+生成课表前会调用 `validateFirstClassDate()` 做两项校验：
+```java
+private void validateFirstClassDate(Date firstClassDate, ScheduleRuleConfig rule) {
+    int weekValue = getWeekValue(firstClassDate);
+    // 1. 不能是节假日
+    if (Boolean.TRUE.equals(rule.getHolidayRest())) {
+        HolidayInfo holidayInfo = holidayService.getHolidayInfo(firstClassDate);
+        if (holidayInfo != null && Boolean.TRUE.equals(holidayInfo.getHoliday())) {
+            throw BusinessException.DateError.newInstance("第一天上课时间不能是节假日");
+        }
+    }
+    // 2. 必须是配置中的上课日（不能是休息日或自习日）
+    if (rule.getClassDays() == null || !rule.getClassDays().contains(weekValue)) {
+        throw BusinessException.DateError.newInstance("第一天上课时间必须是配置中的上课日");
+    }
+}
+```
+
+> 为什么要校验？如果第一天是休息日，算法会直接跳过该天，但用户期望的是"第一天就是第一节课"，语义不符。
+
+**第二步：逐天遍历生成课表**
 
 **课表生成流程图：**
 
@@ -2995,60 +3105,6 @@ return schedules;
 - **while 循环逐天遍历**，自动跳过休息日/节假日/自习日
 - **只有上课日消耗课程明细**，其他类型不消耗
 - **节假日判断优先级最高**，避免在节假日生成上课记录
-                   │  必须是上课日        │
-                   │  不能是节假日        │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  查询课程明细列表    │
-                   │  courseIndex = 0     │
-                   └─────────────────────┘
-                              │
-                              ▼
-              ┌───────────────┴───────────────┐
-              │                               │
-              ▼                               │
-   ┌─────────────────────┐                    │
-   │  courseIndex < 总数? │──── 否 ───────────┼──▶ 返回课表
-   └─────────────────────┘                    │
-              │是                             │
-              ▼                               │
-   ┌─────────────────────┐                    │
-   │  获取当前日期星期    │                    │
-   │  weekValue = 1-7    │                    │
-   └─────────────────────┘                    │
-              │                               │
-              ▼                               │
-   ┌─────────────────────┐                    │
-   │  是节假日?           │── 是 ──▶ 添加HOLIDAY记录 ──▶ currentDate+1 ─┐
-   └─────────────────────┘                    │                       │
-              │否                             │                       │
-              ▼                               │                       │
-   ┌─────────────────────┐                    │                       │
-   │  是休息日?           │── 是 ──▶ 添加REST记录 ──▶ currentDate+1 ──┐│
-   └─────────────────────┘                    │                      ││
-              │否                             │                      ││
-              ▼                               │                      ││
-   ┌─────────────────────┐                    │                      ││
-   │  是自习日?           │── 是 ──▶ 添加SELF_STUDY记录 ──▶ currentDate+1 ┐││
-   └─────────────────────┘                    │                     │││
-              │否                             │                     │││
-              ▼                               │                     │││
-   ┌─────────────────────┐                    │                     │││
-   │  是上课日?           │── 是 ──▶ 添加CLASS记录 ──▶ courseIndex++ ─┼┼┼┘
-   └─────────────────────┘                    │                     │││
-              │否                             │                     │││
-              ▼                               │                     │││
-   ┌─────────────────────┐                    │                     │││
-   │  跳过（非配置日）    │────────────────────┼─────────────────────┘││
-   └─────────────────────┘                    │                      ││
-                                              │◀─────────────────────┘│
-                                              │◀──────────────────────┘
-                                              │
-                                              ▼
-                                    继续循环处理下一天
-```
 
 **算法核心思想：**
 1. 从第一天上课日期开始，逐天遍历
@@ -3068,13 +3124,18 @@ return schedules;
 
 ### 9.5 外部服务集成：HolidayService
 
-​```java
+```java
 @Service
 public class HolidayService {
 
     private static final String HOLIDAY_YEAR_URL = "https://timor.tech/api/holiday/year/";
 
-    // 年度节假日缓存（1天过期，最多缓存20年）
+    // Java 11+ 内置 HttpClient，连接超时 3 秒
+    private final HttpClient httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(3))
+        .build();
+
+    // 年度节假日缓存（写入后 1 天过期，最多缓存 20 年）
     private final Cache<Integer, Map<String, HolidayInfo>> cache = CacheBuilder.newBuilder()
         .expireAfterWrite(1, TimeUnit.DAYS)
         .maximumSize(20)
@@ -3092,6 +3153,51 @@ public class HolidayService {
 }
 ```
 
+**loadYearHoliday() 外部 API 调用细节：**
+```java
+private Map<String, HolidayInfo> loadYearHoliday(Integer year) {
+    try {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(HOLIDAY_YEAR_URL + year))
+            .timeout(Duration.ofSeconds(5))   // 请求超时 5 秒
+            .GET()
+            .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        JSONObject body = JSON.parseObject(response.body());
+        if (body == null || body.getIntValue("code") != 0) {
+            throw BusinessException.DateError.newInstance("节假日信息获取失败");
+        }
+
+        // 解析 holiday 对象，key 是 "MM-dd" 格式
+        JSONObject holiday = body.getJSONObject("holiday");
+        Map<String, HolidayInfo> result = new HashMap<>();
+        if (holiday == null) return result;
+
+        for (String key : holiday.keySet()) {
+            JSONObject item = holiday.getJSONObject(key);
+            if (item == null) continue;
+            // 优先用 API 返回的完整 date 字段，否则拼接 year-key
+            String dateText = item.getString("date");
+            String date = dateText == null ? year + "-" + key : dateText;
+            result.put(date, new HolidayInfo(item.getBoolean("holiday"), item.getString("name")));
+        }
+        return result;
+    } catch (BusinessException e) {
+        throw e;  // 业务异常直接抛出
+    } catch (Exception e) {
+        throw BusinessException.DateError.newInstance("节假日信息获取失败");
+    }
+}
+```
+
+**两个超时参数的区别：**
+| 参数 | 值 | 作用 |
+|------|-----|------|
+| `connectTimeout` | 3 秒 | 建立 TCP 连接的超时 |
+| `request.timeout()` | 5 秒 | 整个请求（连接 + 读取）的超时 |
+
+> 如果外部 API 挂了，最多阻塞 5 秒就会返回错误，不会无限等待。
+
 **为什么按年缓存而非按天？**
 - 节假日数据按年返回（一次 API 调用获取全年数据）
 - 一年内节假日数据不会变化，缓存 1 天足够
@@ -3102,20 +3208,6 @@ public class HolidayService {
 - 支持异步调用（虽然这里用了同步）
 - `connectTimeout` 控制连接超时，避免外部服务慢导致线程阻塞
 
-**外部 API 调用的异常处理：**
-```java
-try {
-    // 调用外部 API
-} catch (BusinessException e) {
-    throw e;  // 业务异常直接抛出
-} catch (Exception e) {
-    throw BusinessException.DateError.newInstance("节假日信息获取失败");
-}
-```
-- 区分业务异常和系统异常
-- 外部服务不可用时，返回明确的错误信息
-- 不暴露外部服务的内部错误给前端
-
 ### 9.6 跨模块数据聚合：阶段信息查询
 
 ```java
@@ -3123,24 +3215,40 @@ public List<ClassStageInfoRes> classStageInfo(Long classId) {
     // 1. 查班级 → 获取课程ID
     ClazzEntity clazz = clazzMapper.selectById(classId);
 
-    // 2. 查课程明细 → 按阶段分组
+    // 2. 查课程明细 → 按阶段分组（stageName 为 null 时归入"未分阶段"）
     List<CourseDetailEntity> courseDetails = courseDetailMapper.selectByCourseId(clazz.getCourseId());
-    Map<String, List<CourseDetailEntity>> courseDetailGroup = groupCourseDetailsByStage(courseDetails);
+    Map<String, List<CourseDetailEntity>> courseDetailGroup = courseDetails.stream()
+        .collect(Collectors.groupingBy(
+            item -> item.getStageName() == null ? "未分阶段" : item.getStageName(),
+            LinkedHashMap::new,    // 保持插入顺序
+            Collectors.toList()
+        ));
 
     // 3. 遍历每个阶段
+    List<ClassStageInfoRes> result = new ArrayList<>();
     for (Map.Entry<String, List<CourseDetailEntity>> entry : courseDetailGroup.entrySet()) {
+        ClassStageInfoRes stageInfo = new ClassStageInfoRes();
+        stageInfo.setStageName(entry.getKey());
+        stageInfo.setStageNumber(entry.getValue().size());
+
         // 4. 查该阶段的课表 → 获取日期范围
+        List<Long> courseIds = entry.getValue().stream().map(CourseDetailEntity::getId).toList();
         List<ClassScheduleEntity> schedules = classScheduleMapper.selectByCourseIds(courseIds, classId);
         Date stageStartDate = schedules.get(0).getScheduleDate();
         Date stageEndDate = schedules.get(schedules.size() - 1).getScheduleDate();
 
-        // 5. 查该时间段内已排课的老师
+        // 5. 查该时间段内已排课的老师（排除当前班级）
         List<Long> teacherIds = classScheduleMapper.selectTeacheringUserId(stageStartDate, stageEndDate, classId);
 
-        // 6. 查所有老师 → 排除已排课的 → 得到空闲老师
+        // 6. 查所有老师 → 排除已排课的 → 构建 Map<teacherId, realName>
         List<SysUserEntity> teacher = sysUserService.getUserByRoleCode("TEACHER");
         teacher.removeIf(next -> teacherIds.contains(next.getId()));
+        stageInfo.setFreeTeacherName(teacher.stream()
+            .collect(Collectors.toMap(SysUserEntity::getId, SysUserEntity::getRealName)));
+
+        result.add(stageInfo);
     }
+    return result;
 }
 ```
 
@@ -3261,92 +3369,11 @@ WHERE schedule_date BETWEEN ? AND ?
 - 同一个老师可以在不同班级的不同时间段授课
 - 只检查**其他班级**在该时间段内是否占用了这个老师
 - 当前班级重新分配老师时，不会被自己之前的分配记录阻塞
-                   │  Stage2: [day6-10]  │
-                   └─────────────────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │  遍历每个阶段        │
-                   └─────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────┴────────────────────┐
-         │                                         │
-         ▼                                         │
-┌─────────────────────┐                            │
-│  检查老师是否存在    │── 不存在 ──▶ 抛异常        │
-└─────────────────────┘                            │
-         │存在                                     │
-         ▼                                         │
-┌─────────────────────┐                            │
-│  获取阶段日期范围    │                            │
-│  startDate ~ endDate │                            │
-└─────────────────────┘                            │
-         │                                         │
-         ▼                                         │
-┌─────────────────────┐                            │
-│  查询该时间段内      │                            │
-│  已排课的老师ID      │                            │
-│  (排除当前班级)      │                            │
-└─────────────────────┘                            │
-         │                                         │
-         ▼                                         │
-┌─────────────────────┐                            │
-│  老师时间冲突?       │                            │
-└─────────────────────┘                            │
-         │         │                               │
-     有冲突        │无冲突                          │
-         ▼         ▼                               │
-┌────────────┐ ┌─────────────┐                     │
-│  抛异常    │ │  更新课表    │                     │
-│ "已有课程" │ │  的老师ID   │                     │
-└────────────┘ └─────────────┘                     │
-                           │                       │
-                           ▼                       │
-                  ┌─────────────────┐              │
-                  │  还有阶段?      │── 是 ────────┘
-                  └─────────────────┘
-                           │否
-                           ▼
-                  ┌─────────────────┐
-                  │  分配完成        │
-                  │  返回更新数量    │
-                  └─────────────────┘
-```
 
 **为什么老师冲突检测按时间段而非按天？**
 - 一个阶段可能跨多天（如 5 天课程）
 - 一次查询判断整个阶段，性能更好
 - 如果按天查询，需要循环查 5 次数据库
-
-**加课功能关键设计：**
-​```java
-// 1. 在指定日期插入新课程
-if (当天是自习/休息/节假日) {
-    // 直接改为上课
-    classScheduleEntity.setClassType(ClassScheduleTypeEnum.CLASS);
-} else if (当天已是上课) {
-    // 插入一条新上课记录（该班当天有两节课）
-    newList.add(newClassSchedule);
-}
-
-// 2. 后续所有上课日往后顺延
-for (剩余课程) {
-    按排课规则重新计算日期（跳过休息日/节假日/自习日）
-}
-
-// 3. 冲突检测（SQL 层面）
-SELECT teacher_id, schedule_date, COUNT(*) cnt
-FROM sys_class_schedule
-WHERE teacher_id IS NOT NULL
-GROUP BY teacher_id, schedule_date
-HAVING cnt > 1;
-
-// 有重复则回滚事务
-if (duplicateCount > 0) {
-    throw new BusinessException("老师同一天存在重复课表");
-}
-```
 
 **N+1 查询优化：**
 ```java
@@ -3505,6 +3532,7 @@ public class AddClassSchuleReq {
 
 **核心实现逻辑：**
 ```java
+@Transactional(rollbackFor = Exception.class)
 public void addClassSchule(Long classId, AddClassSchuleReq req) {
     // 1. 校验参数
     Date scheduleDate = truncateDate(req.getScheduleDate());
@@ -3512,6 +3540,9 @@ public void addClassSchule(Long classId, AddClassSchuleReq req) {
     // 2. 查询加课日期后面的所有课表
     List<ClassScheduleEntity> oldList = classScheduleMapper
         .selectByClassIdAndAfterScheduleDate(classId, scheduleDate);
+    if (oldList.isEmpty()) {
+        throw BusinessException.DateError.newInstance("加课日期后没有课表数据");
+    }
 
     // 3. 构建新课表（插入加课 + 重排后续）
     List<ClassScheduleEntity> newList = buildAddClassSchuleList(oldList, addCourseInfo);
@@ -3527,6 +3558,55 @@ public void addClassSchule(Long classId, AddClassSchuleReq req) {
     }
 }
 ```
+
+**buildAddClassSchuleList() 三段式处理：**
+
+加课的核心是将旧课表拆成三段处理：
+
+```
+旧课表：[A] [B] [C] [D] [E] [F] ...
+                ↑ 加课日期
+```
+
+| 阶段 | 处理方式 | 说明 |
+|------|----------|------|
+| 加课日期之前 | 直接复制到 newList | 不受影响 |
+| 加课日期当天 | 判断当天类型后插入新课程 | 见下方逻辑 |
+| 加课日期之后 | 只保留 CLASS 类型，按排课规则重新排日期 | 休息日/自习日/节假日自动跳过 |
+
+**加课日期当天的处理逻辑：**
+```java
+if (当天不是上课日) {
+    // 直接改为上课（覆盖原来的休息/自习/节假日记录）
+    newEntity.setClassType(ClassScheduleTypeEnum.CLASS);
+    newEntity.setTeacherId(addCourseInfo.getTeacherId());
+    newEntity.setCourseContent(addCourseInfo.getCourseContent());
+} else {
+    // 当天已是上课 → 新增一条上课记录（该班当天有两节课）
+    ClassScheduleEntity newEntity = new ClassScheduleEntity();
+    newEntity.setClassType(ClassScheduleTypeEnum.CLASS);
+    newEntity.setScheduleDate(addCourseInfo.getScheduleDate());
+    newEntity.setTeacherId(addCourseInfo.getTeacherId());
+    newEntity.setCourseContent(addCourseInfo.getCourseContent());
+    newList.add(newEntity);
+}
+```
+
+**后续课程重排逻辑：**
+```java
+// 只保留上课类型的记录用于重排
+removedList.removeIf(e -> !e.getClassType().equals(ClassScheduleTypeEnum.CLASS.name()));
+
+int courseIndex = 0;
+while (courseIndex < removedList.size()) {
+    int weekValue = getWeekValue(curDate);
+    // 按排课规则逐天遍历，跳过节假日/休息日/自习日
+    // 只有上课日才消耗一条课程记录（courseIndex++）
+    // ... 与 buildSchedules() 相同的判断逻辑 ...
+}
+```
+
+> **关键设计：** 重排时保留了原课表的 `teacherId`、`courseDetailId`、`courseContent`，只改变日期。
 
 **为什么用"先删后插"而非"逐条更新"？**
 - 加课会导致后续所有课表日期顺延，相当于重新排课
@@ -3913,7 +3993,62 @@ sequenceDiagram
                    └─────────────────────┘
 ```
 
-### 10.2 三层订单设计
+### 10.2 模块结构
+
+```
+order/
+├── prepay/
+│   ├── controller/
+│   │   ├── OrderController.java           ← 支付订单查询
+│   │   └── PrepayOrderController.java     ← 预支付订单 CRUD
+│   ├── mapper/
+│   │   ├── OrderMapper.java               ← 支付订单数据访问
+│   │   └── PrepayOrderMapper.java         ← 预支付订单数据访问
+│   ├── pojo/
+│   │   ├── bo/QueryOrderBo.java           ← 查询条件 BO
+│   │   ├── entity/
+│   │   │   ├── OrderEntity.java           ← 支付订单实体
+│   │   │   └── PrepayOrderEntity.java     ← 预支付订单实体
+│   │   ├── info/UpdateOrderStatusInfo.java ← 状态更新 Info
+│   │   └── vo/req|res/                    ← 请求/响应 VO
+│   └── service/
+│       ├── OrderService.java              ← 支付订单业务接口
+│       ├── PrepayOrderService.java        ← 预支付订单业务接口
+│       └── impl/                          ← 业务实现
+├── product/
+│   ├── controller/ProductController.java  ← 产品 CRUD
+│   ├── mapper/ProductMapper.java
+│   ├── pojo/entity/ProductEntity.java
+│   └── service/                           ← 产品业务
+└── refund/
+    ├── controller/RefundOrderController.java ← 退款接口
+    ├── biz/
+    │   ├── RefundOrderBiz.java            ← 退款业务编排层
+    │   └── impl/RefundOrderBizImpl.java   ← 退款核心逻辑
+    ├── mapper/RefundOrderMapper.java
+    ├── pojo/entity/RefundOrderEntity.java ← 退款订单实体
+    └── service/RefundOrderService.java    ← 退款数据操作
+
+integration/yeepay/                        ← 易宝支付集成（独立包）
+├── callback/
+│   ├── YeepayCallbackServlet.java         ← 回调入口 Servlet
+│   └── config/YeepayCallbackConfig.java   ← Servlet 注册配置
+├── handle/
+│   ├── YeepayPaySuccessHandle.java        ← 支付成功回调处理
+│   ├── YeepayRefundHandle.java            ← 退款回调处理
+│   └── YeepaySettleSuccessHandle.java     ← 结算回调处理
+├── pojo/req|res|Info/                     ← 易宝请求/响应/回调实体
+└── service/
+    ├── YeepayCashierService.java          ← 统一下单 + 退款
+    └── YeepayGatewayService.java          ← 易宝网关请求封装
+```
+
+**为什么退款模块有 `biz` 层？**
+- 退款涉及多个 Service 协作（OrderService + RefundOrderService + YeepayCashierService）
+- `biz` 层负责编排多个 Service 的调用顺序和事务边界
+- 普通 CRUD（如产品管理）不需要 biz 层，Service 层足够
+
+### 10.3 三层订单设计
 
 **为什么分 Product、PrepayOrder、Order 三层？**
 
@@ -3962,7 +4097,9 @@ public class OrderEntity {
     private String studentPhone;      // 学生手机号
     private String studentName;       // 学生姓名
     private String productId;         // 产品ID
+    private String productContent;    // 产品内容（冗余，避免JOIN）
     private BigDecimal orderAmount;   // 支付金额
+    private BigDecimal refundedAmount;// 已申请退款金额（含处理中+已成功）
     private String prepayOrderNo;     // 关联预支付订单号
     private String status;            // INIT / PROCESSING / SUCCESS / FAIL / TIMEOUT
     private String uniqueOrderNo;     // 支付渠道唯一订单号
@@ -3972,13 +4109,15 @@ public class OrderEntity {
 }
 ```
 
+> **refundedAmount 字段：** 记录该订单已申请的退款总额（包含退款处理中和退款成功的金额）。退款申请时通过乐观锁 `increaseRefundedAmount()` 累加，退款失败时通过 `decreaseRefundedAmount()` 回退，防止超额退款。
+
 **为什么预支付订单和支付订单分开？**
 - **预支付订单**：学生填完信息就创建，还没真正付款，可能取消
 - **支付订单**：调用支付接口时创建，有真实的支付状态
 - 一个预支付订单可以对应多次支付尝试（如第一次失败后重试）
 - 解耦业务逻辑和支付逻辑，预支付订单不关心支付渠道
 
-### 10.3 订单号生成策略
+### 10.4 订单号生成策略
 
 ```java
 private String createOrderNo() {
@@ -4002,7 +4141,7 @@ private String createOrderNo() {
 - 随机数防止同一毫秒内多个订单号冲突
 - `SecureRandom` 比 `Random` 更安全
 
-### 10.4 易宝支付集成
+### 10.5 易宝支付集成
 
 **YeepayCashierService — 统一下单：**
 
@@ -4037,7 +4176,7 @@ public class YeepayProperties {
 - IDE 支持：自动提示、校验
 - 集中管理：所有易宝相关配置在一个类里
 
-### 10.5 支付回调处理
+### 10.6 支付回调处理
 
 **回调流程图：**
 
@@ -4272,7 +4411,7 @@ flowchart TD
 - 支付订单（Order）：记录支付状态，后续用于对账
 - 预支付订单（PrepayOrder）：业务层关心的订单状态，前端展示用
 
-### 10.6 订单状态机
+### 10.7 订单状态机
 
 ```mermaid
 stateDiagram-v2
@@ -4321,6 +4460,202 @@ orderService.updateOrderStatus(new UpdateOrderStatusInfo(
 - 乐观锁：只有当前状态是 PROCESSING 时才能更新为 SUCCESS
 - 防止重复回调导致状态错误（如回调被触发两次）
 - SQL 中用 `WHERE status = #{oldStatus}` 保证原子性
+
+### 10.8 退款模块
+
+**退款流程图：**
+
+```mermaid
+sequenceDiagram
+    participant F as 前端
+    participant RC as RefundOrderController
+    participant RB as RefundOrderBiz
+    participant OS as OrderService
+    participant RS as RefundOrderService
+    participant Y as 易宝支付
+    participant RH as YeepayRefundHandle
+
+    F->>RC: 1. 创建退款订单号
+    RC->>RB: createRefundOrder()
+    RB-->>F: 退款订单号
+
+    F->>RC: 2. 申请退款
+    RC->>RB: applyRefund(refundOrderNo, req)
+    RB->>OS: 校验原单状态（必须是 SUCCESS）
+    RB->>RS: 保存退款单（INIT）
+    RB->>OS: increaseRefundedAmount() 累加已退金额
+    RB->>Y: 调用易宝退款接口
+    Y-->>RB: uniqueRefundNo
+    RB->>RS: 更新退款单为 PROCESSING
+    RB-->>F: 退款申请结果
+
+    Y->>RH: 3. 退款结果回调
+    alt 退款成功
+        RH->>RB: handleRefundSuccess()
+        RB->>RS: 更新退款单为 SUCCESS
+    else 退款失败
+        RH->>RB: handleRefundFail()
+        RB->>RS: 更新退款单为 FAIL
+        RB->>OS: decreaseRefundedAmount() 回退已退金额
+    end
+```
+
+**退款状态机（RefundStatusEnum）：**
+
+```mermaid
+stateDiagram-v2
+    [*] --> INIT: 创建退款单
+    INIT --> PROCESSING: 调用易宝退款接口成功
+    PROCESSING --> SUCCESS: 易宝回调退款成功
+    PROCESSING --> FAIL: 易宝回调退款失败
+    FAIL --> [*]
+    SUCCESS --> [*]
+```
+
+| 状态 | 说明 | 触发时机 |
+|------|------|----------|
+| INIT | 初始化 | 创建退款单 |
+| PROCESSING | 退款处理中 | 调用易宝退款接口成功 |
+| SUCCESS | 退款成功 | 易宝回调通知退款成功 |
+| FAIL | 退款失败 | 易宝回调通知退款失败 |
+| CLOSED | 已关闭 | 预留状态 |
+
+**退款核心逻辑（RefundOrderBiz.applyRefund()）：**
+
+```java
+public RefundApplyRes applyRefund(String refundOrderNo, RefundApplyReq req) {
+    // 1. 校验原单：必须是支付成功的订单
+    OrderEntity order = getRefundablePaymentOrder(req.getPaymentOrderNo());
+
+    // 2. 保存退款单（幂等：重复请求返回已有退款单）
+    RefundOrderEntity existedRefundOrder = saveApplyingRefundOrder(refundOrderNo, req, order);
+    if (existedRefundOrder != null) {
+        return buildRefundApplyRes(existedRefundOrder);  // 幂等返回
+    }
+
+    // 3. 累加原单已退金额（乐观锁，防止超额退款）
+    orderService.increaseRefundedAmount(order.getOrderNo(), req.getRefundAmount());
+
+    // 4. 调用易宝退款接口
+    YeepayRefundRes yeepayRefundRes = requestYeepayRefund(order, refundOrderNo, req);
+
+    // 5. 更新退款单为 PROCESSING
+    refundOrderService.updateRefundProcessing(refundOrderNo, ...);
+}
+```
+
+**退款金额保护机制：**
+```java
+// increaseRefundedAmount() — SQL 层面防止超额退款
+UPDATE order_payment
+SET refunded_amount = refunded_amount + #{refundAmount}
+WHERE order_no = #{orderNo}
+  AND refunded_amount + #{refundAmount} <= order_amount  -- 关键：退款总额不能超过订单金额
+```
+
+> 如果 `refundedAmount + refundAmount > orderAmount`，SQL 不会更新任何行，Service 层检测 `rows != 1` 后抛出异常。
+
+**退款失败时回退已退金额：**
+```java
+// handleRefundFail() — 退款失败时回退
+public void handleRefundFail(String refundOrderNo, String failReason) {
+    refundOrderService.updateRefundFail(refundOrderNo, ...);
+    orderService.decreaseRefundedAmount(refundOrder.getPaymentOrderNo(), refundOrder.getRefundAmount());
+}
+```
+
+### 10.9 退款回调处理
+
+**YeepayRefundHandle — 退款回调 Handler：**
+
+```java
+@Component
+public class YeepayRefundHandle implements YopCallbackHandler {
+
+    @PostConstruct
+    public void init() {
+        YopCallbackHandlerFactory.register(getType(), this);  // 注册到工厂
+    }
+
+    @Override
+    public String getType() {
+        return "/yq-admin/yop-callback/refund";  // 路由匹配 URI
+    }
+
+    @Override
+    public void handle(YopCallback yopCallback) {
+        YeepayRefundInfo refundInfo = JSONObject.parseObject(
+            yopCallback.getBizData(), YeepayRefundInfo.class);
+
+        String refundRequestId = refundInfo.getRefundRequestId();  // 退款订单号
+        String status = refundInfo.getStatus();
+
+        if ("SUCCESS".equals(status)) {
+            Date refundSuccessTime = DateUtil.parse(refundInfo.getRefundSuccessDate(), ...);
+            refundOrderBiz.handleRefundSuccess(refundRequestId, uniqueRefundNo, refundSuccessTime);
+        } else if ("FAILED".equals(status)) {
+            refundOrderBiz.handleRefundFail(refundRequestId, refundInfo.getErrorMessage());
+        }
+    }
+}
+```
+
+**退款回调与支付回调的对比：**
+
+| 对比项 | 支付回调 | 退款回调 |
+|--------|----------|----------|
+| Handler | YeepayPaySuccessHandle | YeepayRefundHandle |
+| URI | /yop-callback/paySuccess | /yop-callback/refund |
+| 更新表 | order_payment + prepay_order | refund_order + order_payment.refundedAmount |
+| 乐观锁 | PROCESSING → SUCCESS | PROCESSING → SUCCESS/FAIL |
+| 失败处理 | 无（支付只有成功） | 回退 refundedAmount |
+
+### 10.10 API 接口汇总
+
+**订单相关接口：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/orders` | 分页查询支付订单 |
+
+**预支付订单接口：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/prepayOrders` | 创建预支付订单 |
+| PUT | `/api/prepayOrders/{id}` | 修改预支付订单 |
+| DELETE | `/api/prepayOrders/{id}` | 删除预支付订单 |
+| GET | `/api/prepayOrders/{id}` | 查询预支付订单详情 |
+| GET | `/api/prepayOrders` | 分页查询预支付订单 |
+
+**退款订单接口：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/refundOrders` | 分页查询退款订单 |
+| POST | `/api/refundOrders/create` | 创建退款订单号 |
+| POST | `/api/refundOrders/{refundOrderNo}/apply` | 申请退款 |
+
+**产品接口（标准 CRUD）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/products` | 新增产品 |
+| PUT | `/api/products/{id}` | 修改产品 |
+| DELETE | `/api/products/{id}` | 删除产品 |
+| GET | `/api/products/{id}` | 查询产品详情 |
+| GET | `/api/products` | 分页查询产品 |
+
+### 10.11 设计决策总结
+
+| 问题 | 设计决策 | 原因 |
+|------|---------|------|
+| 为什么预支付和支付订单分开？ | 两层订单 | 预支付是业务意向，支付是实际交易；一个预支付可对应多次支付尝试 |
+| 为什么退款要先创建退款单号？ | 两步操作 | 前端先拿到退款单号，再带号申请退款，保证幂等性 |
+| 为什么 refundedAmount 用乐观锁？ | SQL 层面防超额 | `WHERE refunded_amount + #{amount} <= order_amount`，比 Java 层面判断更安全 |
+| 为什么退款失败要回退已退金额？ | 释放额度 | 退款失败意味着钱没退出去，已退金额必须回退，否则用户无法再次退款 |
+| 为什么用 SecureRandom？ | 防预测 | 普通 Random 的种子可预测，SecureRandom 基于系统熵源 |
+| 为什么退款回调不更新 prepay_order？ | 业务无关 | 退款只影响支付订单的已退金额，不影响预支付订单的已支付状态 |
 
 ---
 

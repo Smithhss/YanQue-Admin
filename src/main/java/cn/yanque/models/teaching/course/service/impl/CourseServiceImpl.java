@@ -57,6 +57,7 @@ public class CourseServiceImpl implements CourseService {
     @Transactional(rollbackFor = Exception.class)
     public CourseCreateRes addCourse(CourseCreateReq req) {
         CourseEntity course = new CourseEntity();
+
         course.setCourseName(req.getCourseName());
         course.setCourseDays(req.getCourseDays());
         course.setTeachingMode(validateTeachingMode(req.getTeachingMode()));

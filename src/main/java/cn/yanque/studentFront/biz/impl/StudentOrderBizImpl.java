@@ -59,7 +59,7 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
 
         orderService.saveOrder(orderEntity);
 
-
+        // 调用易宝接口
         YeepayUnifiedOrderReq yeepayUnifiedOrderReq = new YeepayUnifiedOrderReq();
         yeepayUnifiedOrderReq.setOrderNo(orderEntity.getOrderNo());
         yeepayUnifiedOrderReq.setOrderAmount(orderEntity.getOrderAmount());

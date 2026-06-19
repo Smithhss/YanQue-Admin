@@ -39,6 +39,7 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
 
             Object userId = jwt.getPayload(USER_ID);
             Object expireTime = jwt.getPayload(EXPIRE_TIME);
+
             if (userId == null || expireTime == null) {
                 throw new BusinessException(401, "Token无效或已过期");
             }
