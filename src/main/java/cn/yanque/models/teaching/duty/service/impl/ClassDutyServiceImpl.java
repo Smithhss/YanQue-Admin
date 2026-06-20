@@ -50,6 +50,16 @@ import java.util.stream.Collectors;
 
 /**
  * 值班管理业务实现。
+ *
+ * 三种值班类型：
+ *   EVENING_STUDY_CLASS  — 晚自习值班（每班一个老师，19:00-21:00）
+ *   EVENING_STUDY_CAMPUS — 晚自习统一值班（每校区一个老师，21:00-22:30）
+ *   SELF_STUDY_CLASS     — 自习日值班（每班一个老师，09:00-18:00）
+ *
+ * 核心设计：
+ *   - 所有新增/修改都经过 buildDutyEntity() 构建+校验流水线
+ *   - 按日期保存采用"先删后插"策略，事务保证一致性
+ *   - 按日期查询聚合 5 个数据源（课表+值班+班级+校区+老师），Map 内存关联
  */
 @Service
 public class ClassDutyServiceImpl implements ClassDutyService {
@@ -72,6 +82,10 @@ public class ClassDutyServiceImpl implements ClassDutyService {
     @Autowired
     private ClassScheduleMapper classScheduleMapper;
 
+    /**
+     * 新增单个值班。
+     * 构建+校验交给 buildDutyEntity()，这里只负责插入。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ClassDutyCreateRes addDuty(ClassDutyCreateReq req) {
@@ -84,6 +98,10 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 修改单个值班。
+     * 先查存在性，再 buildDutyEntity() 构建+校验，最后更新。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ClassDutyUpdateRes updateDuty(ClassDutyUpdateReq req) {
@@ -103,6 +121,9 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 删除单个值班。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ClassDutyDeleteRes deleteDuty(Long id) {
@@ -116,6 +137,10 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 查询单个值班详情。
+     * 填充班级班期、校区名称、老师名称、值班类型描述。
+     */
     @Override
     public ClassDutyDetailRes getDutyById(Long id) {
         ClassDutyEntity duty = classDutyMapper.selectById(id);
@@ -129,10 +154,15 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 分页查询值班列表。
+     * 支持按班级、校区、老师、值班类型、日期范围筛选。
+     */
     @Override
     public PageResult<ClassDutyPageRes> pageDuty(ClassDutyPageReq req) {
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
+
         Date startDate = req.getStartDate() == null ? null : DateUtil.beginOfDay(req.getStartDate());
         Date endDate = req.getEndDate() == null ? null : DateUtil.endOfDay(req.getEndDate());
 
@@ -145,34 +175,59 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
     }
 
+    /**
+     * 按日期查询排班页面数据（值班模块最复杂的查询）。
+     *
+     * 聚合 5 个数据源：
+     *   1. 课表（ClassSchedule）→ 确定当天哪些班有课/自习
+     *   2. 值班记录（ClassDuty）→ 已排班的老师
+     *   3. 班级信息（Clazz）→ 班期、所属校区
+     *   4. 校区信息（Campus）→ 校区名称
+     *   5. 老师信息（SysUser）→ 老师姓名
+     *
+     * 返回两类列表：
+     *   - classDutyList：班级级值班（晚自习/自习日，按课表遍历）
+     *   - campusDutyList：校区级值班（晚自习统一值班，按校区遍历）
+     */
     @Override
     public ClassDutyDateRes getDateDuty(Date dutyDate) {
         Date day = DateUtil.beginOfDay(dutyDate);
+
+        // 1. 查询当天所有课表，只保留上课日和自习日（排除休息日/节假日）
         List<ClassScheduleEntity> schedules = classScheduleMapper.selectByClassIdAndDate(null, day, DateUtil.endOfDay(day))
                 .stream()
                 .filter(item -> ClassScheduleTypeEnum.CLASS.name().equals(item.getClassType())
                         || ClassScheduleTypeEnum.SELF_STUDY.name().equals(item.getClassType()))
                 .toList();
+
+        // 2. 查询当天已有值班记录
         List<ClassDutyEntity> duties = classDutyMapper.selectByDutyDate(day);
 
+        // 3. 构建班级值班 Map（key = classId:dutyType），用于快速查找已有值班
         Map<String, ClassDutyEntity> classDutyMap = duties.stream()
                 .filter(item -> item.getClassId() != null)
                 .collect(Collectors.toMap(item -> buildClassDutyKey(item.getClassId(), item.getDutyType()), Function.identity(), (a, b) -> b));
+
+        // 4. 构建校区值班 Map（key = campusId），用于快速查找校区统一值班
         Map<Long, ClassDutyEntity> campusDutyMap = duties.stream()
                 .filter(item -> DutyTypeEnum.EVENING_STUDY_CAMPUS.name().equals(item.getDutyType()))
                 .collect(Collectors.toMap(ClassDutyEntity::getCampusId, Function.identity(), (a, b) -> b));
 
+        // 5. 批量查询班级信息（从课表提取 classId，避免 N+1）
         List<Long> classIds = schedules.stream().map(ClassScheduleEntity::getClassId).distinct().toList();
         Map<Long, ClazzEntity> clazzMap = classIds.isEmpty() ? Collections.emptyMap() : clazzMapper.selectByIds(classIds).stream()
                 .collect(Collectors.toMap(ClazzEntity::getId, Function.identity(), (a, b) -> a));
 
+        // 6. 收集所有校区ID（班级所属校区 + 已有校区值班的校区）
         Set<Long> campusIds = new LinkedHashSet<>();
         clazzMap.values().forEach(clazz -> campusIds.add(clazz.getCampusId()));
         campusIds.addAll(campusDutyMap.keySet());
 
+        // 7. 批量查询校区信息
         Map<Long, CampusEntity> campusMap = campusIds.isEmpty() ? Collections.emptyMap() : campusMapper.selectByIds(new ArrayList<>(campusIds)).stream()
                 .collect(Collectors.toMap(CampusEntity::getId, Function.identity(), (a, b) -> a));
 
+        // 8. 批量查询老师信息（从值班记录提取 teacherId）
         Set<Long> teacherIds = duties.stream()
                 .map(ClassDutyEntity::getTeacherId)
                 .filter(item -> item != null)
@@ -180,9 +235,12 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         Map<Long, SysUserEntity> teacherMap = teacherIds.isEmpty() ? Collections.emptyMap() : sysUserMapper.selectByIds(new ArrayList<>(teacherIds)).stream()
                 .collect(Collectors.toMap(SysUserEntity::getId, Function.identity(), (a, b) -> a));
 
+        // 9. 组装班级值班列表（遍历课表，每条课表对应一个值班项）
         List<ClassDutyClassItemRes> classDutyList = schedules.stream()
                 .map(schedule -> buildDateClassItem(schedule, clazzMap, campusMap, classDutyMap, teacherMap))
                 .toList();
+
+        // 10. 组装校区值班列表（遍历所有校区，每个校区一个值班项）
         List<ClassDutyCampusItemRes> campusDutyList = campusIds.stream()
                 .map(campusId -> buildDateCampusItem(campusId, campusMap, campusDutyMap, teacherMap))
                 .toList();
@@ -194,12 +252,25 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 按日期覆盖保存值班（先删后插）。
+     *
+     * 策略：删除当天所有值班 → 重新插入前端传入的完整列表。
+     * 事务保证"删+插"的原子性。
+     *
+     * 为什么用先删后插而非逐条对比？
+     * - 前端传的是当天完整列表，不是增量
+     * - 先删后插逻辑简单，不需要处理"删除/新增/修改"三种情况
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ClassDutyDateSaveRes saveDateDuty(ClassDutyDateSaveReq req) {
         Date day = DateUtil.beginOfDay(req.getDutyDate());
+
+        // 1. 删除当天所有值班
         classDutyMapper.deleteByDutyDate(day);
 
+        // 2. 重新插入班级值班（每条都经过 buildDutyEntity 校验）
         int saveCount = 0;
         List<ClassDutyDateSaveReq.ClassDutyItem> classDutyList = req.getClassDutyList() == null ? Collections.emptyList() : req.getClassDutyList();
         for (ClassDutyDateSaveReq.ClassDutyItem item : classDutyList) {
@@ -208,6 +279,7 @@ public class ClassDutyServiceImpl implements ClassDutyService {
             saveCount++;
         }
 
+        // 3. 重新插入校区值班（类型必须是 EVENING_STUDY_CAMPUS）
         List<ClassDutyDateSaveReq.CampusDutyItem> campusDutyList = req.getCampusDutyList() == null ? Collections.emptyList() : req.getCampusDutyList();
         for (ClassDutyDateSaveReq.CampusDutyItem item : campusDutyList) {
             if (!DutyTypeEnum.EVENING_STUDY_CAMPUS.name().equals(item.getDutyType())) {
@@ -223,13 +295,28 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 构建+校验流水线（所有新增/修改值班的统一入口）。
+     *
+     * 流程：
+     *   1. parseDutyType — 解析值班类型枚举
+     *   2. validateTeacher — 校验老师是否为 TEACHER 角色
+     *   3. 校验班级/校区（根据 dutyType 互斥）
+     *   4. validateDutyRule — 业务规则校验（重复+冲突+自习日）
+     *   5. 组装 ClassDutyEntity（startTime/endTime 从枚举获取，不由前端传入）
+     */
     private ClassDutyEntity buildDutyEntity(Long id, Long classId, Long campusId, Long teacherId,
                                             Date dutyDate, String dutyTypeValue, String remark) {
+        // 1. 解析值班类型
         DutyTypeEnum dutyType = parseDutyType(dutyTypeValue);
         Date day = DateUtil.beginOfDay(dutyDate);
 
+        // 2. 校验老师角色（必须是 TEACHER）
         validateTeacher(teacherId);
+
+        // 3. 根据值班类型校验班级/校区（互斥：班级值班有 classId，校区值班有 campusId）
         if (dutyType.isClassRequired()) {
+            // 班级值班：classId 必填，campusId 从班级自动获取
             if (classId == null) {
                 throw BusinessException.DateError.newInstance("班级不能为空");
             }
@@ -241,8 +328,9 @@ public class ClassDutyServiceImpl implements ClassDutyService {
             if (campus == null) {
                 throw BusinessException.CampusNotExist;
             }
-            campusId = clazz.getCampusId();
+            campusId = clazz.getCampusId(); // 自动填充
         } else {
+            // 校区值班：campusId 必填，classId 设为 null
             if (campusId == null) {
                 throw BusinessException.DateError.newInstance("校区不能为空");
             }
@@ -250,11 +338,13 @@ public class ClassDutyServiceImpl implements ClassDutyService {
             if (campus == null) {
                 throw BusinessException.CampusNotExist;
             }
-            classId = null;
+            classId = null; // 强制清空，防止脏数据
         }
 
+        // 4. 业务规则校验（重复 + 老师冲突 + 自习日）
         validateDutyRule(id, classId, campusId, teacherId, day, dutyType);
 
+        // 5. 组装实体（startTime/endTime 从枚举获取，保证数据一致性）
         ClassDutyEntity duty = new ClassDutyEntity();
         duty.setId(id);
         duty.setClassId(classId);
@@ -262,12 +352,15 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         duty.setTeacherId(teacherId);
         duty.setDutyDate(day);
         duty.setDutyType(dutyType.name());
-        duty.setStartTime(dutyType.getStartTime());
+        duty.setStartTime(dutyType.getStartTime()); // 从枚举获取，不由前端传入
         duty.setEndTime(dutyType.getEndTime());
         duty.setRemark(remark);
         return duty;
     }
 
+    /**
+     * 解析值班类型字符串为枚举。
+     */
     private DutyTypeEnum parseDutyType(String dutyType) {
         try {
             return DutyTypeEnum.parse(dutyType);
@@ -276,6 +369,10 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         }
     }
 
+    /**
+     * 校验老师是否具有 TEACHER 角色。
+     * 查询所有 TEACHER 角色的用户ID，检查传入的 teacherId 是否在其中。
+     */
     private void validateTeacher(Long teacherId) {
         Set<Long> teacherIds = sysUserService.getUserByRoleCode("TEACHER").stream()
                 .map(SysUserEntity::getId)
@@ -285,23 +382,35 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         }
     }
 
+    /**
+     * 业务规则校验（4 项检查）。
+     *
+     * 1. 班级值班重复检查：同班同天同类型不能重复
+     * 2. 校区值班重复检查：同校区同天不能重复
+     * 3. 老师时间段冲突：同一老师同一时间段不能有多个值班（时间重叠检测）
+     * 4. 自习日校验：自习日值班只能排在课表标记为 SELF_STUDY 的天
+     */
     private void validateDutyRule(Long id, Long classId, Long campusId, Long teacherId, Date dutyDate, DutyTypeEnum dutyType) {
+        // 检查1：班级值班重复
         if (dutyType.isClassRequired()) {
             int count = classDutyMapper.countClassDuty(id, classId, dutyDate, dutyType.name());
             if (count > 0) {
                 throw BusinessException.DateError.newInstance("该班级当天已存在同类型值班");
             }
         }
+        // 检查2：校区统一值班重复
         if (dutyType.isCampusRequired()) {
             int count = classDutyMapper.countCampusDuty(id, campusId, dutyDate, dutyType.name());
             if (count > 0) {
                 throw BusinessException.DateError.newInstance("该校区当天已存在统一值班");
             }
         }
+        // 检查3：老师时间段冲突（时间重叠：start < endTime AND end > startTime）
         int conflictCount = classDutyMapper.countTeacherTimeConflict(id, teacherId, dutyDate, dutyType.getStartTime(), dutyType.getEndTime());
         if (conflictCount > 0) {
             throw BusinessException.DateError.newInstance("该老师在当前时间段已有值班");
         }
+        // 检查4：自习日值班必须在课表标记为 SELF_STUDY 的天
         if (dutyType == DutyTypeEnum.SELF_STUDY_CLASS) {
             List<ClassScheduleEntity> schedules = classScheduleMapper.selectByClassIdAndDate(classId,
                     DateUtil.beginOfDay(dutyDate), DateUtil.endOfDay(dutyDate));
@@ -313,6 +422,9 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         }
     }
 
+    /**
+     * 构建分页查询结果（填充值班类型描述）。
+     */
     private ClassDutyPageRes buildDutyPageRes(ClassDutyEntity duty) {
         ClassDutyPageRes res = new ClassDutyPageRes();
         BeanUtils.copyProperties(duty, res);
@@ -320,11 +432,18 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 批量填充值班分页列表的名称字段（班级班期、校区名称、老师名称）。
+     *
+     * 设计：先批量查询所有关联实体（避免 N+1），再遍历填充。
+     * 老师名称显示：nickname > username。
+     */
     private void fillDutyPageNames(List<ClassDutyPageRes> records) {
         if (records.isEmpty()) {
             return;
         }
 
+        // 收集所有关联ID（去重）
         List<Long> classIds = records.stream()
                 .map(ClassDutyPageRes::getClassId)
                 .filter(item -> item != null)
@@ -333,6 +452,7 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         List<Long> campusIds = records.stream().map(ClassDutyPageRes::getCampusId).distinct().toList();
         List<Long> teacherIds = records.stream().map(ClassDutyPageRes::getTeacherId).distinct().toList();
 
+        // 批量查询关联实体，构建 Map
         Map<Long, ClazzEntity> clazzMap = classIds.isEmpty() ? Collections.emptyMap() : clazzMapper.selectByIds(classIds).stream()
                 .collect(Collectors.toMap(ClazzEntity::getId, Function.identity(), (a, b) -> a));
         Map<Long, CampusEntity> campusMap = campusMapper.selectByIds(campusIds).stream()
@@ -340,6 +460,7 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         Map<Long, SysUserEntity> userMap = sysUserMapper.selectByIds(teacherIds).stream()
                 .collect(Collectors.toMap(SysUserEntity::getId, Function.identity(), (a, b) -> a));
 
+        // 遍历填充名称
         records.forEach(record -> {
             ClazzEntity clazz = clazzMap.get(record.getClassId());
             if (clazz != null) {
@@ -356,6 +477,9 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         });
     }
 
+    /**
+     * 填充值班详情的名称字段（单条记录，用 selectByIds(singletonList) 保持统一风格）。
+     */
     private void fillDutyDetailNames(ClassDutyDetailRes res) {
         if (res.getClassId() != null) {
             ClazzEntity clazz = clazzMapper.selectByIds(Collections.singletonList(res.getClassId())).stream().findFirst().orElse(null);
@@ -373,25 +497,42 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         }
     }
 
+    /**
+     * 填充分页结果的值班类型描述。
+     */
     private void fillDutyTypeDesc(ClassDutyPageRes res) {
         DutyTypeEnum dutyType = parseDutyType(res.getDutyType());
         res.setDutyTypeDesc(dutyType.getDesc());
     }
 
+    /**
+     * 填充详情的值班类型描述。
+     */
     private void fillDutyTypeDesc(ClassDutyDetailRes res) {
         DutyTypeEnum dutyType = parseDutyType(res.getDutyType());
         res.setDutyTypeDesc(dutyType.getDesc());
     }
 
+    /**
+     * 组装班级值班项（按日期查询时使用）。
+     *
+     * 根据课表类型自动判断值班类型：
+     *   - SELF_STUDY → 自习日值班（09:00-18:00）
+     *   - CLASS      → 晚自习值班（19:00-21:00）
+     *
+     * 从 Map 中查找已有值班记录，填充已排班的老师信息。
+     */
     private ClassDutyClassItemRes buildDateClassItem(ClassScheduleEntity schedule,
                                                      Map<Long, ClazzEntity> clazzMap,
                                                      Map<Long, CampusEntity> campusMap,
                                                      Map<String, ClassDutyEntity> classDutyMap,
                                                      Map<Long, SysUserEntity> teacherMap) {
         ClazzEntity clazz = clazzMap.get(schedule.getClassId());
+        // 根据课表类型自动判断值班类型
         DutyTypeEnum dutyType = ClassScheduleTypeEnum.SELF_STUDY.name().equals(schedule.getClassType())
                 ? DutyTypeEnum.SELF_STUDY_CLASS
                 : DutyTypeEnum.EVENING_STUDY_CLASS;
+        // 从 Map 查找已有值班（key = classId:dutyType）
         ClassDutyEntity duty = classDutyMap.get(buildClassDutyKey(schedule.getClassId(), dutyType.name()));
 
         ClassDutyClassItemRes res = new ClassDutyClassItemRes();
@@ -412,6 +553,7 @@ public class ClassDutyServiceImpl implements ClassDutyService {
                 res.setCampusName(campus.getCampusLocation());
             }
         }
+        // 填充已排班的老师信息（可能为空，表示尚未排班）
         if (duty != null) {
             res.setTeacherId(duty.getTeacherId());
             res.setTeacherName(getUserShowName(teacherMap.get(duty.getTeacherId())));
@@ -419,6 +561,12 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 组装校区值班项（按日期查询时使用）。
+     *
+     * 校区统一值班固定为 EVENING_STUDY_CAMPUS 类型（21:00-22:30）。
+     * 从 Map 查找已有值班记录，填充已排班的老师信息。
+     */
     private ClassDutyCampusItemRes buildDateCampusItem(Long campusId,
                                                        Map<Long, CampusEntity> campusMap,
                                                        Map<Long, ClassDutyEntity> campusDutyMap,
@@ -441,10 +589,17 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return res;
     }
 
+    /**
+     * 构建班级值班 Map 的 key。
+     * 格式：classId:dutyType（一个班级可能有多种值班类型）
+     */
     private String buildClassDutyKey(Long classId, String dutyType) {
         return classId + ":" + dutyType;
     }
 
+    /**
+     * 获取课表类型描述。
+     */
     private String getClassTypeDesc(String classType) {
         for (ClassScheduleTypeEnum item : ClassScheduleTypeEnum.values()) {
             if (item.name().equals(classType)) {
@@ -454,6 +609,10 @@ public class ClassDutyServiceImpl implements ClassDutyService {
         return classType;
     }
 
+    /**
+     * 获取老师显示名称（排班页面使用）。
+     * 优先级：realName > nickname > username
+     */
     private String getUserShowName(SysUserEntity user) {
         if (user == null) {
             return null;

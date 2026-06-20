@@ -20,9 +20,22 @@
 - [第 8 章：系统配置与本地缓存](#第-8-章系统配置与本地缓存)
 - [第 9 章：排课系统 — 算法驱动的业务模块](#第-9-章排课系统--算法驱动的业务模块)
 - [第 10 章：订单与支付 — 第三方支付集成](#第-10-章订单与支付--第三方支付集成)
+  - [10.12 学生端支付流程](#1012-学生端支付流程)
+  - [10.13 免注册支付机制 — PendingPaySignInterceptor](#1013-免注册支付机制--pendingpaysigninterceptor)
 - [第 11 章：值班管理 — 教师排班系统](#第-11-章值班管理--教师排班系统)
+  - [11.7 buildDutyEntity() 构建与校验流水线](#117-builddutyentity--构建与校验流水线)
+  - [11.8 getUserShowName() 教师名称显示策略](#118-getusershowname--教师名称显示策略)
+  - [11.9 API 接口汇总](#119-api-接口汇总)
+  - [11.10 设计决策总结](#1110-设计决策总结)
 - [第 12 章：学生端 — 学生管理与前台业务](#第-12-章学生端--学生管理与前台业务)
+  - [12.9 API 接口汇总](#129-api-接口汇总)
+  - [12.10 设计决策总结](#1210-设计决策总结)
 - [第 13 章：作业系统 — 教师发布与学生提交](#第-13-章作业系统--教师发布与学生提交)
+  - [13.5 学生端：文件下载机制](#135-学生端文件下载机制)
+  - [13.6 答案可见性控制](#136-答案可见性控制)
+  - [13.7 教师端：提交列表查看](#137-教师端提交列表查看)
+  - [13.9 API 接口汇总](#139-api-接口汇总)
+  - [13.10 设计决策总结](#1310-设计决策总结)
 - [第 14 章：退款流程 — 易宝退款集成](#第-14-章退款流程--易宝退款集成)
 - [第 15 章：Docker 部署 — 容器化构建与运行](#第-15-章docker-部署--容器化构建与运行)
 - [第 16 章：考试系统 — 题库、组卷与在线考试](#第-16-章考试系统--题库组卷与在线考试)
@@ -4041,6 +4054,16 @@ integration/yeepay/                        ← 易宝支付集成（独立包）
 └── service/
     ├── YeepayCashierService.java          ← 统一下单 + 退款
     └── YeepayGatewayService.java          ← 易宝网关请求封装
+
+studentFront/                              ← 学生端订单（免注册支付）
+├── controller/StudentFrontOrderController.java ← 学生下单接口
+├── biz/
+│   ├── StudentOrderBiz.java               ← 学生订单业务接口
+│   └── impl/StudentOrderBizImpl.java      ← 下单 + 超时检查
+└── pojo/req|res/                          ← 学生端请求/响应 VO
+
+models/auth/interceptor/
+└── PendingPaySignInterceptor.java         ← 免注册支付签名拦截器
 ```
 
 **为什么退款模块有 `biz` 层？**
@@ -4574,7 +4597,9 @@ public class YeepayRefundHandle implements YopCallbackHandler {
 
     @PostConstruct
     public void init() {
-        YopCallbackHandlerFactory.register(getType(), this);  // 注册到工厂
+        // 应用启动时注册到 YopCallbackEngine 工厂
+        // URI "/yq-admin/yop-callback/refund" → 本 Handler
+        YopCallbackHandlerFactory.register(getType(), this);
     }
 
     @Override
@@ -4584,21 +4609,53 @@ public class YeepayRefundHandle implements YopCallbackHandler {
 
     @Override
     public void handle(YopCallback yopCallback) {
+        // 1. 解析回调数据
         YeepayRefundInfo refundInfo = JSONObject.parseObject(
             yopCallback.getBizData(), YeepayRefundInfo.class);
 
-        String refundRequestId = refundInfo.getRefundRequestId();  // 退款订单号
+        String uniqueRefundNo = refundInfo.getUniqueRefundNo();    // 易宝退款流水号
+        String refundRequestId = refundInfo.getRefundRequestId();  // 我方退款订单号
+
+        // 2. 校验：退款订单号不能为空
+        if (StrUtil.isBlank(refundRequestId)) {
+            log.error("yeepay 接收退款通知缺少退款订单号, bizData={}", yopCallback.getBizData());
+            return;  // 数据异常，不处理
+        }
+
+        // 3. 根据退款状态分支处理
         String status = refundInfo.getStatus();
 
         if ("SUCCESS".equals(status)) {
+            // 退款成功 → 更新退款单状态 + 记录成功时间
             Date refundSuccessTime = DateUtil.parse(refundInfo.getRefundSuccessDate(), ...);
             refundOrderBiz.handleRefundSuccess(refundRequestId, uniqueRefundNo, refundSuccessTime);
-        } else if ("FAILED".equals(status)) {
-            refundOrderBiz.handleRefundFail(refundRequestId, refundInfo.getErrorMessage());
+            return;
         }
+
+        if ("FAILED".equals(status)) {
+            // 退款失败 → 更新退款单状态 + 回退原单已退金额
+            refundOrderBiz.handleRefundFail(refundRequestId, refundInfo.getErrorMessage());
+            return;
+        }
+
+        // 其他状态（如 PROCESSING）→ 不处理，等待下次回调
+        log.info("yeepay 退款通知状态未完成, refundRequestId={}, status={}", refundRequestId, status);
     }
 }
 ```
+
+**三种退款状态的处理：**
+
+| 易宝返回状态 | 调用方法 | 业务操作 |
+|-------------|----------|----------|
+| SUCCESS | handleRefundSuccess() | 退款单 → SUCCESS，记录退款成功时间 |
+| FAILED | handleRefundFail() | 退款单 → FAIL，**回退原单 refundedAmount** |
+| 其他 | 不处理 | 等待下次回调（易宝会再通知） |
+
+**退款失败为什么要回退已退金额？**
+- 退款失败 = 钱没退出去
+- 如果不回退 `refundedAmount`，用户下次再申请退款时会算上这次"假退"的金额
+- 可能导致"退款金额超过订单金额"的误判，让用户无法再次退款
 
 **退款回调与支付回调的对比：**
 
@@ -4609,6 +4666,7 @@ public class YeepayRefundHandle implements YopCallbackHandler {
 | 更新表 | order_payment + prepay_order | refund_order + order_payment.refundedAmount |
 | 乐观锁 | PROCESSING → SUCCESS | PROCESSING → SUCCESS/FAIL |
 | 失败处理 | 无（支付只有成功） | 回退 refundedAmount |
+| 未完成状态 | 无 | 等待下次回调 |
 
 ### 10.10 API 接口汇总
 
@@ -4646,6 +4704,14 @@ public class YeepayRefundHandle implements YopCallbackHandler {
 | GET | `/api/products/{id}` | 查询产品详情 |
 | GET | `/api/products` | 分页查询产品 |
 
+**学生端订单接口（免注册支付）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/student/pending/order/createOrderNo` | 生成支付订单号 |
+| POST | `/student/pending/order/createPaymentOrder` | 学生支付下单 |
+| GET | `/student/pending/order/paymentReturnInfo` | 支付成功回跳页查询 |
+
 ### 10.11 设计决策总结
 
 | 问题 | 设计决策 | 原因 |
@@ -4656,12 +4722,295 @@ public class YeepayRefundHandle implements YopCallbackHandler {
 | 为什么退款失败要回退已退金额？ | 释放额度 | 退款失败意味着钱没退出去，已退金额必须回退，否则用户无法再次退款 |
 | 为什么用 SecureRandom？ | 防预测 | 普通 Random 的种子可预测，SecureRandom 基于系统熵源 |
 | 为什么退款回调不更新 prepay_order？ | 业务无关 | 退款只影响支付订单的已退金额，不影响预支付订单的已支付状态 |
+| 为什么先保存订单再调易宝？ | 保证我方有记录 | 先调易宝再保存的话，易宝成功但保存失败会产生幽灵订单 |
+| 为什么 15 分钟超时？ | 业务需求 | 超时自动关闭未支付订单，释放库存/名额 |
+| 为什么免注册支付用 HMAC 签名？ | 防篡改 + 防重放 | Token 只证明身份，签名保证请求完整性；Nonce 防重放 |
+| 为什么 JWT + Redis 双重校验？ | 安全纵深 | JWT 本地验证身份，Redis 支持主动失效（取消订单立即失效） |
+
+### 10.12 学生端支付流程
+
+前面章节讲的是管理端的订单 CRUD，但实际的支付下单发生在**学生端**。学生端有一套独立的 Controller 和 Biz 层。
+
+**学生端订单接口（StudentFrontOrderController）：**
+
+```java
+@RestController
+@RequestMapping("/student/pending/order")
+public class StudentFrontOrderController {
+
+    @PostMapping("/createOrderNo")
+    public ApiResponse<CreateOrderNoRes> createOrderNo() { ... }
+
+    @PostMapping("/createPaymentOrder")
+    public ApiResponse<CreatePaymentOrderRes> createPaymentOrder(@Valid @RequestBody CreatePaymentOrderReq req) { ... }
+
+    @GetMapping("/paymentReturnInfo")
+    public ApiResponse<PaymentReturnInfoRes> paymentReturnInfo(@RequestParam String orderNo) { ... }
+}
+```
+
+| 接口 | 路径 | 说明 |
+|------|------|------|
+| POST | `/student/pending/order/createOrderNo` | 生成支付订单号（前端展示用） |
+| POST | `/student/pending/order/createPaymentOrder` | 提交支付下单（调用易宝） |
+| GET | `/student/pending/order/paymentReturnInfo` | 支付成功回跳页查询订单信息 |
+
+**学生端订单号格式（与管理端不同）：**
+
+```java
+// 学生端：1010 + yyyyMMddHHmmss + 0101 + 6位随机数
+"1010" + DateUtil.format(new Date(), DatePattern.PURE_DATETIME_PATTERN) + "0101" + RandomUtil.randomNumbers(6)
+// 示例：1010202606201430250101123456
+```
+
+| 段 | 长度 | 说明 |
+|---|---|---|
+| `1010` | 4 | 支付业务标识（区别于退款的 `1011`） |
+| `yyyyMMddHHmmss` | 14 | 创建时间 |
+| `0101` | 4 | 固定分隔段 |
+| 随机数 | 6 | 防止同一秒内重复 |
+
+**createPaymentOrder() — 支付下单核心流程：**
+
+```java
+public CreatePaymentOrderRes createPaymentOrder(CreatePaymentOrderReq req) {
+    // 1. 组装订单，状态 INIT，保存到数据库
+    OrderEntity orderEntity = new OrderEntity();
+    BeanUtils.copyProperties(req, orderEntity);
+    orderEntity.setStatus(OrderStatusEnum.INIT.name());
+    orderService.saveOrder(orderEntity);
+
+    // 2. 调用易宝统一下单接口
+    YeepayUnifiedOrderReq yeepayReq = new YeepayUnifiedOrderReq();
+    yeepayReq.setOrderNo(orderEntity.getOrderNo());
+    yeepayReq.setOrderAmount(orderEntity.getOrderAmount());
+    YeepayUnifiedOrderRes res = yeepayCashierService.unifiedOrder(yeepayReq);
+
+    // 3. 更新订单状态为 PROCESSING，记录易宝唯一订单号
+    orderService.updateOrderStatus(new UpdateOrderStatusInfo(
+        orderEntity.getOrderNo(), OrderStatusEnum.PROCESSING.name(),
+        OrderStatusEnum.INIT.name(), res.getUniqueOrderNo(), null));
+
+    // 4. 启动 15 分钟超时检查
+    scheduleOrderTimeoutCheck(orderEntity.getOrderNo());
+
+    return res;  // 返回收银台地址给前端
+}
+```
+
+**流程图：**
+
+```mermaid
+sequenceDiagram
+    participant F as 学生前端
+    participant C as StudentFrontOrderController
+    participant B as StudentOrderBizImpl
+    participant DB as 数据库
+    participant Y as 易宝支付
+
+    F->>C: POST /createOrderNo
+    C->>B: createOrderNo()
+    B-->>F: 订单号（1010...）
+
+    F->>C: POST /createPaymentOrder
+    C->>B: createPaymentOrder(req)
+    B->>DB: 保存订单（INIT）
+    B->>Y: 统一下单
+    Y-->>B: 收银台地址
+    B->>DB: 更新状态（PROCESSING）
+    B->>B: scheduleOrderTimeoutCheck(15min)
+    B-->>F: 收银台地址
+
+    F->>Y: 跳转支付
+    Y->>Y: 用户完成支付
+    Y-->>F: 回跳到支付成功页
+
+    F->>C: GET /paymentReturnInfo?orderNo=xxx
+    C->>B: paymentReturnInfo()
+    B->>DB: 查询订单 + 产品信息
+    B-->>F: 订单详情 + 课程内容
+```
+
+**异常处理设计：**
+
+| 阶段 | 异常处理 | 原因 |
+|------|---------|------|
+| 易宝下单失败 | `INIT → FAIL`，抛出异常 | 订单创建成功但支付渠道调用失败，需要标记 |
+| 易宝下单成功 | `INIT → PROCESSING` | 正常流转，等待用户支付 |
+| 15分钟未支付 | `PROCESSING → TIMEOUT` | 定时检查，自动关闭未支付订单 |
+
+**为什么先保存订单再调易宝？**
+- 如果先调易宝再保存，易宝调用成功但保存失败时，会产生"幽灵订单"（易宝侧有记录，我方没有）
+- 先保存保证我方始终有记录，即使易宝调用失败也可以标记为 FAIL
+
+**paymentReturnInfo() — 支付成功回跳页：**
+
+```java
+public PaymentReturnInfoRes paymentReturnInfo(String orderNo) {
+    OrderEntity order = orderService.selectByOrderNo(orderNo);
+    // 校验：订单存在 + 状态为 SUCCESS
+    if (!OrderStatusEnum.SUCCESS.name().equals(order.getStatus())) {
+        throw BusinessException.DateError.newInstance("订单未支付成功");
+    }
+    // 查询产品信息（冗余读取，避免 JOIN）
+    ProductEntity product = productMapper.selectById(Long.valueOf(order.getProductId()));
+    // 返回订单 + 课程内容
+    ...
+}
+```
+
+### 10.13 免注册支付机制 — PendingPaySignInterceptor
+
+学生下单走的是 `/student/pending/**` 路径，这个路径**不需要学生注册账号**，但需要一套独立的认证机制。
+
+**为什么需要免注册支付？**
+- 学生可能只是想买课，不想先注册账号
+- 流程：老师创建预支付订单 → 生成专属链接 → 学生点链接直接支付
+- 支付成功后再绑定学生信息
+
+**拦截器链配置（WebMvcConfig）：**
+
+```java
+// 学生管理端：JWT + 签名（需要登录）
+registry.addInterceptor(studentJwtAuthInterceptor)
+        .addPathPatterns("/student/**")
+        .excludePathPatterns("/student/login", "/student/pending/**");
+
+// 学生支付端：PendingPay 签名（不需要登录）
+registry.addInterceptor(pendingPaySignInterceptor)
+        .addPathPatterns("/student/pending/**");
+```
+
+| 路径 | 拦截器 | 认证方式 |
+|------|--------|---------|
+| `/api/**` | JwtAuth + Sign + Permission | 管理员 JWT + 签名 + 权限 |
+| `/student/**`（非 pending） | StudentJwt + StudentSign | 学生 JWT + 签名 |
+| `/student/pending/**` | PendingPaySign | 预支付 Token + HMAC 签名 |
+
+**PendingPaySignInterceptor 认证流程：**
+
+```mermaid
+flowchart TD
+    A["请求到达 /student/pending/**"] --> B{"检查 4 个 Header"}
+    B -- 缺失 --> C["返回 401: 参数缺失"]
+    B -- 齐全 --> D["解析 X-Pending-Pay-Token (JWT)"]
+    D --> E{"JWT 有效?"}
+    E -- 无效/过期 --> F["返回 401: Token无效"]
+    E -- 有效 --> G["从 Redis 读取待支付状态"]
+    G --> H{"Redis 有记录?"}
+    H -- 无 --> I["返回 401: 登录状态失效"]
+    H -- 有 --> J["校验 JWT 与 Redis 数据一致"]
+    J --> K{"时间戳在 1h 内?"}
+    K -- 超时 --> L["返回 401: 请求超时"]
+    K -- 正常 --> M{"Nonce 未使用?"}
+    M -- 已使用 --> N["返回 401: 重复请求"]
+    M -- 未使用 --> O["记录 Nonce 到 Redis"]
+    O --> P["计算 HMAC-SHA256 签名"]
+    P --> Q{"签名匹配?"}
+    Q -- 不匹配 --> R["返回 401: 签名错误"]
+    Q -- 匹配 --> S["校验预支付订单状态"]
+    S --> T["设置 request 属性 → 放行"]
+```
+
+**请求需要携带的 Header：**
+
+| Header | 说明 | 示例 |
+|--------|------|------|
+| `X-Pending-Pay-Token` | JWT Token（含 phone + prepayOrderNo） | `eyJhbGci...` |
+| `X-Timestamp` | 请求时间戳（毫秒） | `1718866225000` |
+| `X-Nonce` | 随机字符串（防重放） | `a3f8b2c1` |
+| `X-Sign` | HMAC-SHA256 签名 | `a1b2c3d4...` |
+
+**签名计算方式：**
+
+```java
+// 签名原文 = METHOD + \n + URI + \n + queryString + \n + timestamp + \n + nonce
+String source = "POST\n/student/pending/order/createPaymentOrder\n\n1718866225000\na3f8b2c1";
+
+// 签名密钥从 Redis 中的待支付状态获取
+String sign = HMAC-SHA256(source, signSecret);
+```
+
+**Redis 存储结构：**
+
+```
+Key:   yanque:student:pending-pay:{token}
+Value: {studentPhone}|{prepayOrderNo}|{signSecret}
+TTL:   1小时（ALLOWED_SKEW_MILLIS）
+```
+
+| 字段 | 说明 |
+|------|------|
+| `studentPhone` | 学生手机号（从预支付订单获取） |
+| `prepayOrderNo` | 预支付订单号 |
+| `signSecret` | 签名密钥（随机生成，每次不同） |
+
+**为什么用 HMAC-SHA256 而非简单 Token？**
+- Token 只证明"你是谁"，签名证明"请求没被篡改"
+- 签名包含请求方法、路径、参数、时间戳，任何一项被修改都会导致签名不匹配
+- Nonce 防重放攻击：同一个 Nonce 只能使用一次
+
+**为什么 JWT + Redis 双重校验？**
+- JWT 包含用户身份信息（phone + prepayOrderNo），可本地解析
+- Redis 存储会话状态（signSecret + 是否有效），支持主动失效
+- 即使 JWT 被窃取，没有 Redis 中的 signSecret 也无法伪造签名
+- 老师取消预支付订单时，删除 Redis key 即可立即失效
+
+**isPaymentCreatingRequest() — 下单接口额外校验：**
+
+```java
+private boolean isPaymentCreatingRequest(HttpServletRequest request) {
+    String requestURI = request.getRequestURI();
+    return requestURI.endsWith("/createOrderNo") || requestURI.endsWith("/createPaymentOrder");
+}
+```
+
+| 接口 | 额外校验 | 原因 |
+|------|---------|------|
+| `/createOrderNo` | 预支付订单状态必须是 `PENDING_PAYMENT` | 防止已支付/已取消的订单再次下单 |
+| `/createPaymentOrder` | 同上 | 同上 |
+| 其他接口（如查询） | 无额外校验 | 查询不需要限制订单状态 |
 
 ---
 
 ## 第 11 章：值班管理 — 教师排班系统
 
 > 本章讲解值班管理模块的设计，展示如何处理复杂的业务规则校验和数据聚合。
+
+**值班模块整体流程：**
+
+```mermaid
+sequenceDiagram
+    participant T as 教师/管理员
+    participant C as ClassDutyController
+    participant S as ClassDutyServiceImpl
+    participant M as ClassDutyMapper
+    participant CS as ClassScheduleMapper
+
+    Note over T,CS: 场景1: 按日期排班（核心流程）
+    T->>C: GET /api/classDuties/date?dutyDate=2026-06-20
+    C->>S: getDateDuty(dutyDate)
+    S->>CS: 查询当天课表（CLASS + SELF_STUDY）
+    S->>M: 查询当天已有值班
+    S->>S: 批量查班级/校区/老师 → Map 组装
+    S-->>T: 返回排班页面数据（班级列表 + 校区列表）
+
+    T->>C: PUT /api/classDuties/date（保存排班）
+    C->>S: saveDateDuty(req)
+    S->>M: deleteByDutyDate（删除当天所有值班）
+    loop 每条值班
+        S->>S: buildDutyEntity（构建+校验）
+        S->>M: insert（插入）
+    end
+    S-->>T: 返回保存数量
+
+    Note over T,CS: 场景2: 单条值班 CRUD
+    T->>C: POST /api/classDuties（新增）
+    C->>S: addDuty(req)
+    S->>S: buildDutyEntity（构建+校验）
+    S->>M: insert
+    S-->>T: 返回值班ID
+```
 
 ### 11.1 值班类型设计
 
@@ -4839,32 +5188,68 @@ flowchart TD
 **查询流程图：**
 
 ```mermaid
-flowchart TD
-    A[查询指定日期值班] --> B[查询当天所有课表]
-    B --> C[过滤: 只保留上课日和自习日]
-    C --> D[查询当天已有值班记录]
-
-    D --> E[构建班级值班 Map]
-    D --> F[构建校区值班 Map]
-
-    E --> G[查询班级信息]
-    F --> H[查询校区信息]
-    G --> H
-
-    H --> I[查询老师信息]
-    I --> J[组装班级值班列表]
-
-    J --> K[遍历课表]
-    K --> L[判断课表类型: 上课日→晚自习值班, 自习日→自习日值班]
-    L --> M[从 Map 中查找已有值班]
-    M --> N[组装 ClassDutyClassItemRes]
-
-    N --> O[组装校区值班列表]
-    O --> P[遍历所有校区]
-    P --> Q[从 Map 中查找已有值班]
-    Q --> R[组装 ClassDutyCampusItemRes]
-
-    R --> S[返回 ClassDutyDateRes]
+flowchart TB
+    Start([前端请求: 查询指定日期值班]) --> Step1[步骤1: 查询当天课表]
+    
+    Step1 --> |classScheduleMapper<br/>selectByClassIdAndDate| Step2[步骤2: 过滤课表类型]
+    
+    Step2 --> |保留 CLASS 和<br/>SELF_STUDY| Step3[步骤3: 查询当天值班记录]
+    
+    Step3 --> |classDutyMapper<br/>selectByDutyDate| Step4[步骤4: 构建 Map 索引]
+    
+    Step4 --> MapBuild{分流构建两个 Map}
+    
+    MapBuild --> ClassMap[班级值班 Map<br/>key = classId:dutyType<br/>value = ClassDutyEntity]
+    MapBuild --> CampusMap[校区值班 Map<br/>key = campusId<br/>value = ClassDutyEntity]
+    
+    ClassMap --> Step5[步骤5: 批量查询关联数据]
+    CampusMap --> Step5
+    
+    Step5 --> Batch{并行批量查询}
+    Batch --> |clazzMapper<br/>selectByIds| ClazzData[班级信息]
+    Batch --> |campusMapper<br/>selectByIds| CampusData[校区信息]
+    Batch --> |sysUserMapper<br/>selectByIds| TeacherData[老师信息]
+    
+    ClazzData --> Step6[步骤6: 组装班级值班列表]
+    CampusData --> Step6
+    TeacherData --> Step6
+    
+    Step6 --> Loop1{遍历过滤后的课表}
+    
+    Loop1 --> |CLASS 类型| ClassItem1[晚自习值班<br/>dutyType = SELF_STUDY_EVENING]
+    Loop1 --> |SELF_STUDY 类型| ClassItem2[自习日值班<br/>dutyType = SELF_STUDY_ALL_DAY]
+    
+    ClassItem1 --> Lookup1[从 classDutyMap 查找]
+    ClassItem2 --> Lookup1
+    
+    Lookup1 --> |有值班记录| Fill1[填充老师姓名]
+    Lookup1 --> |无值班记录| Empty1[字段为空]
+    
+    Fill1 --> Build1[构建 ClassDutyClassItemRes]
+    Empty1 --> Build1
+    
+    Build1 --> Step7[步骤7: 组装校区值班列表]
+    
+    Step7 --> Loop2{遍历所有校区}
+    
+    Loop2 --> Lookup2[从 campusDutyMap 查找]
+    
+    Lookup2 --> |有值班记录| Fill2[填充老师姓名]
+    Lookup2 --> |无值班记录| Empty2[字段为空]
+    
+    Fill2 --> Build2[构建 ClassDutyCampusItemRes]
+    Empty2 --> Build2
+    
+    Build2 --> End([返回 ClassDutyDateRes<br/>包含班级值班列表和校区值班列表])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e1f5ff
+    style MapBuild fill:#fff4e6
+    style Batch fill:#fff4e6
+    style Loop1 fill:#f3e5f5
+    style Loop2 fill:#f3e5f5
+    style Step4 fill:#e8f5e9
+    style Step5 fill:#e8f5e9
 ```
 
 **文字流程图：**
@@ -4940,6 +5325,28 @@ Map<String, ClassDutyEntity> classDutyMap = duties.stream()
 ### 11.5 按日期保存值班（saveDateDuty）
 
 **保存策略：先删后插，覆盖式保存。**
+
+```mermaid
+flowchart TD
+    A[前端提交当天完整值班列表] --> B[归一化日期到零点]
+    B --> C[删除当天所有值班记录]
+    C --> D[遍历班级值班列表]
+
+    D --> E{还有下一条?}
+    E -- 否 --> F[遍历校区值班列表]
+    E -- 是 --> G[buildDutyEntity 构建+校验]
+    G --> H[插入数据库]
+    H --> E
+
+    F --> I{还有下一条?}
+    I -- 否 --> J{校验类型 = EVENING_STUDY_CAMPUS?}
+    I -- 是 --> K[buildDutyEntity 构建+校验]
+    K --> L[插入数据库]
+    L --> I
+
+    J -- 否 --> M[抛异常: 校区统一值班类型错误]
+    J -- 是 --> N[返回保存数量]
+```
 
 ```java
 @Transactional(rollbackFor = Exception.class)
@@ -5021,6 +5428,169 @@ user.getNickname() != null ? user.getNickname() : user.getUsername()
 - `fillDutyPageNames` 中直接用 `nickname` 作为老师显示名
 - 如果没有昵称，降级用用户名
 - 另有 `getUserShowName()` 方法优先用 `realName`，用于其他场景
+
+### 11.7 buildDutyEntity() — 构建与校验流水线
+
+所有新增/修改值班的入口都经过 `buildDutyEntity()`，它是一个**构建+校验的流水线**：
+
+```mermaid
+flowchart TB
+    Start([buildDutyEntity 入口<br/>参数: id, classId, campusId, teacherId, dutyDate, dutyTypeValue]) --> Step1[步骤1: 解析值班类型<br/>parseDutyType]
+    
+    Step1 --> Step2[步骤2: 校验老师角色<br/>validateTeacher]
+    
+    Step2 --> Check1{老师是否有<br/>TEACHER 角色?}
+    
+    Check1 -->|否| Error1[抛异常:<br/>请选择老师角色的用户]
+    Check1 -->|是| Step3{步骤3: 判断值班类型<br/>dutyType.isClassRequired}
+    
+    Step3 -->|true 班级值班| Branch1[分支A: 班级值班<br/>SELF_STUDY_EVENING<br/>SELF_STUDY_ALL_DAY]
+    Step3 -->|false 校区值班| Branch2[分支B: 校区值班<br/>NIGHT_DUTY]
+    
+    Branch1 --> Check2{classId 是否为空?}
+    Check2 -->|是| Error2[抛异常:<br/>班级不能为空]
+    Check2 -->|否| Action1[查询班级信息<br/>clazzMapper.selectById]
+    
+    Action1 --> Auto1[自动获取 campusId<br/>从 ClazzEntity]
+    Auto1 --> Step4[步骤4: 业务规则校验<br/>validateDutyRule]
+    
+    Branch2 --> Check3{campusId 是否为空?}
+    Check3 -->|是| Error3[抛异常:<br/>校区不能为空]
+    Check3 -->|否| Action2[强制 classId = null<br/>保证互斥]
+    
+    Action2 --> Step4
+    
+    Step4 --> Rule{4项规则检查}
+    
+    Rule --> Rule1[规则1: 重复值班检查<br/>同一老师同一天同类型]
+    Rule --> Rule2[规则2: 老师时间冲突<br/>时间区间重叠检测]
+    Rule --> Rule3[规则3: 班级值班去重<br/>同班级同日期同类型]
+    Rule --> Rule4[规则4: 自习日值班前置条件<br/>必须是 SELF_STUDY 课表类型]
+    
+    Rule1 --> RulePass{所有规则通过?}
+    Rule2 --> RulePass
+    Rule3 --> RulePass
+    Rule4 --> RulePass
+    
+    RulePass -->|否| Error4[抛异常:<br/>具体规则错误信息]
+    RulePass -->|是| Step5[步骤5: 组装 ClassDutyEntity]
+    
+    Step5 --> Fill1[填充值班类型]
+    Fill1 --> Fill2[从枚举获取时间段<br/>startTime, endTime]
+    Fill2 --> Fill3[填充日期和老师<br/>dutyDate, teacherId]
+    Fill3 --> Fill4[填充班级或校区<br/>classId, campusId 互斥]
+    Fill4 --> Fill5[填充备注和时间戳<br/>remark, createdAt, updatedAt]
+    
+    Fill5 --> End([返回 ClassDutyEntity<br/>待插入或更新])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e1f5ff
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Error4 fill:#ffebee
+    style Step3 fill:#fff4e6
+    style Rule fill:#fff4e6
+    style Branch1 fill:#e8f5e9
+    style Branch2 fill:#e8f5e9
+    style Step4 fill:#f3e5f5
+    style Step5 fill:#e3f2fd
+```
+
+```java
+private ClassDutyEntity buildDutyEntity(Long id, Long classId, Long campusId, Long teacherId,
+                                        Date dutyDate, String dutyTypeValue, String remark) {
+    // 1. 解析值班类型
+    DutyTypeEnum dutyType = parseDutyType(dutyTypeValue);
+
+    // 2. 校验老师角色
+    validateTeacher(teacherId);
+
+    // 3. 校验班级/校区（根据值班类型）
+    if (dutyType.isClassRequired()) {
+        // 班级值班：classId 必填，campusId 从班级自动获取
+        ClazzEntity clazz = clazzMapper.selectById(classId);
+        campusId = clazz.getCampusId();  // 自动填充
+    } else {
+        // 校区值班：campusId 必填，classId 设为 null
+        classId = null;
+    }
+
+    // 4. 业务规则校验（重复 + 冲突 + 自习日）
+    validateDutyRule(id, classId, campusId, teacherId, day, dutyType);
+
+    // 5. 组装实体
+    ClassDutyEntity duty = new ClassDutyEntity();
+    duty.setStartTime(dutyType.getStartTime());  // 从枚举获取，不由前端传入
+    duty.setEndTime(dutyType.getEndTime());
+    ...
+    return duty;
+}
+```
+
+**为什么 startTime/endTime 从枚举获取而非前端传入？**
+- 时间段是固定的（如晚自习 19:00-21:00），由业务规则决定
+- 如果允许前端传入，可能传入非法时间段（如 10:00-12:00 的"晚自习"）
+- 枚举保证数据一致性，前端只需传 `dutyType`，不需要传时间
+
+**为什么 classId 和 campusId 会自动互斥？**
+- 班级值班：从班级实体自动获取 campusId，不依赖前端传入
+- 校区值班：强制将 classId 设为 null，防止脏数据
+- 保证数据库中 `classId` 和 `campusId` 的互斥关系
+
+### 11.8 getUserShowName() — 教师名称显示策略
+
+```java
+private String getUserShowName(SysUserEntity user) {
+    if (user == null) return null;
+    if (user.getRealName() != null && !user.getRealName().isEmpty()) {
+        return user.getRealName();       // 优先用真实姓名
+    }
+    return user.getNickname() != null ? user.getNickname() : user.getUsername();
+}
+```
+
+**优先级：realName > nickname > username**
+
+| 场景 | 使用方法 | 优先级 |
+|------|---------|--------|
+| getDateDuty（按日期查询） | getUserShowName() | realName > nickname > username |
+| fillDutyPageNames（分页查询） | 直接取 nickname | nickname > username |
+
+**为什么两处显示策略不同？**
+- `getDateDuty` 是排班页面，需要显示真实姓名方便老师识别
+- `fillDutyPageNames` 是分页列表，nickname 足够
+
+### 11.9 API 接口汇总
+
+**值班管理接口（ClassDutyController）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/classDuties` | 新增值班 |
+| PUT | `/api/classDuties/{id}` | 修改值班 |
+| DELETE | `/api/classDuties/{id}` | 删除值班 |
+| GET | `/api/classDuties/{id}` | 查询值班详情 |
+| GET | `/api/classDuties` | 分页查询值班 |
+| GET | `/api/classDuties/date?dutyDate=2026-06-20` | 按日期查询排班页面 |
+| PUT | `/api/classDuties/date` | 按日期覆盖保存值班 |
+
+**按日期查询/保存是值班模块的核心接口：**
+- `getDateDuty`：前端排班页面加载时调用，返回当天所有班级和校区的值班情况
+- `saveDateDuty`：前端保存排班时调用，覆盖式更新当天所有值班
+
+### 11.10 设计决策总结
+
+| 问题 | 设计决策 | 原因 |
+|------|---------|------|
+| 为什么用枚举定义值班类型？ | 编译期校验 | 值班类型固定，枚举封装业务规则（时间、是否需要班级/校区） |
+| 为什么 classId 和 campusId 互斥？ | 防止脏数据 | 班级值班自动获取 campusId，校区值班强制 classId=null |
+| 为什么 startTime 从枚举获取？ | 数据一致性 | 防止前端传入非法时间段 |
+| 为什么用"先删后插"保存？ | 简化逻辑 | 前端传完整列表，不是增量；事务保证一致性 |
+| 为什么老师冲突用时间重叠检测？ | 精确判断 | `start < endTime AND end > startTime`，相邻不算冲突 |
+| 为什么自习日值班要查课表？ | 业务前提 | 课表标记了每天类型，只有 SELF_STUDY 才能排自习日值班 |
+| 为什么用 Map 做内存关联？ | 避免 N+1 | 一次查询所有值班，Map 精确定位，性能与 JOIN 相当 |
+| 为什么不在 SQL 里 JOIN？ | 模块解耦 | 各模块独立演进，单表查询 + Java 组装更清晰 |
 
 ---
 
@@ -5113,51 +5683,143 @@ studentFront/
 - 两套接口的认证方式不同：后台用 RBAC 权限，学生端用学生 JWT
 - 分开后职责清晰，互不影响
 
-### 12.3 学生登录 — 双重身份判断
+### 12.3 学生登录 — 三分支身份判断
+
+登录接口根据手机号查询三个数据源，返回不同的响应引导前端跳转：
 
 **登录流程图：**
 
 ```mermaid
-flowchart TD
-    A[学生输入手机号+密码] --> B[查询学生表]
-    B --> C{学生存在?}
-    C -- 是 --> D[校验状态和密码]
-    D --> E[生成JWT, 返回学生信息]
-    C -- 否 --> F[查询预支付订单]
-
-    F --> G{有待支付订单?}
-    G -- 是 --> H[返回待支付订单信息]
-    H --> I[前端跳转支付页面]
-    G -- 否 --> J[返回错误: 用户名不存在]
+flowchart TB
+    Start([学生输入手机号+密码]) --> Step1[步骤1: 查询学生表<br/>studentMapper.selectByPhone]
+    
+    Step1 --> Branch1{学生是否存在?}
+    
+    Branch1 -->|是 分支1| Validate1[校验学生状态<br/>ACTIVE]
+    Validate1 --> Validate2[校验密码<br/>BCrypt.checkpw]
+    Validate2 --> Success1[生成学生登录态]
+    
+    Success1 --> Token1[创建 JWT Token<br/>payload: uid, phone, student:true]
+    Token1 --> Secret1[创建签名密钥<br/>48位随机字符串]
+    Secret1 --> Redis1[存入 Redis<br/>key: yanque:student:sign:studentId<br/>TTL: 1小时]
+    Redis1 --> Return1[返回完整登录态<br/>needPay=false<br/>needCompleteProfile=false<br/>token, signSecret, student]
+    
+    Return1 --> End1([前端: 进入学生主页])
+    
+    Branch1 -->|否| Step2[步骤2: 查询已支付订单<br/>orderService.selectLatestSuccessByStudentPhone]
+    
+    Step2 --> Branch2{有已支付订单?}
+    
+    Branch2 -->|是 分支2| Success2[生成待支付登录态<br/>fillPaidProfileAuth]
+    Success2 --> Token2[创建 PendingPayToken<br/>JWT: phone + orderNo]
+    Token2 --> Secret2[创建随机签名密钥]
+    Secret2 --> Redis2[存入 Redis<br/>key: yanque:student:pending-pay:token<br/>TTL: 30分钟]
+    Redis2 --> Return2[返回引导信息<br/>needPay=false<br/>needCompleteProfile=true<br/>paymentOrderNo<br/>pendingPayToken, pendingPaySignSecret]
+    
+    Return2 --> End2([前端: 跳转完善资料页面])
+    
+    Branch2 -->|否| Step3[步骤3: 查询待支付订单<br/>prepayOrderMapper.selectLatestByPhoneAndStatus]
+    
+    Step3 --> Branch3{有待支付订单?}
+    
+    Branch3 -->|是 分支3| Success3[生成待支付登录态<br/>fillPendingPayAuth]
+    Success3 --> Token3[创建 PendingPayToken<br/>JWT: phone + prepayOrderNo]
+    Token3 --> Secret3[创建随机签名密钥]
+    Secret3 --> Redis3[存入 Redis<br/>TTL: 30分钟]
+    Redis3 --> Return3[返回引导信息<br/>needPay=true<br/>needCompleteProfile=false<br/>pendingOrder, pendingPayToken]
+    
+    Return3 --> End3([前端: 跳转支付页面])
+    
+    Branch3 -->|否| Error[抛异常: 用户名不存在]
+    
+    style Start fill:#e1f5ff
+    style End1 fill:#e8f5e9
+    style End2 fill:#fff9c4
+    style End3 fill:#fff9c4
+    style Error fill:#ffebee
+    style Branch1 fill:#fff4e6
+    style Branch2 fill:#fff4e6
+    style Branch3 fill:#fff4e6
 ```
 
-**核心逻辑：**
+**核心逻辑（三分支）：**
+
 ```java
 public StudentLoginRes login(StudentLoginReq req) {
-    // 1. 先查学生表
+    // 第一分支：已注册学生 → 正常登录
     StudentEntity student = studentMapper.selectByPhone(req.getPhone());
     if (student != null) {
-        // 已注册学生 → 正常登录
-        return buildLoginRes(student);
+        // 校验状态（ACTIVE）和密码
+        StudentLoginRes res = new StudentLoginRes();
+        res.setNeedPay(false);
+        res.setNeedCompleteProfile(false);
+        res.setToken(studentFrontAuthService.createToken(student));
+        res.setSignSecret(studentFrontAuthService.createSignSecret(student));
+        res.setStudent(studentFrontAuthService.buildStudentInfo(student));
+        return res;
     }
 
-    // 2. 学生不存在，查是否有待支付订单
+    // 第二分支：已支付但未完善资料 → 引导注册
+    OrderEntity paidOrder = orderService.selectLatestSuccessByStudentPhone(req.getPhone());
+    if (paidOrder != null) {
+        StudentLoginRes res = new StudentLoginRes();
+        res.setNeedPay(false);
+        res.setNeedCompleteProfile(true);
+        res.setPaymentOrderNo(paidOrder.getOrderNo());
+        fillPaidProfileAuth(res, paidOrder);  // 生成待支付Token用于完善资料接口鉴权
+        return res;
+    }
+
+    // 第三分支：有待支付订单 → 引导支付
     PrepayOrderEntity pendingOrder = prepayOrderMapper
         .selectLatestByPhoneAndStatus(req.getPhone(), "PENDING_PAYMENT");
     if (pendingOrder != null) {
-        // 有待支付订单 → 提示需要先支付
-        return buildNeedPayRes(pendingOrder);
+        StudentLoginRes res = new StudentLoginRes();
+        res.setNeedPay(true);
+        res.setNeedCompleteProfile(false);
+        fillPendingPayAuth(res, pendingOrder);  // 生成待支付Token
+        res.setPendingOrder(buildPendingOrderRes(pendingOrder));
+        return res;
     }
 
-    // 3. 都没有 → 报错
+    // 都没有 → 报错
     throw BusinessException.PasswordError.newInstance("用户名不存在");
 }
 ```
 
-**为什么要先查学生表再查订单表？**
-- 场景：学生下单后还没支付，这时用手机号登录
-- 如果只查学生表，会报"用户不存在"，体验差
-- 查订单表后可以提示"您有待支付订单"，引导完成支付
+**响应字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `needPay` | boolean | 是否需要先支付 |
+| `needCompleteProfile` | boolean | 是否需要完善资料 |
+| `token` | String | 学生JWT（仅已注册学生） |
+| `signSecret` | String | 签名密钥（仅已注册学生） |
+| `pendingPayToken` | String | 待支付Token（待支付/已支付未注册） |
+| `paymentOrderNo` | String | 已支付订单号（已支付未注册） |
+| `pendingOrder` | Object | 待支付订单信息（待支付） |
+
+**为什么要三分支而不是两分支？**
+- 场景：学生下单 → 支付成功 → 但还没完善资料（没设密码） → 用手机号登录
+- 如果只有两分支（已注册/待支付），这种情况会报"用户不存在"
+- 第二分支查已支付订单，引导学生完善资料完成注册
+
+**fillPendingPayAuth — 待支付登录态生成：**
+
+```java
+private void fillPendingPayAuth(StudentLoginRes res, PrepayOrderEntity pendingOrder) {
+    String token = createPendingPayToken(pendingOrder);  // JWT: phone + prepayOrderNo
+    String signSecret = createRandomSecret();             // 48位随机签名密钥
+    // 存入Redis: phone|prepayOrderNo|signSecret, TTL 30分钟
+    redisUtil.set("yanque:student:pending-pay:" + token, value, Duration.ofMinutes(30));
+    res.setPendingPayToken(token);
+    res.setPendingPaySignSecret(signSecret);
+}
+```
+
+- 待支付Token和签名密钥用于 `PendingPaySignInterceptor` 鉴权
+- 学生拿到 Token 后可以访问 `/student/pending/**` 接口（下单、完善资料）
+- 30 分钟过期，过期后需要重新登录
 
 **学生 JWT 与管理员 JWT 的区别：**
 ```java
@@ -5228,50 +5890,99 @@ private void scheduleOrderTimeoutCheck(String orderNo) {
 **完善资料流程图：**
 
 ```mermaid
-flowchart TD
-    A[支付成功] --> B[跳转到完善资料页面]
-    B --> C[学生填写: 密码、学历、届数、学校、专业]
-    C --> D[POST /completeProfile]
-
-    D --> E[校验密码一致性]
-    E --> F[查询支付订单]
-    F --> G{订单存在且已支付?}
-    G -- 否 --> H[返回错误]
-    G -- 是 --> I[创建学生账号]
-
-    I --> J[创建学生产品关联]
-    J --> K[返回学生ID]
+flowchart TB
+    Start([支付成功后<br/>前端跳转到完善资料页面]) --> Form[学生填写资料<br/>密码、确认密码<br/>学历、届数、学校、专业]
+    
+    Form --> Submit[POST /student/pending/completeProfile<br/>携带 pendingPayToken]
+    
+    Submit --> Intercept[PendingPaySignInterceptor<br/>验证 HMAC-SHA256 签名]
+    
+    Intercept --> Step1[步骤1: 校验密码一致性<br/>password == confirmPassword]
+    
+    Step1 --> Check1{密码是否一致?}
+    Check1 -->|否| Error1[抛异常: 两次输入的密码不一致]
+    Check1 -->|是| Step2[步骤2: 查询支付订单<br/>orderService.selectByOrderNo]
+    
+    Step2 --> Check2{订单状态是否为 SUCCESS?}
+    Check2 -->|否| Error2[抛异常: 订单未支付成功]
+    Check2 -->|是| Step3[步骤3: 查询产品信息<br/>获取 teachingMode]
+    
+    Step3 --> TxStart[开启事务<br/>@Transactional]
+    
+    TxStart --> Step4[步骤4: 创建学生账号<br/>studentService.createStudent]
+    
+    Step4 --> Auto1[姓名和手机从订单自动填充<br/>studentName = order.studentName<br/>studentPhone = order.studentPhone]
+    Auto1 --> Auto2[teachingMode 从产品获取<br/>teachingMode = product.teachingMode]
+    Auto2 --> Insert1[插入学生表<br/>studentMapper.insert]
+    
+    Insert1 --> Step5[步骤5: 创建学生产品关联<br/>studentProductService.createStudentProduct]
+    
+    Step5 --> Insert2[插入学生产品表<br/>studentId, productId, sourceOrderNo]
+    
+    Insert2 --> TxCommit[事务提交]
+    
+    TxCommit --> Step6[步骤6: 生成学生登录态<br/>直接返回 token 无需再次登录]
+    
+    Step6 --> Token[创建 JWT Token<br/>uid, phone, student:true]
+    Token --> Secret[创建签名密钥<br/>48位随机字符串]
+    Secret --> Redis[存入 Redis<br/>TTL: 1小时]
+    
+    Redis --> Return[返回完整响应<br/>studentId, completed=true<br/>token, signSecret, student]
+    
+    Return --> End([前端: 自动登录进入学生主页])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style TxStart fill:#f3e5f5
+    style TxCommit fill:#f3e5f5
 ```
 
 **核心逻辑：**
 ```java
 @Transactional(rollbackFor = Exception.class)
 public CompleteStudentProfileRes completeProfile(CompleteStudentProfileReq req) {
-    // 1. 校验密码
+    // 1. 校验密码一致性
     if (!req.getPassword().equals(req.getConfirmPassword())) {
         throw BusinessException.ParamsError.newInstance("两次输入的密码不一致");
     }
 
-    // 2. 校验订单
+    // 2. 校验订单存在且已支付
     OrderEntity order = orderService.selectByOrderNo(req.getOrderNo());
     if (!OrderStatusEnum.SUCCESS.name().equals(order.getStatus())) {
         throw BusinessException.DateError.newInstance("订单未支付成功");
     }
 
-    // 3. 创建学生（订单里的姓名和手机号自动填充）
+    // 3. 创建学生（姓名和手机号从订单自动填充，不让学生填）
     StudentEntity student = new StudentEntity();
     student.setStudentName(order.getStudentName());
     student.setStudentPhone(order.getStudentPhone());
     student.setPassword(req.getPassword());
-    // ... 学历、届数、学校、专业
+    student.setEducation(req.getEducation());
+    student.setGradeYear(req.getGradeYear());
+    student.setSchool(req.getSchool());
+    student.setMajor(req.getMajor());
+    student.setTeachingMode(product.getTeachingMode());  // 上课方式从产品获取
     StudentEntity createdStudent = studentService.createStudent(student);
 
-    // 4. 创建学生-产品关联
+    // 4. 创建学生-产品关联（记录"哪个学生买了哪个产品"）
     StudentProductEntity studentProduct = new StudentProductEntity();
     studentProduct.setStudentId(createdStudent.getId());
     studentProduct.setProductId(order.getProductId());
     studentProduct.setSourceOrderNo(order.getOrderNo());
     studentProductService.createStudentProduct(studentProduct);
+
+    // 5. 直接返回登录态，不需要再次登录
+    CompleteStudentProfileRes res = new CompleteStudentProfileRes();
+    res.setStudentId(createdStudent.getId());
+    res.setCompleted(true);
+    res.setToken(studentFrontAuthService.createToken(createdStudent));      // JWT
+    res.setSignSecret(studentFrontAuthService.createSignSecret(createdStudent)); // 签名密钥
+    res.setStudent(studentFrontAuthService.buildStudentInfo(createdStudent));
+    return res;
 }
 ```
 
@@ -5290,10 +6001,21 @@ public CompleteStudentProfileRes completeProfile(CompleteStudentProfileReq req) 
 | 维度 | 后台管理（models/） | 学生端（studentFront/） |
 |------|---------------------|------------------------|
 | 用户 | 管理员 | 学生 |
-| 认证 | JWT + 签名 + RBAC 权限 | 简单 JWT（无签名） |
-| 接口前缀 | /api/... | /api/studentFront/... |
+| 认证 | JWT + 签名 + RBAC 权限 | JWT + 签名（无 RBAC） |
+| 接口前缀 | /api/... | /student/... |
 | 业务层 | Controller → Service | Controller → Biz → Service |
 | 数据隔离 | 可看所有数据 | 只看自己的数据 |
+| JWT payload | uid, expire_time | uid, phone, student:true, expire_time |
+| 签名密钥来源 | 登录时生成，存 Redis | 登录时生成，存 Redis |
+
+**为什么学生端也有签名验证？**
+- 学生端有 `StudentSignInterceptor`，签名逻辑与管理端一致
+- 签名防篡改：防止中间人修改请求参数（如篡改支付金额）
+- 签名密钥通过 `createSignSecret()` 生成，存入 Redis，TTL 1 小时
+
+**为什么学生端不用 RBAC 权限？**
+- 学生只能看自己的数据，不需要细粒度权限控制
+- 数据隔离在 Service 层实现（通过 StudentThreadLocal 获取当前学生ID）
 
 **为什么学生端多了 Biz 层？**
 - 学生下单涉及：创建订单 → 调用易宝 → 更新状态 → 超时检测
@@ -5325,26 +6047,92 @@ public ApiResponse<StudentAssignClassRes> assignClass(@PathVariable Long id,
 
 学生购买产品后，管理员需要把学生分配到具体班级。学生有了 `classId` 后才能查看该班级的作业、课表等信息。
 
-### 12.8 学生端认证：独立的拦截器体系
+### 12.8 学生端认证：三套拦截器体系
 
-学生端和后台管理使用**两套独立的拦截器链**：
+系统有**三套独立的拦截器链**，分别对应不同用户群体：
+
+```mermaid
+flowchart TB
+    Request([HTTP 请求]) --> Router{路径匹配}
+    
+    Router -->|/api/**| Chain1[管理端拦截器链]
+    Router -->|/student/pending/**| Chain2[免注册支付拦截器链]
+    Router -->|/student/** 非 pending| Chain3[学生端拦截器链]
+    
+    subgraph AdminChain [管理端拦截器链]
+        direction LR
+        A1[JwtAuthInterceptor<br/>解析管理员JWT] --> A2[SignInterceptor<br/>HMAC-SHA256签名]
+        A2 --> A3[PermissionInterceptor<br/>RBAC权限校验]
+    end
+    
+    subgraph PendingChain [免注册支付拦截器链]
+        direction LR
+        P1[PendingPaySignInterceptor<br/>HMAC-SHA256签名<br/>从Redis取密钥]
+    end
+    
+    subgraph StudentChain [学生端拦截器链]
+        direction LR
+        S1[StudentJwtAuthInterceptor<br/>解析学生JWT] --> S2[StudentSignInterceptor<br/>HMAC-SHA256签名]
+    end
+    
+    Chain1 --> AdminChain
+    Chain2 --> PendingChain
+    Chain3 --> StudentChain
+    
+    AdminChain --> AResult[存入 ThreadLocal<br/>SysUserEntity]
+    PendingChain --> PResult[从Redis验证<br/>phone + prepayOrderNo]
+    StudentChain --> SResult[存入 StudentThreadLocal<br/>StudentEntity]
+    
+    AResult --> ACtrl[AdminController<br/>可访问所有数据]
+    PResult --> PCtrl[StudentPendingController<br/>仅下单和完善资料]
+    SResult --> SCtrl[StudentController<br/>只看自己的数据]
+    
+    style Request fill:#e1f5ff
+    style Router fill:#fff4e6
+    style AdminChain fill:#e8f5e9
+    style PendingChain fill:#fff9c4
+    style StudentChain fill:#e3f2fd
+```
 
 ```
-后台管理拦截器链：
+后台管理拦截器链（/api/**）：
   JwtAuthInterceptor → SignInterceptor → PermissionInterceptor
 
-学生端拦截器链：
-  StudentJwtAuthInterceptor（单独一套）
+学生端拦截器链（/student/**，排除 /student/pending/**）：
+  StudentJwtAuthInterceptor → StudentSignInterceptor
+
+免注册支付拦截器链（/student/pending/**）：
+  PendingPaySignInterceptor
 ```
 
-**StudentJwtAuthInterceptor 与 JwtAuthInterceptor 的区别：**
+**拦截器链配置（WebMvcConfig）：**
 
-| 维度 | JwtAuthInterceptor | StudentJwtAuthInterceptor |
-|------|--------------------|-----------------------------|
-| JWT payload | uid, expire_time | uid, phone, student:true, expire_time |
-| 额外校验 | 无 | 检查 student:true 标记 |
-| 用户信息 | 存入 request.setAttribute | 存入 StudentThreadLocal |
-| 权限校验 | 有（PermissionInterceptor） | 无（学生只看自己的数据） |
+```java
+// 1. 后台管理：JWT + 签名 + RBAC 权限
+registry.addInterceptor(jwtAuthInterceptor).addPathPatterns("/api/**");
+registry.addInterceptor(signInterceptor).addPathPatterns("/api/**");
+registry.addInterceptor(permissionInterceptor).addPathPatterns("/api/**");
+
+// 2. 免注册支付：PendingPay 签名（不需要登录）
+registry.addInterceptor(pendingPaySignInterceptor).addPathPatterns("/student/pending/**");
+
+// 3. 学生端：JWT + 签名（排除 pending 路径）
+registry.addInterceptor(studentJwtAuthInterceptor)
+        .addPathPatterns("/student/**").excludePathPatterns("/student/login", "/student/pending/**");
+registry.addInterceptor(studentSignInterceptor)
+        .addPathPatterns("/student/**").excludePathPatterns("/student/login", "/student/pending/**");
+```
+
+**三套拦截器对比：**
+
+| 维度 | 管理端 | 学生端 | 免注册支付 |
+|------|--------|--------|-----------|
+| 路径 | /api/** | /student/**（非 pending） | /student/pending/** |
+| JWT | JwtAuthInterceptor | StudentJwtAuthInterceptor | PendingPaySignInterceptor |
+| 签名 | SignInterceptor | StudentSignInterceptor | 内置 HMAC-SHA256 |
+| 权限 | PermissionInterceptor | 无 | 无 |
+| JWT payload | uid, expire_time | uid, phone, student:true, expire_time | phone, prepay_order_no |
+| 密钥存储 | Redis | Redis | Redis |
 
 **StudentThreadLocal — 线程级学生上下文：**
 ```java
@@ -5361,10 +6149,67 @@ public class StudentThreadLocal {
 - Service 层通过 `StudentThreadLocal.get()` 直接获取当前学生，不用重复查询
 - `afterCompletion` 中清理 ThreadLocal，防止线程复用导致数据污染
 
-**为什么学生端不用签名验证（SignInterceptor）？**
-- 学生端是 H5 页面，签名逻辑对前端实现成本较高
-- 学生只能看自己的数据，安全风险相对较低
-- 后台管理是内部系统，签名防篡改更有必要
+**StudentFrontAuthService — 学生登录态服务：**
+
+```java
+// 创建 JWT Token（1小时过期）
+public String createToken(StudentEntity student) {
+    Map<String, Object> map = new HashMap<>();
+    map.put("uid", student.getId());
+    map.put("phone", student.getStudentPhone());
+    map.put("student", true);                        // 标记学生身份
+    map.put("expire_time", System.currentTimeMillis() + TOKEN_EXPIRE_MILLIS);
+    return JWTUtil.createToken(map, jwtSecret.getBytes());
+}
+
+// 创建签名密钥（48位随机字符串，存Redis，1小时过期）
+public String createSignSecret(StudentEntity student) {
+    String signSecret = RandomUtil.randomString(48);
+    redisUtil.set("yanque:student:sign:secret:" + student.getId(), signSecret, Duration.ofHours(1));
+    return signSecret;
+}
+```
+
+### 12.9 API 接口汇总
+
+**学生登录接口：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/student/login` | 学生登录（三分支判断） |
+
+**学生订单接口（免注册支付）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/student/pending/order/createOrderNo` | 生成支付订单号 |
+| POST | `/student/pending/order/createPaymentOrder` | 学生支付下单 |
+| GET | `/student/pending/order/paymentReturnInfo` | 支付成功回跳页查询 |
+
+**学生资料接口（免注册支付）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/student/pending/profile/completeProfile` | 支付成功后完善资料 |
+
+**后台管理接口：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/students` | 分页查询学生 |
+| PUT | `/api/students/{id}/class` | 分配学生到班级 |
+
+### 12.10 设计决策总结
+
+| 问题 | 设计决策 | 原因 |
+|------|---------|------|
+| 为什么登录有三分支？ | 覆盖完整生命周期 | 已注册/已支付未注册/待支付三种状态都需要正确引导 |
+| 为什么学生端单独一个包？ | 职责分离 | 后台管理和学生端认证方式、数据权限完全不同 |
+| 为什么完善资料后直接返回 Token？ | 减少一步操作 | 学生刚填完资料，不应该再要求登录一次 |
+| 为什么姓名和手机号从订单取？ | 数据一致性 | 下单时已填过，避免学生注册时填写不一致 |
+| 为什么学生端也有签名？ | 防篡改 | 防止中间人修改支付金额等敏感参数 |
+| 为什么不用 RBAC？ | 数据隔离足够 | 学生只看自己的数据，Service 层通过 ThreadLocal 过滤 |
+| 为什么有三套拦截器？ | 安全分层 | 管理端最严（JWT+签名+权限），学生端次之（JWT+签名），免注册最松（签名） |
 
 ---
 
@@ -5407,23 +6252,55 @@ HomeworkSubmissionEntity（学生提交）
 ### 13.2 教师端：发布作业
 
 ```mermaid
-flowchart TD
-    A[教师填写作业信息] --> B[预填接口 prepareHomework]
-    B --> C[校验班级存在]
-    C --> D{同班同天已有作业?}
-    D -- 是 --> E[抛异常: 该班级当天作业已存在]
-    D -- 否 --> F[查询当天课表]
-
-    F --> G{当天有课表?}
-    G -- 否 --> H[抛异常: 该班级当天没有课表]
-    G -- 是 --> I[自动填充课程内容]
-
-    I --> J[校验截止时间]
-    J --> K{截止时间 < 开始时间?}
-    K -- 是 --> L[抛异常: 截止时间不能早于开始时间]
-    K -- 否 --> M[创建作业记录]
-
-    M --> N[返回作业ID]
+flowchart TB
+    Start([教师选择班级和日期]) --> Prepare[调用预填接口<br/>POST /api/homeworks/prepare]
+    
+    Prepare --> Step1[步骤1: 校验班级存在<br/>clazzMapper.selectById]
+    
+    Step1 --> Step2[步骤2: 归一化日期<br/>DateUtil.beginOfDay<br/>去除时间部分]
+    
+    Step2 --> Check1{同班同天是否已有作业?<br/>homeworkMapper.selectByClassIdAndHomeworkDate}
+    
+    Check1 -->|是| Error1[抛异常: 该班级当天作业已存在]
+    Check1 -->|否| Step3[步骤3: 查询当天课表<br/>classScheduleMapper.selectByClassIdAndDate]
+    
+    Step3 --> Check2{当天是否有课表?}
+    
+    Check2 -->|否| Error2[抛异常: 该班级当天没有课表,无法发布作业]
+    Check2 -->|是| Step4[步骤4: 自动填充预填信息]
+    
+    Step4 --> Fill1[classContent = schedule.courseContent]
+    Fill1 --> Fill2[defaultTitle = 班期 + 日期 + 作业]
+    Fill2 --> Fill3[startTime = 当天 00:00:00]
+    Fill3 --> Fill4[deadline = 当天 23:59:59]
+    
+    Fill4 --> Return1[返回预填信息<br/>HomeworkPrepareRes]
+    
+    Return1 --> Form[前端展示预填表单<br/>教师补充: 标题、作业文件、开始时间、截止时间]
+    
+    Form --> Submit[提交发布<br/>POST /api/homeworks]
+    
+    Submit --> Validate1[校验班级存在]
+    Validate1 --> Validate2[再次校验同班同天唯一]
+    Validate2 --> Validate3[再次查询课表获取课程内容]
+    
+    Validate3 --> Check3{截止时间 < 开始时间?}
+    Check3 -->|是| Error3[抛异常: 截止时间不能早于开始时间]
+    Check3 -->|否| Insert[插入作业记录<br/>homeworkMapper.insert]
+    
+    Insert --> Return2[返回作业ID<br/>HomeworkCreateRes]
+    
+    Return2 --> End([作业发布成功])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Check3 fill:#fff4e6
+    style Step4 fill:#e3f2fd
 ```
 
 **发布流程：**
@@ -5499,28 +6376,124 @@ public HomeworkSubmissionGradeRes gradeSubmission(Long submissionId, HomeworkSub
 
 ### 13.4 学生端：查看与提交作业
 
-```mermaid
-flowchart TD
-    subgraph 查看作业
-        A1[学生打开作业列表] --> A2[从 ThreadLocal 获取当前学生]
-        A2 --> A3{已分配班级?}
-        A3 -- 否 --> A4[返回空列表]
-        A3 -- 是 --> A5[查询班级作业列表]
-        A5 --> A6[批量查询我的提交状态]
-        A6 --> A7[组装: 作业信息 + 提交状态]
-    end
+**查看作业列表流程图：**
 
-    subgraph 提交作业
-        B1[学生上传 .md 文件到 OSS] --> B2[POST 提交作业]
-        B2 --> B3{已过截止时间?}
-        B3 -- 是 --> B4[抛异常: 作业已截止]
-        B3 -- 否 --> B5[校验文件路径安全]
-        B5 --> B6{路径合法?}
-        B6 -- 否 --> B7[抛异常: 提交文件路径不合法]
-        B6 -- 是 --> B8{已有提交记录?}
-        B8 -- 否 --> B9[插入新提交记录]
-        B8 -- 是 --> B10[覆盖更新提交记录]
-    end
+```mermaid
+flowchart TB
+    Start([学生打开作业列表页]) --> Auth[StudentJwtAuthInterceptor<br/>解析JWT获取学生ID]
+    
+    Auth --> ThreadLocal[存入 StudentThreadLocal<br/>后续直接获取当前学生]
+    
+    ThreadLocal --> Step1[步骤1: 获取当前学生<br/>StudentThreadLocal.get]
+    
+    Step1 --> Check1{学生是否已分配班级?<br/>student.classId != null}
+    
+    Check1 -->|否| Return1[返回空列表<br/>未分配班级的学生看不到作业]
+    Check1 -->|是| Step2[步骤2: 查询班级作业列表<br/>homeworkMapper.selectStudentPage]
+    
+    Step2 --> Filter[过滤条件:<br/>classId = student.classId<br/>startTime <= 当前时间]
+    
+    Filter --> Step3[步骤3: 批量查询我的提交状态<br/>buildSubmissionMap]
+    
+    Step3 --> Query1[提取作业ID列表<br/>homeworkIds]
+    Query1 --> Query2[批量查询提交记录<br/>homeworkSubmissionMapper<br/>.selectByHomeworkIdsAndStudentId]
+    Query2 --> MapBuild[构建 Map<br/>key = homeworkId<br/>value = HomeworkSubmissionEntity]
+    
+    MapBuild --> Step4[步骤4: 组装响应数据<br/>buildHomeworkRes]
+    
+    Step4 --> Assemble{遍历每份作业}
+    
+    Assemble --> Answer[处理答案可见性]
+    Answer --> AnswerCheck{answerStudentVisible<br/>&&<br/>answerObjectKey 非空?}
+    
+    AnswerCheck -->|是| AnswerShow[answerVisible = true<br/>返回答案信息]
+    AnswerCheck -->|否| AnswerHide[answerVisible = false<br/>答案字段设为 null<br/>防止前端自行下载]
+    
+    AnswerShow --> Submission[处理提交状态]
+    AnswerHide --> Submission
+    
+    Submission --> SubCheck{从 Map 查找提交记录?}
+    
+    SubCheck -->|有| SubShow[submitted = true<br/>填充提交文件名、提交时间<br/>分数、评语、是否迟交]
+    SubCheck -->|无| SubEmpty[submitted = false<br/>提交相关字段为空]
+    
+    SubShow --> Response[组装 StudentHomeworkPageRes]
+    SubEmpty --> Response
+    
+    Response --> End([返回作业列表<br/>每份作业包含: 作业信息+答案可见性+提交状态])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Return1 fill:#fff9c4
+    style Check1 fill:#fff4e6
+    style AnswerCheck fill:#fff4e6
+    style SubCheck fill:#fff4e6
+    style Step3 fill:#f3e5f5
+```
+
+**提交作业流程图：**
+
+```mermaid
+flowchart TB
+    Start([学生上传 .md 文件到 OSS<br/>前端调用 uploadService]) --> Upload[获得 objectKey<br/>格式: homework/submission/homeworkId/studentId/xxx.md]
+    
+    Upload --> Submit[POST /student/homeworks/id/submissions<br/>提交 objectKey 和 fileName]
+    
+    Submit --> Auth[StudentJwtAuthInterceptor<br/>获取当前学生ID]
+    
+    Auth --> Step1[步骤1: 校验学生存在<br/>validateStudent]
+    
+    Step1 --> Step2[步骤2: 校验作业归属和时间<br/>validateStudentHomework]
+    
+    Step2 --> Check1{作业是否存在?}
+    Check1 -->|否| Error1[抛异常: 作业不存在]
+    Check1 -->|是| Check2{学生classId == 作业classId?}
+    
+    Check2 -->|否| Error2[抛异常: 作业不存在<br/>防止跨班访问]
+    Check2 -->|是| Check3{作业已到开始时间?}
+    
+    Check3 -->|否| Error3[抛异常: 作业暂未开始]
+    Check3 -->|是| Step3[步骤3: 校验截止时间<br/>now vs deadline]
+    
+    Step3 --> Check4{是否已过截止时间?}
+    
+    Check4 -->|是| Error4[抛异常: 作业已截止,不能提交]
+    Check4 -->|否| Step4[步骤4: 校验文件路径安全<br/>validateSubmissionObjectKey]
+    
+    Step4 --> PathCheck1{文件是否为 .md 格式?}
+    PathCheck1 -->|否| Error5[抛异常: 提交文件只支持md格式]
+    PathCheck1 -->|是| PathCheck2{路径是否符合规范?<br/>homework/submission/homeworkId/studentId/}
+    
+    PathCheck2 -->|否| Error6[抛异常: 提交文件路径不合法<br/>防止路径穿越和越权]
+    PathCheck2 -->|是| Step5[步骤5: 查询已有提交记录<br/>selectByHomeworkIdAndStudentId]
+    
+    Step5 --> Check5{已有提交记录?}
+    
+    Check5 -->|否| Insert[插入新记录<br/>homeworkSubmissionMapper.insert]
+    Check5 -->|是| Update[覆盖更新<br/>homeworkSubmissionMapper.updateSubmit<br/>只更新文件信息和提交时间]
+    
+    Insert --> Fill[填充字段<br/>homeworkId, studentId, classId<br/>contentObjectKey, contentFileName<br/>submitTime, lateSubmitted=false]
+    Update --> Fill
+    
+    Fill --> Return[返回提交结果<br/>StudentHomeworkSubmitRes]
+    
+    Return --> End([提交成功])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Error4 fill:#ffebee
+    style Error5 fill:#ffebee
+    style Error6 fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Check3 fill:#fff4e6
+    style Check4 fill:#fff4e6
+    style PathCheck1 fill:#fff4e6
+    style PathCheck2 fill:#fff4e6
+    style Check5 fill:#fff4e6
 ```
 
 **学生查看作业列表：**
@@ -5587,23 +6560,313 @@ private void validateSubmissionObjectKey(String objectKey, Long homeworkId, Long
 - 防止路径穿越攻击（`..`）
 - 只允许 `.md` 格式，统一提交规范
 
-### 13.5 作业系统数据流
+### 13.5 学生端：文件下载机制
+
+学生需要下载三种文件：作业内容、答案、自己提交的文件。每种都有独立的安全校验。
+
+**文件下载流程图：**
 
 ```mermaid
-flowchart TD
-    subgraph 教师端
-        A[发布作业] --> B[学生提交]
-        B --> C[教师批改]
-        C --> D[发布答案]
-    end
-
-    subgraph 学生端
-        E[查看作业列表] --> F[下载作业内容]
-        F --> G[提交作业文件]
-        G --> H[查看分数和评语]
-        D --> I[查看答案]
-    end
+flowchart TB
+    Start([学生点击下载]) --> Router{下载类型}
+    
+    Router -->|作业内容/答案| Flow1[GET /student/homeworks/id/download-url<br/>参数: type=CONTENT 或 ANSWER]
+    Router -->|自己的提交文件| Flow2[GET /student/homeworks/id/submissions/download-url]
+    
+    Flow1 --> Auth1[StudentJwtAuthInterceptor<br/>获取当前学生]
+    Flow2 --> Auth2[StudentJwtAuthInterceptor<br/>获取当前学生]
+    
+    Auth1 --> Validate1[validateStudent<br/>校验学生存在]
+    Auth2 --> Validate2[validateStudent<br/>校验学生存在]
+    
+    Validate1 --> Validate3[validateStudentHomework<br/>校验作业归属+开始时间]
+    Validate2 --> Validate4[validateStudentHomework<br/>校验作业归属+开始时间]
+    
+    Validate3 --> Check1{班级是否匹配?<br/>student.classId == homework.classId}
+    Check1 -->|否| Error1[抛异常: 作业不存在<br/>防止跨班访问]
+    Check1 -->|是| Check2{作业是否已到开始时间?}
+    
+    Check2 -->|否| Error2[抛异常: 作业暂未开始]
+    Check2 -->|是| TypeCheck{type 参数?}
+    
+    TypeCheck -->|CONTENT| GetContent[获取作业内容<br/>objectKey = homework.contentObjectKey]
+    TypeCheck -->|ANSWER| CheckAnswer{答案是否对学生可见?<br/>answerStudentVisible == true}
+    
+    CheckAnswer -->|否| Error3[抛异常: 答案暂未公布<br/>双重防护的第二层]
+    CheckAnswer -->|是| GetAnswer[获取答案文件<br/>objectKey = homework.answerObjectKey]
+    
+    GetContent --> Presign1[调用 uploadService<br/>createDownloadPresign]
+    GetAnswer --> Presign1
+    
+    Presign1 --> TOS1[TOS 对象存储<br/>生成预签名 URL<br/>有效期: 1小时]
+    
+    TOS1 --> Return1[返回下载信息<br/>fileName, downloadUrl, expires]
+    
+    Validate4 --> Query[查询当前学生的提交记录<br/>selectByHomeworkIdAndStudentId]
+    
+    Query --> Check3{提交记录是否存在?}
+    
+    Check3 -->|否| Error4[抛异常: 尚未提交作业]
+    Check3 -->|是| Check4{contentObjectKey 是否为空?}
+    
+    Check4 -->|是| Error5[抛异常: 尚未提交作业]
+    Check4 -->|否| GetSubmission[获取提交文件<br/>objectKey = submission.contentObjectKey]
+    
+    GetSubmission --> Presign2[调用 uploadService<br/>createDownloadPresign]
+    
+    Presign2 --> TOS2[TOS 对象存储<br/>生成预签名 URL]
+    
+    TOS2 --> Return2[返回下载信息<br/>fileName, downloadUrl, expires]
+    
+    Return1 --> End([前端跳转预签名 URL<br/>浏览器自动下载文件])
+    Return2 --> End
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Error4 fill:#ffebee
+    style Error5 fill:#ffebee
+    style Router fill:#fff4e6
+    style TypeCheck fill:#fff4e6
+    style CheckAnswer fill:#fff4e6
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Check3 fill:#fff4e6
+    style Check4 fill:#fff4e6
 ```
+
+**下载接口（StudentHomeworkController）：**
+
+| 接口 | 路径 | 说明 |
+|------|------|------|
+| 作业/答案下载 | `GET /student/homeworks/{id}/download-url?type=CONTENT` | 获取预签名下载URL |
+| 提交文件下载 | `GET /student/homeworks/{id}/submissions/download-url` | 获取自己提交文件的下载URL |
+
+**createDownloadUrl — 作业/答案下载：**
+
+```java
+public StudentHomeworkDownloadUrlRes createDownloadUrl(Long homeworkId, String type) {
+    StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
+    HomeworkEntity homework = validateStudentHomework(student, homeworkId);  // 校验班级归属+开始时间
+
+    String objectKey;
+    if ("CONTENT".equalsIgnoreCase(type)) {
+        // 下载作业内容
+        objectKey = homework.getContentObjectKey();
+    } else if ("ANSWER".equalsIgnoreCase(type)) {
+        // 下载答案：额外校验答案是否对学生可见
+        if (!Boolean.TRUE.equals(homework.getAnswerStudentVisible())) {
+            throw BusinessException.DateError.newInstance("答案暂未公布");
+        }
+        objectKey = homework.getAnswerObjectKey();
+    }
+
+    // 生成预签名URL（TOS对象存储）
+    DownloadPresignRes presign = uploadService.createDownloadPresign(objectKey);
+    return presign;
+}
+```
+
+**createSubmissionDownloadUrl — 提交文件下载：**
+
+```java
+public StudentHomeworkDownloadUrlRes createSubmissionDownloadUrl(Long homeworkId) {
+    StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
+    validateStudentHomework(student, homeworkId);
+
+    // 查询当前学生的提交记录（只能下载自己的）
+    HomeworkSubmissionEntity submission = homeworkSubmissionMapper
+        .selectByHomeworkIdAndStudentId(homeworkId, student.getId());
+    if (submission == null || isBlank(submission.getContentObjectKey())) {
+        throw BusinessException.DateError.newInstance("尚未提交作业");
+    }
+
+    return uploadService.createDownloadPresign(submission.getContentObjectKey());
+}
+```
+
+**validateStudentHomework — 数据隔离校验：**
+
+```java
+private HomeworkEntity validateStudentHomework(StudentEntity student, Long homeworkId) {
+    HomeworkEntity homework = homeworkMapper.selectById(homeworkId);
+    // 校验1：作业存在
+    // 校验2：学生已分配班级
+    // 校验3：作业属于学生的班级（防止跨班访问）
+    if (homework == null || student.getClassId() == null || !student.getClassId().equals(homework.getClassId())) {
+        throw BusinessException.DateError.newInstance("作业不存在");
+    }
+    // 校验4：作业已到开始时间（防止提前查看）
+    if (homework.getStartTime() == null || homework.getStartTime().after(new Date())) {
+        throw BusinessException.DateError.newInstance("作业暂未开始");
+    }
+    return homework;
+}
+```
+
+| 校验项 | 说明 |
+|--------|------|
+| 作业存在 | 防止访问不存在的作业 |
+| 班级匹配 | 学生只能访问自己班级的作业 |
+| 开始时间 | 作业未到开始时间时不可见 |
+
+### 13.6 答案可见性控制
+
+**buildHomeworkRes — 答案脱敏：**
+
+```java
+private StudentHomeworkPageRes buildHomeworkRes(HomeworkEntity homework, HomeworkSubmissionEntity submission) {
+    StudentHomeworkPageRes res = new StudentHomeworkPageRes();
+    BeanUtils.copyProperties(homework, res);
+
+    // 答案可见性判断：教师已发布 + 设置了对学生可见
+    boolean answerVisible = Boolean.TRUE.equals(homework.getAnswerStudentVisible())
+            && !isBlank(homework.getAnswerObjectKey());
+    res.setAnswerVisible(answerVisible);
+
+    if (!answerVisible) {
+        // 答案未公布时，不向学生端透出答案objectKey和文件名
+        res.setAnswerObjectKey(null);
+        res.setAnswerFileName(null);
+    }
+
+    // 提交状态
+    boolean submitted = submission != null && !isBlank(submission.getContentObjectKey());
+    res.setSubmitted(submitted);
+    if (submitted) {
+        res.setSubmissionFileName(submission.getContentFileName());
+        res.setSubmitTime(submission.getSubmitTime());
+        res.setLateSubmitted(submission.getLateSubmitted());
+        res.setScore(submission.getScore());
+        res.setTeacherRemark(submission.getTeacherRemark());
+    }
+    return res;
+}
+```
+
+**为什么要双重控制答案可见性？**
+- **接口层**（createDownloadUrl）：下载时再次校验 `answerStudentVisible`，防止绕过列表接口直接调下载
+- **列表层**（buildHomeworkRes）：列表中不返回答案 objectKey，防止前端自行拼接下载链接
+- 两层防护，任何一层被绕过都不会泄露答案
+
+### 13.7 教师端：提交列表查看
+
+教师批改前需要查看所有学生的提交情况：
+
+**pageSubmissions — 提交列表：**
+
+```java
+public PageResult<HomeworkSubmissionPageRes> pageSubmissions(Long homeworkId, HomeworkSubmissionPageReq req) {
+    validateHomework(homeworkId);
+
+    // 1. 分页查询提交记录（主查询）
+    PageHelper.startPage(pageNum, pageSize);
+    List<HomeworkSubmissionEntity> submissions = homeworkSubmissionMapper.selectByHomeworkId(homeworkId);
+
+    // 2. 批量查询学生信息（避免 N+1）
+    Map<Long, StudentEntity> studentMap = buildStudentMap(submissions);
+
+    // 3. 组装：提交记录 + 学生姓名/手机号
+    List<HomeworkSubmissionPageRes> records = submissions.stream()
+            .map(item -> buildSubmissionPageRes(item, studentMap.get(item.getStudentId())))
+            .toList();
+    return new PageResult<>(...);
+}
+```
+
+**为什么分页后再批量查学生？**
+- 分页以 submission 为主表，SQL 保持简单
+- 批量查学生信息用 `selectByIds`，一次查询补齐所有学生
+- 避免 PageHelper 分页被 JOIN 影响
+
+### 13.8 作业系统数据流
+
+```mermaid
+flowchart TB
+    subgraph Teacher [教师端操作流程]
+        direction TB
+        T1[1. prepareHomework<br/>预填作业信息<br/>获取班期、日期、课程内容] --> T2[2. addHomework<br/>发布作业<br/>上传作业文件到TOS]
+        T2 --> T3[3. pageSubmissions<br/>查看学生提交列表<br/>批量查询学生信息]
+        T3 --> T4[4. gradeSubmission<br/>批改作业<br/>填写分数和评语]
+        T4 --> T5[5. publishAnswer<br/>发布答案<br/>设置学生可见性]
+    end
+    
+    subgraph Student [学生端操作流程]
+        direction TB
+        S1[1. pageHomework<br/>查看作业列表<br/>过滤: 已分配班级+已到开始时间] --> S2[2. createDownloadUrl<br/>下载作业内容<br/>校验: 班级归属+开始时间]
+        S2 --> S3[3. 上传 .md 文件到 TOS<br/>路径: homework/submission/hwId/stuId/]
+        S3 --> S4[4. submitHomework<br/>提交作业<br/>校验: 截止时间+路径安全]
+        S4 --> S5[5. 查看分数和评语<br/>在作业列表中显示]
+        S5 --> S6[6. createDownloadUrl type=ANSWER<br/>下载答案<br/>校验: answerStudentVisible]
+        S4 --> S7[7. createSubmissionDownloadUrl<br/>下载自己的提交<br/>校验: 提交记录存在]
+    end
+    
+    subgraph Data [核心数据表]
+        direction LR
+        D1[(HomeworkEntity<br/>作业表)]
+        D2[(HomeworkSubmissionEntity<br/>提交表)]
+        D3[(TOS 对象存储<br/>文件存储)]
+    end
+    
+    T2 -->|插入| D1
+    T4 -->|更新 score/remark| D2
+    T5 -->|更新 answer 字段| D1
+    
+    S1 -->|查询| D1
+    S1 -->|批量查询| D2
+    S4 -->|插入或覆盖更新| D2
+    
+    T2 -->|上传作业文件| D3
+    T5 -->|上传答案文件| D3
+    S3 -->|上传提交文件| D3
+    
+    S2 -->|生成预签名URL| D3
+    S6 -->|生成预签名URL| D3
+    S7 -->|生成预签名URL| D3
+    
+    style Teacher fill:#e8f5e9
+    style Student fill:#e3f2fd
+    style Data fill:#fff9c4
+```
+
+### 13.9 API 接口汇总
+
+**教师端作业接口（HomeworkController）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/homeworks/prepare` | 预填作业信息（班期、日期、默认标题） |
+| POST | `/api/homeworks` | 发布作业 |
+| GET | `/api/homeworks` | 分页查询作业 |
+| PUT | `/api/homeworks/{id}/answer` | 发布答案 |
+| GET | `/api/homeworks/{id}/submissions` | 查看学生提交列表 |
+| PUT | `/api/homeworks/submissions/{id}/grade` | 批改作业（分数+评语） |
+
+**学生端作业接口（StudentHomeworkController）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/student/homeworks` | 查看我的作业列表 |
+| GET | `/student/homeworks/{id}/download-url?type=CONTENT` | 下载作业内容 |
+| GET | `/student/homeworks/{id}/download-url?type=ANSWER` | 下载答案（需可见） |
+| POST | `/student/homeworks/{id}/submissions` | 提交/重新提交作业 |
+| GET | `/student/homeworks/{id}/submissions/download-url` | 下载自己提交的文件 |
+
+### 13.10 设计决策总结
+
+| 问题 | 设计决策 | 原因 |
+|------|---------|------|
+| 为什么作业和提交分两张表？ | 一对多 | 一份作业对应多个学生提交，独立批改 |
+| 为什么同班同天只能一份作业？ | 防重复 | 同一天的课程内容只有一份，避免老师重复发布 |
+| 为什么课程内容从课表自动填充？ | 数据一致性 | 不让老师手动维护，减少出错 |
+| 为什么提交只支持 .md 格式？ | 统一规范 | Markdown 便于教师阅读和批改 |
+| 为什么路径校验要检查目录前缀？ | 防越权 | 防止学生用别人的 objectKey 覆盖提交记录 |
+| 为什么答案双重可见性控制？ | 纵深防御 | 列表层脱敏 + 接口层校验，防止绕过 |
+| 为什么分页后再批量查关联数据？ | 保持SQL简单 | 主表分页简单，关联数据 Java 层补齐 |
+| 为什么重新提交是覆盖而非新增？ | 业务语义 | 一个学生一份作业只保留最新提交 |
+| 为什么有开始时间校验？ | 防提前查看 | 作业未到开始时间时学生不可见 |
 
 ---
 
@@ -5613,28 +6876,78 @@ flowchart TD
 
 ### 14.1 退款流程
 
+**退款完整流程图：**
+
 ```mermaid
-sequenceDiagram
-    participant A as 管理员
-    participant C as RefundOrderController
-    participant B as RefundOrderBiz
-    participant O as OrderService
-    participant Y as 易宝支付
-
-    A->>C: POST /createRefundOrder (生成退款单号)
-    C-->>A: 退款单号
-
-    A->>C: POST /applyRefund (申请退款)
-    C->>B: applyRefund(refundOrderNo, req)
-    B->>O: 查询原支付订单
-    B->>B: 保存退款单 (状态: INIT)
-    B->>O: 增加已退金额
-    B->>Y: 调用易宝退款接口
-    Y-->>B: 退款流水号
-    B->>B: 更新退款单状态为 PROCESSING
-
-    Y->>B: 退款成功回调
-    B->>B: 更新退款单状态为 SUCCESS
+flowchart TB
+    Start([管理员发起退款]) --> Step1[步骤1: 生成退款单号<br/>POST /api/refundOrders/createRefundOrder]
+    
+    Step1 --> Generate[生成退款单号<br/>格式: 1011 + yyyyMMddHHmmss + 6位随机数]
+    
+    Generate --> Return1[返回退款单号<br/>RefundOrderNoRes]
+    
+    Return1 --> Step2[步骤2: 申请退款<br/>POST /api/refundOrders/applyRefund]
+    
+    Step2 --> Validate1[校验原支付订单<br/>getRefundablePaymentOrder]
+    
+    Validate1 --> Check1{订单状态是否为 SUCCESS?}
+    Check1 -->|否| Error1[抛异常: 订单未支付成功]
+    Check1 -->|是| Check2{退款金额是否合法?<br/>refundAmount > 0<br/>refundAmount <= paymentAmount - refundedAmount}
+    
+    Check2 -->|否| Error2[抛异常: 退款金额不合法]
+    Check2 -->|是| Step3[步骤3: 保存退款单<br/>saveApplyingRefundOrder]
+    
+    Step3 --> Idempotent{退款单是否已存在?<br/>按 refundOrderNo 查询}
+    
+    Idempotent -->|是| Return2[返回已有退款单<br/>幂等保护]
+    Idempotent -->|否| Insert[插入退款单<br/>状态: INIT]
+    
+    Insert --> CatchDuplicate{捕获 DuplicateKeyException?<br/>唯一索引: refundOrderNo}
+    
+    CatchDuplicate -->|是| Return3[查询并返回已有退款单<br/>并发幂等保护]
+    CatchDuplicate -->|否| Step4[步骤4: 增加原订单已退金额<br/>orderService.increaseRefundedAmount]
+    
+    Step4 --> UpdateAmount[乐观锁更新<br/>refundedAmount += refundAmount<br/>WHERE version = oldVersion]
+    
+    UpdateAmount --> Step5[步骤5: 调用易宝退款接口<br/>yeepayCashierService.refund]
+    
+    Step5 --> TryCatch{易宝调用是否成功?}
+    
+    TryCatch -->|失败| Rollback[回退已退金额<br/>decreaseRefundedAmount]
+    Rollback --> UpdateFail[更新退款单状态: FAIL]
+    UpdateFail --> Error3[抛异常: 申请退款失败]
+    
+    TryCatch -->|成功| YeepayRes[易宝返回退款流水号<br/>uniqueRefundNo]
+    
+    YeepayRes --> Step6[步骤6: 更新退款单状态<br/>INIT → PROCESSING]
+    
+    Step6 --> UpdateProcessing[更新字段:<br/>status = PROCESSING<br/>uniqueRefundNo<br/>updatedAt]
+    
+    UpdateProcessing --> Return4[返回退款申请结果<br/>RefundApplyRes]
+    
+    Return4 --> Wait[等待易宝异步回调]
+    
+    Wait --> Callback{易宝回调类型}
+    
+    Callback -->|SUCCESS| Success[更新状态: SUCCESS<br/>记录退款成功时间]
+    Callback -->|FAIL| Fail[更新状态: FAIL<br/>回退已退金额<br/>记录失败原因]
+    
+    Success --> End([退款完成])
+    Fail --> End
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Idempotent fill:#fff4e6
+    style CatchDuplicate fill:#fff4e6
+    style TryCatch fill:#fff4e6
+    style Callback fill:#fff4e6
+    style Step4 fill:#f3e5f5
+    style Rollback fill:#ffcdd2
 ```
 
 ### 14.2 退款订单实体
@@ -6018,13 +7331,142 @@ public class ExamPaperQuestionEntity {
 **组卷流程图：**
 
 ```mermaid
-flowchart TD
-    A[创建试卷] --> B[设置试卷名称]
-    B --> C[关联课程和阶段]
-    C --> D[从题库选题]
-    D --> E[设置每题分值]
-    E --> F[计算总分]
-    F --> G[保存试卷]
+flowchart TB
+    Start([教师创建试卷]) --> Step1[步骤1: 填写试卷基本信息<br/>试卷名称、课程、阶段]
+    
+    Step1 --> Step2[步骤2: 从题库选题<br/>POST /api/examPapers]
+    
+    Step2 --> Validate1[校验课程存在<br/>courseMapper.selectById]
+    
+    Validate1 --> Check1{课程是否存在?}
+    Check1 -->|否| Error1[抛异常: 课程不存在]
+    Check1 -->|是| Validate2[校验题目ID列表非空]
+    
+    Validate2 --> Check2{题目列表是否为空?}
+    Check2 -->|是| Error2[抛异常: 题目列表不能为空]
+    Check2 -->|否| Step3[步骤3: 批量查询题目<br/>questionMapper.selectByIds]
+    
+    Step3 --> Check3{题目数量是否匹配?<br/>实际查询数 == 请求数}
+    
+    Check3 -->|否| Error3[抛异常: 部分题目不存在]
+    Check3 -->|是| TxStart[开启事务<br/>@Transactional]
+    
+    TxStart --> Step4[步骤4: 创建试卷记录<br/>examPaperMapper.insert]
+    
+    Step4 --> Insert1[插入试卷基本信息<br/>paperName, courseId, stageName<br/>totalScore = 0 暂时]
+    
+    Insert1 --> Step5[步骤5: 批量创建试卷-题目关联<br/>examPaperQuestionMapper.batchInsert]
+    
+    Step5 --> Loop{遍历每道题目}
+    
+    Loop --> BuildAssoc[构建关联记录<br/>paperId, questionId, questionScore]
+    BuildAssoc --> CalcTotal[累加总分<br/>totalScore += questionScore]
+    
+    CalcTotal --> NextQuestion{还有题目?}
+    NextQuestion -->|是| Loop
+    NextQuestion -->|否| Step6[步骤6: 更新试卷总分<br/>examPaperMapper.updateTotalScore]
+    
+    Step6 --> UpdateTotal[更新 totalScore<br/>值为所有题目分值之和]
+    
+    UpdateTotal --> TxCommit[事务提交]
+    
+    TxCommit --> Return[返回试卷ID<br/>ExamPaperCreateRes]
+    
+    Return --> End([试卷创建成功])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Check3 fill:#fff4e6
+    style TxStart fill:#f3e5f5
+    style TxCommit fill:#f3e5f5
+```
+
+**学生考试流程图：**
+
+```mermaid
+flowchart TB
+    Start([学生进入考试]) --> Step1[步骤1: 查询考试信息<br/>GET /student/exams/id]
+    
+    Step1 --> Validate1[校验学生存在<br/>StudentThreadLocal.get]
+    
+    Validate1 --> Validate2[校验考试归属<br/>exam.classId == student.classId]
+    
+    Validate2 --> Check1{班级是否匹配?}
+    Check1 -->|否| Error1[抛异常: 考试不存在<br/>防止跨班访问]
+    Check1 -->|是| Check2{当前时间是否在考试窗口内?<br/>startTime <= now <= endTime}
+    
+    Check2 -->|否| Error2[抛异常: 不在考试时间范围内]
+    Check2 -->|是| Step2[步骤2: 查询或创建考试记录<br/>studentExamRecordMapper.selectByExamIdAndStudentId]
+    
+    Step2 --> Check3{已有考试记录?}
+    
+    Check3 -->|否| Create[创建新考试记录<br/>status = IN_PROGRESS]
+    Create --> CalcDeadline[计算个人截止时间<br/>deadline = now + durationMinutes]
+    CalcDeadline --> InsertRecord[插入 StudentExamRecordEntity]
+    
+    Check3 -->|是| CheckStatus{考试记录状态?}
+    
+    CheckStatus -->|SUBMITTED| Error3[抛异常: 已提交，不能重复考试]
+    CheckStatus -->|IN_PROGRESS| LoadAnswers[加载已答题目<br/>studentExamAnswerMapper.selectByRecordId]
+    
+    InsertRecord --> Step3[步骤3: 加载试卷题目<br/>examPaperQuestionMapper.selectByPaperId]
+    LoadAnswers --> Step3
+    
+    Step3 --> Step4[步骤4: 批量查询题目详情<br/>examQuestionMapper.selectByIds]
+    
+    Step4 --> Filter{答案是否对学生可见?<br/>exam.answerVisible}
+    
+    Filter -->|否| HideAnswer[隐藏正确答案和解析<br/>answerContent = null<br/>analysisContent = null]
+    Filter -->|是| ShowAnswer[返回完整题目信息]
+    
+    HideAnswer --> Return1[返回考试信息<br/>题目列表 + 已答答案 + 截止时间]
+    ShowAnswer --> Return1
+    
+    Return1 --> StudentAnswer([学生开始答题])
+    
+    StudentAnswer --> Save[实时保存答案<br/>POST /student/exams/records/id/answers]
+    
+    Save --> Upsert[插入或更新答案<br/>studentExamAnswerMapper.upsert]
+    
+    Upsert --> Submit{学生提交考试?<br/>POST /student/exams/records/id/submit}
+    
+    Submit -->|否| Continue[继续答题]
+    Continue --> Save
+    
+    Submit -->|是| Step5[步骤5: 自动判分<br/>calculateScore]
+    
+    Step5 --> Auto{遍历所有题目}
+    
+    Auto --> TypeCheck{题型判断}
+    
+    TypeCheck -->|SINGLE/MULTIPLE/JUDGE| AutoGrade[自动判分<br/>比对学生答案与正确答案]
+    TypeCheck -->|FILL/SHORT/PROGRAMMING| ManualGrade[需要教师批改<br/>分数暂为0]
+    
+    AutoGrade --> AddScore[累加得分<br/>totalScore += questionScore]
+    ManualGrade --> AddScore
+    
+    AddScore --> NextQ{还有题目?}
+    NextQ -->|是| Auto
+    NextQ -->|否| Step6[步骤6: 更新考试记录<br/>status = SUBMITTED<br/>totalScore, submitTime]
+    
+    Step6 --> End([考试提交成功])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Check3 fill:#fff4e6
+    style CheckStatus fill:#fff4e6
+    style Filter fill:#fff4e6
+    style TypeCheck fill:#fff4e6
 ```
 
 ### 16.4 考试管理（Exam）
@@ -6597,23 +8039,109 @@ erDiagram
 **学习计划创建流程图：**
 
 ```mermaid
-flowchart TD
-    A[管理员创建学习计划] --> B[校验SOP已完成]
-    B --> C{SOP状态?}
-    C -- 未完成 --> D[抛异常: 只有完成SOP后才能定制学习计划]
-    C -- 已完成 --> E[校验学生是线上学员]
-
-    E --> F{是线上学员?}
-    F -- 否 --> G[抛异常: 只有线上学员可以定制学习计划]
-    F -- 是 --> H{已有生效计划?}
-
-    H -- 是 --> I[抛异常: 该学员已有生效学习计划]
-    H -- 否 --> J[校验课程是线上课程]
-
-    J --> K[校验阶段配置]
-    K --> L[创建学习计划]
-    L --> M[生成学习日历]
-    M --> N[返回计划ID和日历数量]
+flowchart TB
+    Start([管理员创建学习计划]) --> Step1[步骤1: 校验SOP已完成<br/>studentSopMapper.selectByStudentId]
+    
+    Step1 --> Check1{SOP是否存在?}
+    Check1 -->|否| Error1[抛异常: 学生SOP不存在]
+    Check1 -->|是| Check2{SOP状态是否为 COMPLETED?}
+    
+    Check2 -->|否| Error2[抛异常: 只有完成SOP后<br/>才能定制学习计划]
+    Check2 -->|是| Step2[步骤2: 校验学生是线上学员<br/>studentMapper.selectById]
+    
+    Step2 --> Check3{teachingMode 是否为 ONLINE?}
+    
+    Check3 -->|否| Error3[抛异常: 只有线上学员<br/>可以定制学习计划]
+    Check3 -->|是| Step3[步骤3: 校验是否已有生效计划<br/>learningPlanMapper.selectActiveByStudentId]
+    
+    Step3 --> Check4{已有生效计划?<br/>status = ACTIVE}
+    
+    Check4 -->|是| Error4[抛异常: 该学员已有生效学习计划]
+    Check4 -->|否| Step4[步骤4: 校验课程是线上课程<br/>courseMapper.selectById]
+    
+    Step4 --> Check5{课程 teachingMode 是否为 ONLINE?}
+    
+    Check5 -->|否| Error5[抛异常: 只能选择线上课程]
+    Check5 -->|是| Step5[步骤5: 校验阶段配置<br/>validateStages]
+    
+    Step5 --> SubStep1[5.1: 查询课程所有阶段<br/>courseDetailMapper.selectByCourseId]
+    
+    SubStep1 --> SubStep2[5.2: 提取课程阶段名称列表<br/>去重]
+    
+    SubStep2 --> Loop1{遍历请求的阶段}
+    
+    Loop1 --> Check6{阶段名称是否属于课程?}
+    
+    Check6 -->|否| Error6[抛异常: 阶段不属于所选课程]
+    Check6 -->|是| NextStage1{还有阶段?}
+    
+    NextStage1 -->|是| Loop1
+    NextStage1 -->|否| SubStep3[5.3: 按课程阶段顺序重排<br/>防止前端传参顺序错误]
+    
+    SubStep3 --> Loop2{遍历课程阶段}
+    
+    Loop2 --> Check7{请求中是否包含该阶段?}
+    
+    Check7 -->|否| Error7[抛异常: 请填写阶段学习天数]
+    Check7 -->|是| AddStage[加入已排序列表]
+    
+    AddStage --> NextStage2{还有课程阶段?}
+    NextStage2 -->|是| Loop2
+    NextStage2 -->|否| TxStart[开启事务<br/>@Transactional]
+    
+    TxStart --> Step6[步骤6: 创建学习计划<br/>learningPlanMapper.insert]
+    
+    Step6 --> Insert1[插入计划记录<br/>studentId, courseId, sopId<br/>startDate, status=ACTIVE]
+    
+    Insert1 --> Step7[步骤7: 生成学习日历<br/>buildCalendars]
+    
+    Step7 --> InitVars[初始化变量<br/>dayIndex = 1<br/>calendars = 空列表]
+    
+    InitVars --> Loop3{遍历阶段}
+    
+    Loop3 --> GetStage[获取阶段信息<br/>stageName, stageDays]
+    
+    GetStage --> Loop4{遍历阶段天数<br/>1 to stageDays}
+    
+    Loop4 --> BuildCalendar[构建日历记录]
+    
+    BuildCalendar --> Fill1[填充字段:<br/>planId, studentId<br/>studyDate = startDate + dayIndex - 1<br/>stageName<br/>dayIndex 全局序号<br/>stageDayIndex 阶段内序号<br/>status = TODO]
+    
+    Fill1 --> AddCalendar[加入日历列表]
+    AddCalendar --> Increment[dayIndex++]
+    
+    Increment --> NextDay{还有天数?}
+    NextDay -->|是| Loop4
+    NextDay -->|否| NextStage3{还有阶段?}
+    
+    NextStage3 -->|是| Loop3
+    NextStage3 -->|否| Step8[步骤8: 批量插入日历<br/>calendarMapper.batchInsert]
+    
+    Step8 --> TxCommit[事务提交]
+    
+    TxCommit --> Return[返回结果<br/>planId, 日历数量]
+    
+    Return --> End([学习计划创建成功])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Error2 fill:#ffebee
+    style Error3 fill:#ffebee
+    style Error4 fill:#ffebee
+    style Error5 fill:#ffebee
+    style Error6 fill:#ffebee
+    style Error7 fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Check3 fill:#fff4e6
+    style Check4 fill:#fff4e6
+    style Check5 fill:#fff4e6
+    style Check6 fill:#fff4e6
+    style Check7 fill:#fff4e6
+    style TxStart fill:#f3e5f5
+    style TxCommit fill:#f3e5f5
+    style Step7 fill:#e3f2fd
 ```
 
 **为什么学习计划只针对线上学员？**
@@ -7011,110 +8539,125 @@ public class StudentFollowupTagEntity {
 **回访标签配置流程：**
 
 ```mermaid
-flowchart TD
-    A[管理员配置回访标签] --> B[选择学生标签]
-    B --> C[设置回访间隔天数]
-    C --> D[校验标签是否在系统配置范围内]
-    D --> E{标签有效?}
-    E -- 否 --> F[抛异常: 学生标签不在配置范围内]
-    E -- 是 --> G[保存配置]
-    G --> H[返回配置ID]
+flowchart TB
+    Start([管理员配置回访标签]) --> Form[填写配置信息<br/>学生标签、回访间隔天数]
+    
+    Form --> Submit[POST /api/studentFollowupTags]
+    
+    Submit --> Step1[步骤1: 校验学生标签<br/>validateStudentTag]
+    
+    Step1 --> GetConfig[获取系统配置的学生标签列表<br/>studentTagConfig.getStudentTagList]
+    
+    GetConfig --> Check1{标签是否在配置范围内?}
+    
+    Check1 -->|否| Error1[抛异常: 学生标签不在配置范围内]
+    Check1 -->|是| Step2[步骤2: 插入配置记录<br/>followupTagMapper.insert]
+    
+    Step2 --> Insert[插入字段:<br/>studentTag<br/>followupIntervalDays<br/>status = ACTIVE<br/>remark]
+    
+    Insert --> Return[返回配置ID<br/>StudentFollowupTagCreateRes]
+    
+    Return --> End([配置创建成功])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Check1 fill:#fff4e6
 ```
 
-**为什么需要回访标签配置？**
-- 不同标签的学生需要不同的回访频率
-- 例如：`需关注` 标签的学生可能需要更频繁的回访
-- 例如：`已就业` 标签的学生可能不需要回访
-
-### 18.2 回访记录生成算法
-
-**核心逻辑：**
-
-```java
-@Override
-@Transactional(rollbackFor = Exception.class)
-public StudentFollowupRecordGenerateRes generateDueRecords(Date generateDate) {
-    Date today = DateUtil.beginOfDay(generateDate == null ? new Date() : generateDate);
-
-    // 1. 查询所有可回访的学生（线上、启用、有标签）
-    List<StudentEntity> students = studentMapper.selectFollowupCandidates();
-    if (students.isEmpty()) {
-        return buildGenerateRes(0);
-    }
-
-    // 2. 获取启用的回访标签配置
-    Map<String, StudentFollowupTagEntity> followupTagMap = studentFollowupTagMapper.selectActiveList().stream()
-            .collect(Collectors.toMap(StudentFollowupTagEntity::getStudentTag, Function.identity(), (a, b) -> a));
-
-    // 3. 获取每个学生最新的回访记录
-    Map<Long, StudentFollowupRecordEntity> latestRecordMap = buildLatestRecordMap(students.stream()
-            .map(StudentEntity::getId)
-            .toList());
-
-    int generatedCount = 0;
-    Date now = new Date();
-    for (StudentEntity student : students) {
-        // 4. 只生成线上、启用、有标签的学生
-        if (!canGenerate(student)) {
-            continue;
-        }
-
-        StudentFollowupRecordEntity latestRecord = latestRecordMap.get(student.getId());
-        // 5. 如果学生最新记录是待回访状态，跳过
-        if (latestRecord != null && RECORD_STATUS_NEED_FOLLOWUP.equals(latestRecord.getStatus())) {
-            continue;
-        }
-
-        // 6. 获取学生当前标签对应的回访规则
-        StudentFollowupTagEntity rule = followupTagMap.get(student.getStudentTag());
-        if (rule == null || rule.getFollowupIntervalDays() == null || rule.getFollowupIntervalDays() <= 0) {
-            continue;
-        }
-
-        // 7. 计算回访截止日期
-        Date enrollDate = DateUtil.beginOfDay(student.getCreatedAt());
-        Date baseDate = latestRecord == null ? enrollDate : getLatestFollowupBaseDate(latestRecord);
-        Date dueDate = DateUtil.offsetDay(DateUtil.beginOfDay(baseDate), rule.getFollowupIntervalDays());
-
-        // 8. 如果截止日期 <= 今天，生成回访记录
-        if (!dueDate.after(today)) {
-            StudentFollowupRecordEntity record = buildRecord(student, rule, enrollDate, latestRecord, dueDate, now);
-            generatedCount += studentFollowupRecordMapper.insertIgnore(record);
-        }
-    }
-    return buildGenerateRes(generatedCount);
-}
-```
-
-**回访记录生成规则：**
+**回访记录生成流程图：**
 
 ```mermaid
-flowchart TD
-    A[定时任务触发] --> B[查询所有可回访学生]
-    B --> C[获取回访标签配置]
-    C --> D[获取学生最新回访记录]
-    D --> E{遍历每个学生}
-
-    E --> F{是线上学员?}
-    F -- 否 --> G[跳过]
-    F -- 是 --> H{学生启用?}
-
-    H -- 否 --> G
-    H -- 是 --> I{学生有标签?}
-
-    I -- 否 --> G
-    I -- 是 --> J{最新记录状态?}
-
-    J -- 待回访 --> G
-    J -- 无记录/已回访 --> K[获取标签配置]
-
-    K --> L{配置存在?}
-    L -- 否 --> G
-    L -- 是 --> M[计算截止日期]
-
-    M --> N{截止日期 <= 今天?}
-    N -- 否 --> G
-    N -- 是 --> O[生成回访记录]
+flowchart TB
+    Start([定时任务触发<br/>每天凌晨执行]) --> Step1[步骤1: 查询所有可回访学生<br/>studentMapper.selectFollowupCandidates]
+    
+    Step1 --> Filter1[过滤条件:<br/>teachingMode = ONLINE<br/>status = ACTIVE<br/>studentTag IS NOT NULL]
+    
+    Filter1 --> Check1{学生列表是否为空?}
+    
+    Check1 -->|是| Return1[返回生成数量: 0]
+    Check1 -->|否| Step2[步骤2: 获取启用的回访标签配置<br/>followupTagMapper.selectActiveList]
+    
+    Step2 --> BuildMap1[构建 Map<br/>key = studentTag<br/>value = StudentFollowupTagEntity]
+    
+    BuildMap1 --> Step3[步骤3: 获取每个学生最新回访记录<br/>buildLatestRecordMap]
+    
+    Step3 --> Query1[批量查询最新记录<br/>按 studentId 分组取最新]
+    
+    Query1 --> BuildMap2[构建 Map<br/>key = studentId<br/>value = 最新的 StudentFollowupRecordEntity]
+    
+    BuildMap2 --> InitCount[初始化生成计数器<br/>generatedCount = 0]
+    
+    InitCount --> Loop{遍历每个学生}
+    
+    Loop --> Check2{学生是否可生成?<br/>canGenerate}
+    
+    Check2 -->|否: 非线上/未启用/无标签| Skip1[跳过该学生]
+    
+    Check2 -->|是| GetLatest[从 Map 获取最新回访记录]
+    
+    GetLatest --> Check3{最新记录状态?}
+    
+    Check3 -->|NEED_FOLLOWUP 待回访| Skip2[跳过: 已有待回访记录]
+    
+    Check3 -->|无记录 或 COMPLETED/CANCELED| GetRule[从 Map 获取学生标签对应的规则]
+    
+    GetRule --> Check4{规则是否存在?<br/>followupIntervalDays > 0}
+    
+    Check4 -->|否| Skip3[跳过: 无有效规则]
+    
+    Check4 -->|是| CalcDue[计算回访截止日期]
+    
+    CalcDue --> GetBase{确定基准日期}
+    
+    GetBase -->|无记录| UseEnroll[基准日期 = 入学日期<br/>student.createdAt]
+    GetBase -->|有记录| UseLastFollowup[基准日期 = 最新回访完成日期<br/>或最新记录的 dueDate]
+    
+    UseEnroll --> AddInterval[截止日期 = 基准日期 + 间隔天数]
+    UseLastFollowup --> AddInterval
+    
+    AddInterval --> Check5{截止日期 <= 今天?}
+    
+    Check5 -->|否| Skip4[跳过: 尚未到期]
+    
+    Check5 -->|是| BuildRecord[构建回访记录<br/>buildRecord]
+    
+    BuildRecord --> FillFields[填充字段:<br/>studentId, studentTag<br/>dueDate 截止日期<br/>enrollDate 入学日期<br/>lastFollowupDate 上次回访日期<br/>followupIntervalDays 间隔天数<br/>status = NEED_FOLLOWUP]
+    
+    FillFields --> InsertIgnore[插入记录<br/>studentFollowupRecordMapper.insertIgnore]
+    
+    InsertIgnore --> UniqueCheck{唯一键冲突?<br/>student_id + due_date}
+    
+    UniqueCheck -->|是| Skip5[跳过: 记录已存在<br/>幂等保护]
+    UniqueCheck -->|否| Increment[generatedCount++]
+    
+    Increment --> NextStudent{还有学生?}
+    Skip1 --> NextStudent
+    Skip2 --> NextStudent
+    Skip3 --> NextStudent
+    Skip4 --> NextStudent
+    Skip5 --> NextStudent
+    
+    NextStudent -->|是| Loop
+    NextStudent -->|否| Return2[返回生成数量<br/>StudentFollowupRecordGenerateRes]
+    
+    Return1 --> End([任务完成])
+    Return2 --> End
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Check3 fill:#fff4e6
+    style Check4 fill:#fff4e6
+    style Check5 fill:#fff4e6
+    style GetBase fill:#fff4e6
+    style UniqueCheck fill:#fff4e6
+    style Skip1 fill:#fff9c4
+    style Skip2 fill:#fff9c4
+    style Skip3 fill:#fff9c4
+    style Skip4 fill:#fff9c4
+    style Skip5 fill:#fff9c4
 ```
 
 **为什么使用 insertIgnore？**
@@ -7249,6 +8792,61 @@ public class StudentFollowupRecordJob {
 - 例如：`teachingMode` 只能是 `ONLINE` 或 `OFFLINE`
 - 使用注解可以减少重复的校验代码
 
+**枚举验证流程图：**
+
+```mermaid
+flowchart TB
+    Start([请求到达 Controller]) --> Step1[Spring MVC 参数绑定<br/>@Valid 或 @Validated 触发]
+    
+    Step1 --> Step2[遍历字段上的验证注解]
+    
+    Step2 --> Check1{字段有 @EnumValue 注解?}
+    
+    Check1 -->|否| Skip[跳过该字段]
+    Check1 -->|是| Step3[调用 EnumValueValidator.initialize<br/>获取 enumClass 参数]
+    
+    Step3 --> GetEnum[获取枚举类<br/>例如: TeachingModeEnum.class]
+    
+    GetEnum --> Step4[调用 EnumValueValidator.isValid<br/>传入字段值]
+    
+    Step4 --> Check2{字段值是否为空?}
+    
+    Check2 -->|是| Return1[返回 true<br/>空值由 @NotBlank 等注解处理]
+    
+    Check2 -->|否| Step5[获取枚举所有常量<br/>enumClass.getEnumConstants]
+    
+    Step5 --> GetConstants[获取枚举列表<br/>例如: ONLINE, OFFLINE]
+    
+    GetConstants --> Loop{遍历所有枚举常量}
+    
+    Loop --> Compare{enumConstant.name == 字段值?}
+    
+    Compare -->|是| Return2[返回 true<br/>验证通过]
+    Compare -->|否| NextEnum{还有枚举常量?}
+    
+    NextEnum -->|是| Loop
+    NextEnum -->|否| Return3[返回 false<br/>验证失败]
+    
+    Return1 --> Continue[继续验证其他注解]
+    Return2 --> Continue
+    Return3 --> Error[抛出 MethodArgumentNotValidException<br/>返回 400 错误]
+    
+    Continue --> Check3{所有字段验证通过?}
+    
+    Check3 -->|否| Error
+    Check3 -->|是| Controller[进入 Controller 方法]
+    
+    Controller --> End([处理业务逻辑])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error fill:#ffebee
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style Compare fill:#fff4e6
+    style Check3 fill:#fff4e6
+```
+
 **注解定义：**
 
 ```java
@@ -7342,6 +8940,103 @@ public class CourseCreateReq {
 - 学生需要查看自己的学习进度
 - 学生需要查看今日学习任务
 - 学生需要查看完整的学习日历
+
+**获取当前学习计划流程图：**
+
+```mermaid
+flowchart TB
+    Start([学生打开学习计划页面]) --> Auth[StudentJwtAuthInterceptor<br/>解析JWT获取学生ID]
+    
+    Auth --> ThreadLocal[存入 StudentThreadLocal]
+    
+    ThreadLocal --> Step1[步骤1: 获取当前学生<br/>StudentThreadLocal.get]
+    
+    Step1 --> Validate[校验学生存在<br/>validateStudent]
+    
+    Validate --> Step2[步骤2: 查询生效的学习计划<br/>learningPlanMapper.selectActiveByStudentId]
+    
+    Step2 --> Check1{学习计划是否存在?}
+    
+    Check1 -->|否| Return1[返回空计划信息<br/>hasPlan = false<br/>totalDays = 0]
+    
+    Check1 -->|是| Step3[步骤3: 查询学习日历<br/>calendarMapper.selectByPlanId]
+    
+    Step3 --> Step4[步骤4: 组装基本信息]
+    
+    Step4 --> Fill1[填充字段:<br/>hasPlan = true<br/>id = plan.id<br/>startDate = plan.startDate<br/>status = plan.status<br/>totalDays = calendars.size]
+    
+    Fill1 --> CalcEnd{日历列表是否为空?}
+    
+    CalcEnd -->|否| GetEndDate[endDate = 最后一天的 studyDate]
+    CalcEnd -->|是| SkipEnd[endDate 为空]
+    
+    GetEndDate --> Step5[步骤5: 查询课程信息<br/>courseMapper.selectById]
+    SkipEnd --> Step5
+    
+    Step5 --> FillCourse[填充课程名称<br/>courseName]
+    
+    FillCourse --> Step6[步骤6: 查找今日学习任务]
+    
+    Step6 --> GetToday[获取今天日期<br/>truncateDate new Date]
+    
+    GetToday --> FindToday[遍历日历查找今天<br/>filter studyDate == today]
+    
+    FindToday --> Check2{找到今日任务?}
+    
+    Check2 -->|是| FillToday[填充今日信息:<br/>currentDayIndex<br/>todayStageName]
+    Check2 -->|否| SkipToday[今日字段为空<br/>可能还未开始或已结束]
+    
+    FillToday --> Return2[返回完整计划信息<br/>StudentLearningPlanCurrentRes]
+    SkipToday --> Return2
+    
+    Return1 --> End([前端展示学习计划])
+    Return2 --> End
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Check1 fill:#fff4e6
+    style Check2 fill:#fff4e6
+    style CalcEnd fill:#fff4e6
+```
+
+**获取学习日历流程图：**
+
+```mermaid
+flowchart TB
+    Start([学生查看学习日历]) --> Auth[StudentJwtAuthInterceptor<br/>解析JWT]
+    
+    Auth --> Step1[步骤1: 获取当前学生]
+    
+    Step1 --> Step2[步骤2: 校验学习计划存在<br/>learningPlanMapper.selectActiveByStudentId]
+    
+    Step2 --> Check1{计划是否存在?}
+    
+    Check1 -->|否| Error1[抛异常: 学习计划不存在]
+    
+    Check1 -->|是| Step3[步骤3: 查询完整学习日历<br/>calendarMapper.selectByPlanId]
+    
+    Step3 --> Sort[按 dayIndex 排序<br/>确保顺序正确]
+    
+    Sort --> Step4[步骤4: 组装响应数据]
+    
+    Step4 --> Loop{遍历每条日历}
+    
+    Loop --> Build[构建 StudentLearningCalendarRes]
+    
+    Build --> Fill[填充字段:<br/>id, studyDate<br/>stageName, dayIndex, stageDayIndex<br/>status TODO/IN_PROGRESS/COMPLETED]
+    
+    Fill --> NextCal{还有日历?}
+    
+    NextCal -->|是| Loop
+    NextCal -->|否| Return[返回日历列表<br/>List<StudentLearningCalendarRes>]
+    
+    Return --> End([前端展示学习日历<br/>按天展示学习进度])
+    
+    style Start fill:#e1f5ff
+    style End fill:#e8f5e9
+    style Error1 fill:#ffebee
+    style Check1 fill:#fff4e6
+```
 
 **获取当前学习计划：**
 

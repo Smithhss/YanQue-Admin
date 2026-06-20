@@ -64,6 +64,7 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
         yeepayUnifiedOrderReq.setOrderNo(orderEntity.getOrderNo());
         yeepayUnifiedOrderReq.setOrderAmount(orderEntity.getOrderAmount());
         YeepayUnifiedOrderRes res;
+
         try {
             res = yeepayCashierService.unifiedOrder(yeepayUnifiedOrderReq);
         } catch (Exception e) {
