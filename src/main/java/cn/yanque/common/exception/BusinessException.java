@@ -26,6 +26,8 @@ public class BusinessException extends RuntimeException {
     public static final BusinessException ProductNotExist = new BusinessException(17001, "产品不存在");
     public static final BusinessException PrepayOrderNotExist = new BusinessException(17002, "预支付订单不存在");
     public static final BusinessException RemoteError = new BusinessException(17003, "远程调用异常");
+    public static final BusinessException ScheduleNotExist = new BusinessException(18001, "课次不存在");
+    public static final BusinessException AttendanceNotClassType = new BusinessException(18002, "非上课课次不可考勤");
 
 
 

@@ -33,18 +33,47 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 考试题库业务层实现。
+ *
+ * <p>核心功能:
+ * <ul>
+ *   <li>题目的创建、更新、删除、查询
+ *   <li>题目类型校验(单选/多选/判断/填空/简答/编程)
+ *   <li>选项校验(选择题必须有选项, 非选择题不能有选项)
+ *   <li>答案标准化处理(去空格、转大写、去重、排序)
+ *   <li>课程阶段关联管理
+ * </ul>
+ *
+ * <p>数据校验规则:
+ * <ul>
+ *   <li>单选题: 必须有2个以上选项, 只能有1个正确答案
+ *   <li>多选题: 必须有2个以上选项, 至少2个正确答案
+ *   <li>判断题: 答案只能是TRUE或FALSE
+ *   <li>填空/简答/编程题: 不能有选项
+ * </ul>
+ */
 @Service
 public class ExamQuestionBizImpl implements ExamQuestionBiz {
 
+    // 题目类型
     private static final Set<String> QUESTION_TYPES = Set.of("SINGLE", "MULTIPLE", "JUDGE", "FILL", "SHORT", "PROGRAMMING");
+    // 选择题类型(需要选项)
     private static final Set<String> CHOICE_TYPES = Set.of("SINGLE", "MULTIPLE");
+    // 难度等级
     private static final Set<String> DIFFICULTIES = Set.of("VERY_EASY", "EASY", "NORMAL", "HARD", "VERY_HARD");
+    // 题目状态
     private static final Set<String> STATUSES = Set.of("ENABLED", "DISABLED");
+    // 判断题答案
     private static final Set<String> JUDGE_ANSWERS = Set.of("TRUE", "FALSE");
 
     @Autowired
     private ExamQuestionService examQuestionService;
 
+    /**
+     * 创建题目。
+     * 构建题目实体、课程关联、选项, 调用Service层完成事务性创建。
+     */
     @Override
     public ExamQuestionCreateRes addQuestion(ExamQuestionCreateReq req) {
         ExamQuestionEntity question = buildQuestion(req);
@@ -56,6 +85,10 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return res;
     }
 
+    /**
+     * 更新题目。
+     * 构建题目实体、课程关联、选项, 调用Service层完成事务性更新。
+     */
     @Override
     public ExamQuestionUpdateRes updateQuestion(ExamQuestionUpdateReq req) {
         ExamQuestionEntity question = buildQuestion(req);
@@ -68,6 +101,9 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return res;
     }
 
+    /**
+     * 删除题目。
+     */
     @Override
     public ExamQuestionDeleteRes deleteQuestion(Long id) {
         ExamQuestionDeleteRes res = new ExamQuestionDeleteRes();
@@ -75,11 +111,17 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return res;
     }
 
+    /**
+     * 查询题目详情。
+     */
     @Override
     public ExamQuestionDetailRes getQuestionById(Long id) {
         return examQuestionService.getQuestionById(id);
     }
 
+    /**
+     * 分页查询题目列表。
+     */
     @Override
     public PageResult<ExamQuestionPageRes> pageQuestion(ExamQuestionPageReq req) {
         QueryExamQuestionBo query = new QueryExamQuestionBo();
@@ -87,6 +129,9 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return examQuestionService.pageQuestion(query, req.getPageNum(), req.getPageSize());
     }
 
+    /**
+     * 更新题目状态(启用/禁用)。
+     */
     @Override
     public ExamQuestionStatusRes updateStatus(Long id, ExamQuestionStatusReq req) {
         String status = normalize(req.getStatus());
@@ -98,6 +143,10 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return res;
     }
 
+    /**
+     * 构建题目实体。
+     * 校验题目类型、难度、状态, 标准化答案。
+     */
     private ExamQuestionEntity buildQuestion(ExamQuestionCreateReq req) {
         String questionType = normalize(req.getQuestionType());
         String difficulty = normalize(req.getDifficulty());
@@ -117,6 +166,10 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return question;
     }
 
+    /**
+     * 构建选项列表。
+     * 非选择题不能有选项, 选择题至少2个选项, 选项标识不能重复, 正确答案必须在选项中。
+     */
     private List<ExamQuestionOptionEntity> buildOptions(String questionType, String answerContent, List<ExamQuestionOptionReq> optionReqs) {
         String type = normalize(questionType);
         if (!CHOICE_TYPES.contains(type)) {
@@ -135,7 +188,7 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
             ExamQuestionOptionReq optionReq = optionReqs.get(i);
             String optionKey = normalize(optionReq.getOptionKey());
             if (!optionKeys.add(optionKey)) {
-                throw BusinessException.DateError.newInstance("选项标识重复：" + optionKey);
+                throw BusinessException.DateError.newInstance("选项标识重复:" + optionKey);
             }
             ExamQuestionOptionEntity option = new ExamQuestionOptionEntity();
             option.setOptionKey(optionKey);
@@ -154,12 +207,16 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         }
         for (String answerKey : answerKeys) {
             if (!optionKeys.contains(answerKey)) {
-                throw BusinessException.DateError.newInstance("正确答案不在选项中：" + answerKey);
+                throw BusinessException.DateError.newInstance("正确答案不在选项中:" + answerKey);
             }
         }
         return options;
     }
 
+    /**
+     * 构建课程阶段关联列表。
+     * 去重处理, 同一课程同一阶段只保留一条记录。
+     */
     private List<ExamQuestionCourseEntity> buildCourseStages(List<ExamQuestionCourseStageReq> courseStageReqs) {
         if (CollectionUtils.isEmpty(courseStageReqs)) {
             return List.of();
@@ -180,6 +237,12 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return relations;
     }
 
+    /**
+     * 标准化答案内容。
+     * 选择题: 去空格、转大写、去重、排序
+     * 判断题: 只能是TRUE或FALSE
+     * 其他题型: 只去首尾空格
+     */
     private String normalizeAnswer(String questionType, String answerContent) {
         String type = normalize(questionType);
         if (!StringUtils.hasText(answerContent)) {
@@ -200,12 +263,18 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
         return answerContent.trim();
     }
 
+    /**
+     * 校验值是否在允许的集合中。
+     */
     private void validateIn(String value, Set<String> values, String message) {
         if (!values.contains(value)) {
             throw BusinessException.DateError.newInstance(message);
         }
     }
 
+    /**
+     * 标准化字符串: 去首尾空格、转大写。
+     */
     private String normalize(String value) {
         return value == null ? null : value.trim().toUpperCase(Locale.ROOT);
     }

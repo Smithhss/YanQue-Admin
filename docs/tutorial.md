@@ -5890,59 +5890,40 @@ private void scheduleOrderTimeoutCheck(String orderNo) {
 **完善资料流程图：**
 
 ```mermaid
-flowchart TB
-    Start([支付成功后<br/>前端跳转到完善资料页面]) --> Form[学生填写资料<br/>密码、确认密码<br/>学历、届数、学校、专业]
-    
-    Form --> Submit[POST /student/pending/completeProfile<br/>携带 pendingPayToken]
-    
-    Submit --> Intercept[PendingPaySignInterceptor<br/>验证 HMAC-SHA256 签名]
-    
-    Intercept --> Step1[步骤1: 校验密码一致性<br/>password == confirmPassword]
-    
-    Step1 --> Check1{密码是否一致?}
-    Check1 -->|否| Error1[抛异常: 两次输入的密码不一致]
-    Check1 -->|是| Step2[步骤2: 查询支付订单<br/>orderService.selectByOrderNo]
-    
-    Step2 --> Check2{订单状态是否为 SUCCESS?}
-    Check2 -->|否| Error2[抛异常: 订单未支付成功]
-    Check2 -->|是| Step3[步骤3: 查询产品信息<br/>获取 teachingMode]
-    
-    Step3 --> TxStart[开启事务<br/>@Transactional]
-    
-    TxStart --> Step4[步骤4: 创建学生账号<br/>studentService.createStudent]
-    
-    Step4 --> Auto1[姓名和手机从订单自动填充<br/>studentName = order.studentName<br/>studentPhone = order.studentPhone]
-    Auto1 --> Auto2[teachingMode 从产品获取<br/>teachingMode = product.teachingMode]
-    Auto2 --> Insert1[插入学生表<br/>studentMapper.insert]
-    
-    Insert1 --> Step5[步骤5: 创建学生产品关联<br/>studentProductService.createStudentProduct]
-    
-    Step5 --> Insert2[插入学生产品表<br/>studentId, productId, sourceOrderNo]
-    
-    Insert2 --> TxCommit[事务提交]
-    
-    TxCommit --> Step6[步骤6: 生成学生登录态<br/>直接返回 token 无需再次登录]
-    
-    Step6 --> Token[创建 JWT Token<br/>uid, phone, student:true]
-    Token --> Secret[创建签名密钥<br/>48位随机字符串]
-    Secret --> Redis[存入 Redis<br/>TTL: 1小时]
-    
-    Redis --> Return[返回完整响应<br/>studentId, completed=true<br/>token, signSecret, student]
-    
-    Return --> End([前端: 自动登录进入学生主页])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Error2 fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style TxStart fill:#f3e5f5
-    style TxCommit fill:#f3e5f5
+graph TB
+    A[支付成功后跳转完善资料页面] --> B[学生填写资料]
+    B --> C[提交表单 POST /student/pending/completeProfile]
+    C --> D[PendingPaySignInterceptor 验证签名]
+    D --> E{密码一致性校验}
+    E -->|否| F[抛异常: 密码不一致]
+    E -->|是| G[查询支付订单]
+    G --> H{订单状态为SUCCESS?}
+    H -->|否| I[抛异常: 订单未支付]
+    H -->|是| J[查询产品信息]
+    J --> K[开启事务]
+    K --> L[创建学生账号]
+    L --> M[姓名和手机从订单自动填充]
+    M --> N[teachingMode从产品获取]
+    N --> O[插入学生表]
+    O --> P[创建学生产品关联]
+    P --> Q[插入学生产品表]
+    Q --> R[事务提交]
+    R --> S[生成JWT Token]
+    S --> T[创建签名密钥]
+    T --> U[存入Redis TTL 1小时]
+    U --> V[返回登录态]
+    V --> W[前端自动登录进入学生主页]
 ```
 
 **核心逻辑：**
 ```java
+/**
+ * 完善学生资料。
+ *
+ * 学生支付成功后，通过此接口完善个人资料并完成注册。
+ * 姓名和手机号从订单自动填充，避免数据不一致。
+ * 完成后直接返回登录态，学生无需再次登录。
+ */
 @Transactional(rollbackFor = Exception.class)
 public CompleteStudentProfileRes completeProfile(CompleteStudentProfileReq req) {
     // 1. 校验密码一致性
@@ -5950,41 +5931,65 @@ public CompleteStudentProfileRes completeProfile(CompleteStudentProfileReq req) 
         throw BusinessException.ParamsError.newInstance("两次输入的密码不一致");
     }
 
-    // 2. 校验订单存在且已支付
+    // 2. 校验订单存在且已支付成功
     OrderEntity order = orderService.selectByOrderNo(req.getOrderNo());
+    if (order == null) {
+        throw BusinessException.DateError.newInstance("支付订单不存在");
+    }
     if (!OrderStatusEnum.SUCCESS.name().equals(order.getStatus())) {
         throw BusinessException.DateError.newInstance("订单未支付成功");
     }
 
-    // 3. 创建学生（姓名和手机号从订单自动填充，不让学生填）
+    // 3. 查询产品信息（需要获取上课方式 teachingMode）
+    ProductEntity product = productMapper.selectById(Long.valueOf(order.getProductId()));
+    if (product == null) {
+        throw BusinessException.ProductNotExist;
+    }
+
+    // 4. 创建学生账号（姓名和手机号从订单自动填充，不让学生重复填写）
     StudentEntity student = new StudentEntity();
-    student.setStudentName(order.getStudentName());
-    student.setStudentPhone(order.getStudentPhone());
-    student.setPassword(req.getPassword());
-    student.setEducation(req.getEducation());
-    student.setGradeYear(req.getGradeYear());
-    student.setSchool(req.getSchool());
-    student.setMajor(req.getMajor());
-    student.setTeachingMode(product.getTeachingMode());  // 上课方式从产品获取
+    student.setStudentName(order.getStudentName());      // 从订单自动填充
+    student.setStudentPhone(order.getStudentPhone());    // 从订单自动填充
+    student.setPassword(req.getPassword());              // 学生填写的密码
+    student.setEducation(req.getEducation());            // 学历
+    student.setGradeYear(req.getGradeYear());            // 届数
+    student.setSchool(req.getSchool());                  // 学校
+    student.setMajor(req.getMajor());                    // 专业
+    student.setTeachingMode(product.getTeachingMode());  // 从产品获取（线上/线下）
     StudentEntity createdStudent = studentService.createStudent(student);
 
-    // 4. 创建学生-产品关联（记录"哪个学生买了哪个产品"）
+    // 5. 创建学生-产品关联（记录"哪个学生购买了哪个产品"）
     StudentProductEntity studentProduct = new StudentProductEntity();
     studentProduct.setStudentId(createdStudent.getId());
     studentProduct.setProductId(order.getProductId());
-    studentProduct.setSourceOrderNo(order.getOrderNo());
+    studentProduct.setSourceOrderNo(order.getOrderNo());  // 记录来源订单号
     studentProductService.createStudentProduct(studentProduct);
 
-    // 5. 直接返回登录态，不需要再次登录
+    // 6. 生成学生登录态并返回（完成注册后直接登录，无需再次调用登录接口）
     CompleteStudentProfileRes res = new CompleteStudentProfileRes();
     res.setStudentId(createdStudent.getId());
     res.setCompleted(true);
-    res.setToken(studentFrontAuthService.createToken(createdStudent));      // JWT
-    res.setSignSecret(studentFrontAuthService.createSignSecret(createdStudent)); // 签名密钥
-    res.setStudent(studentFrontAuthService.buildStudentInfo(createdStudent));
+    res.setToken(studentFrontAuthService.createToken(createdStudent));          // JWT Token
+    res.setSignSecret(studentFrontAuthService.createSignSecret(createdStudent)); // 签名密钥（存入Redis，TTL 1小时）
+    res.setStudent(studentFrontAuthService.buildStudentInfo(createdStudent));    // 学生基本信息
     return res;
 }
 ```
+
+**关键实现细节：**
+
+| 实现点 | 说明 |
+|--------|------|
+| **@Transactional** | 学生账号和产品关联必须同时成功或同时失败 |
+| **密码校验** | 前端传入 password 和 confirmPassword，后端验证一致性 |
+| **订单状态检查** | 必须是 SUCCESS 状态的订单，防止未支付就注册 |
+| **自动填充字段** | studentName 和 studentPhone 从订单获取，不让学生重复填写 |
+| **teachingMode** | 从产品获取，保证与购买的产品一致（线上/线下） |
+| **sourceOrderNo** | 学生产品关联记录来源订单号，方便追溯 |
+| **直接返回登录态** | 避免注册后再次登录的繁琐流程 |
+| **JWT payload** | 包含 uid、phone、student:true、expire_time |
+| **签名密钥** | 48位随机字符串，存入Redis，TTL 1小时 |
+
 
 **为什么学生姓名和手机号从订单取，不让学生填？**
 - 下单时已经填过姓名和手机号了
@@ -6052,46 +6057,27 @@ public ApiResponse<StudentAssignClassRes> assignClass(@PathVariable Long id,
 系统有**三套独立的拦截器链**，分别对应不同用户群体：
 
 ```mermaid
-flowchart TB
-    Request([HTTP 请求]) --> Router{路径匹配}
+graph TB
+    A[HTTP 请求] --> B{路径匹配}
     
-    Router -->|/api/**| Chain1[管理端拦截器链]
-    Router -->|/student/pending/**| Chain2[免注册支付拦截器链]
-    Router -->|/student/** 非 pending| Chain3[学生端拦截器链]
+    B -->|/api/**| C[管理端拦截器链]
+    B -->|/student/pending/**| D[免注册支付拦截器链]
+    B -->|/student/** 非 pending| E[学生端拦截器链]
     
-    subgraph AdminChain [管理端拦截器链]
-        direction LR
-        A1[JwtAuthInterceptor<br/>解析管理员JWT] --> A2[SignInterceptor<br/>HMAC-SHA256签名]
-        A2 --> A3[PermissionInterceptor<br/>RBAC权限校验]
-    end
+    C --> C1[JwtAuthInterceptor 解析管理员JWT]
+    C1 --> C2[SignInterceptor HMAC-SHA256签名]
+    C2 --> C3[PermissionInterceptor RBAC权限校验]
+    C3 --> C4[存入 ThreadLocal SysUserEntity]
+    C4 --> C5[AdminController 可访问所有数据]
     
-    subgraph PendingChain [免注册支付拦截器链]
-        direction LR
-        P1[PendingPaySignInterceptor<br/>HMAC-SHA256签名<br/>从Redis取密钥]
-    end
+    D --> D1[PendingPaySignInterceptor HMAC-SHA256签名]
+    D1 --> D2[从Redis验证 phone + prepayOrderNo]
+    D2 --> D3[StudentPendingController 仅下单和完善资料]
     
-    subgraph StudentChain [学生端拦截器链]
-        direction LR
-        S1[StudentJwtAuthInterceptor<br/>解析学生JWT] --> S2[StudentSignInterceptor<br/>HMAC-SHA256签名]
-    end
-    
-    Chain1 --> AdminChain
-    Chain2 --> PendingChain
-    Chain3 --> StudentChain
-    
-    AdminChain --> AResult[存入 ThreadLocal<br/>SysUserEntity]
-    PendingChain --> PResult[从Redis验证<br/>phone + prepayOrderNo]
-    StudentChain --> SResult[存入 StudentThreadLocal<br/>StudentEntity]
-    
-    AResult --> ACtrl[AdminController<br/>可访问所有数据]
-    PResult --> PCtrl[StudentPendingController<br/>仅下单和完善资料]
-    SResult --> SCtrl[StudentController<br/>只看自己的数据]
-    
-    style Request fill:#e1f5ff
-    style Router fill:#fff4e6
-    style AdminChain fill:#e8f5e9
-    style PendingChain fill:#fff9c4
-    style StudentChain fill:#e3f2fd
+    E --> E1[StudentJwtAuthInterceptor 解析学生JWT]
+    E1 --> E2[StudentSignInterceptor HMAC-SHA256签名]
+    E2 --> E3[存入 StudentThreadLocal StudentEntity]
+    E3 --> E4[StudentController 只看自己的数据]
 ```
 
 ```
@@ -6252,55 +6238,21 @@ HomeworkSubmissionEntity（学生提交）
 ### 13.2 教师端：发布作业
 
 ```mermaid
-flowchart TB
-    Start([教师选择班级和日期]) --> Prepare[调用预填接口<br/>POST /api/homeworks/prepare]
-    
-    Prepare --> Step1[步骤1: 校验班级存在<br/>clazzMapper.selectById]
-    
-    Step1 --> Step2[步骤2: 归一化日期<br/>DateUtil.beginOfDay<br/>去除时间部分]
-    
-    Step2 --> Check1{同班同天是否已有作业?<br/>homeworkMapper.selectByClassIdAndHomeworkDate}
-    
-    Check1 -->|是| Error1[抛异常: 该班级当天作业已存在]
-    Check1 -->|否| Step3[步骤3: 查询当天课表<br/>classScheduleMapper.selectByClassIdAndDate]
-    
-    Step3 --> Check2{当天是否有课表?}
-    
-    Check2 -->|否| Error2[抛异常: 该班级当天没有课表,无法发布作业]
-    Check2 -->|是| Step4[步骤4: 自动填充预填信息]
-    
-    Step4 --> Fill1[classContent = schedule.courseContent]
-    Fill1 --> Fill2[defaultTitle = 班期 + 日期 + 作业]
-    Fill2 --> Fill3[startTime = 当天 00:00:00]
-    Fill3 --> Fill4[deadline = 当天 23:59:59]
-    
-    Fill4 --> Return1[返回预填信息<br/>HomeworkPrepareRes]
-    
-    Return1 --> Form[前端展示预填表单<br/>教师补充: 标题、作业文件、开始时间、截止时间]
-    
-    Form --> Submit[提交发布<br/>POST /api/homeworks]
-    
-    Submit --> Validate1[校验班级存在]
-    Validate1 --> Validate2[再次校验同班同天唯一]
-    Validate2 --> Validate3[再次查询课表获取课程内容]
-    
-    Validate3 --> Check3{截止时间 < 开始时间?}
-    Check3 -->|是| Error3[抛异常: 截止时间不能早于开始时间]
-    Check3 -->|否| Insert[插入作业记录<br/>homeworkMapper.insert]
-    
-    Insert --> Return2[返回作业ID<br/>HomeworkCreateRes]
-    
-    Return2 --> End([作业发布成功])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Error2 fill:#ffebee
-    style Error3 fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style Check3 fill:#fff4e6
-    style Step4 fill:#e3f2fd
+graph TB
+    A[教师选择班级和日期] --> B[调用预填接口]
+    B --> C[校验班级存在]
+    C --> D{同班同天已有作业?}
+    D -->|是| E[抛异常]
+    D -->|否| F[查询课表]
+    F --> G{有课表?}
+    G -->|否| H[抛异常]
+    G -->|是| I[自动填充信息]
+    I --> J[返回预填数据]
+    J --> K[教师补充信息]
+    K --> L[提交发布]
+    L --> M[再次校验唯一性]
+    M --> N[插入作业记录]
+    N --> O[发布成功]
 ```
 
 **发布流程：**
@@ -6379,121 +6331,49 @@ public HomeworkSubmissionGradeRes gradeSubmission(Long submissionId, HomeworkSub
 **查看作业列表流程图：**
 
 ```mermaid
-flowchart TB
-    Start([学生打开作业列表页]) --> Auth[StudentJwtAuthInterceptor<br/>解析JWT获取学生ID]
-    
-    Auth --> ThreadLocal[存入 StudentThreadLocal<br/>后续直接获取当前学生]
-    
-    ThreadLocal --> Step1[步骤1: 获取当前学生<br/>StudentThreadLocal.get]
-    
-    Step1 --> Check1{学生是否已分配班级?<br/>student.classId != null}
-    
-    Check1 -->|否| Return1[返回空列表<br/>未分配班级的学生看不到作业]
-    Check1 -->|是| Step2[步骤2: 查询班级作业列表<br/>homeworkMapper.selectStudentPage]
-    
-    Step2 --> Filter[过滤条件:<br/>classId = student.classId<br/>startTime <= 当前时间]
-    
-    Filter --> Step3[步骤3: 批量查询我的提交状态<br/>buildSubmissionMap]
-    
-    Step3 --> Query1[提取作业ID列表<br/>homeworkIds]
-    Query1 --> Query2[批量查询提交记录<br/>homeworkSubmissionMapper<br/>.selectByHomeworkIdsAndStudentId]
-    Query2 --> MapBuild[构建 Map<br/>key = homeworkId<br/>value = HomeworkSubmissionEntity]
-    
-    MapBuild --> Step4[步骤4: 组装响应数据<br/>buildHomeworkRes]
-    
-    Step4 --> Assemble{遍历每份作业}
-    
-    Assemble --> Answer[处理答案可见性]
-    Answer --> AnswerCheck{answerStudentVisible<br/>&&<br/>answerObjectKey 非空?}
-    
-    AnswerCheck -->|是| AnswerShow[answerVisible = true<br/>返回答案信息]
-    AnswerCheck -->|否| AnswerHide[answerVisible = false<br/>答案字段设为 null<br/>防止前端自行下载]
-    
-    AnswerShow --> Submission[处理提交状态]
-    AnswerHide --> Submission
-    
-    Submission --> SubCheck{从 Map 查找提交记录?}
-    
-    SubCheck -->|有| SubShow[submitted = true<br/>填充提交文件名、提交时间<br/>分数、评语、是否迟交]
-    SubCheck -->|无| SubEmpty[submitted = false<br/>提交相关字段为空]
-    
-    SubShow --> Response[组装 StudentHomeworkPageRes]
-    SubEmpty --> Response
-    
-    Response --> End([返回作业列表<br/>每份作业包含: 作业信息+答案可见性+提交状态])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Return1 fill:#fff9c4
-    style Check1 fill:#fff4e6
-    style AnswerCheck fill:#fff4e6
-    style SubCheck fill:#fff4e6
-    style Step3 fill:#f3e5f5
+graph TB
+    A[学生打开作业列表] --> B[获取当前学生]
+    B --> C{已分配班级?}
+    C -->|否| D[返回空列表]
+    C -->|是| E[查询班级作业]
+    E --> F[批量查询我的提交状态]
+    F --> G[构建提交Map]
+    G --> H[遍历作业组装数据]
+    H --> I{答案可见?}
+    I -->|是| J[返回答案信息]
+    I -->|否| K[隐藏答案]
+    J --> L{已提交?}
+    K --> L
+    L -->|是| M[填充提交信息]
+    L -->|否| N[提交字段为空]
+    M --> O[返回作业列表]
+    N --> O
 ```
 
 **提交作业流程图：**
 
 ```mermaid
-flowchart TB
-    Start([学生上传 .md 文件到 OSS<br/>前端调用 uploadService]) --> Upload[获得 objectKey<br/>格式: homework/submission/homeworkId/studentId/xxx.md]
-    
-    Upload --> Submit[POST /student/homeworks/id/submissions<br/>提交 objectKey 和 fileName]
-    
-    Submit --> Auth[StudentJwtAuthInterceptor<br/>获取当前学生ID]
-    
-    Auth --> Step1[步骤1: 校验学生存在<br/>validateStudent]
-    
-    Step1 --> Step2[步骤2: 校验作业归属和时间<br/>validateStudentHomework]
-    
-    Step2 --> Check1{作业是否存在?}
-    Check1 -->|否| Error1[抛异常: 作业不存在]
-    Check1 -->|是| Check2{学生classId == 作业classId?}
-    
-    Check2 -->|否| Error2[抛异常: 作业不存在<br/>防止跨班访问]
-    Check2 -->|是| Check3{作业已到开始时间?}
-    
-    Check3 -->|否| Error3[抛异常: 作业暂未开始]
-    Check3 -->|是| Step3[步骤3: 校验截止时间<br/>now vs deadline]
-    
-    Step3 --> Check4{是否已过截止时间?}
-    
-    Check4 -->|是| Error4[抛异常: 作业已截止,不能提交]
-    Check4 -->|否| Step4[步骤4: 校验文件路径安全<br/>validateSubmissionObjectKey]
-    
-    Step4 --> PathCheck1{文件是否为 .md 格式?}
-    PathCheck1 -->|否| Error5[抛异常: 提交文件只支持md格式]
-    PathCheck1 -->|是| PathCheck2{路径是否符合规范?<br/>homework/submission/homeworkId/studentId/}
-    
-    PathCheck2 -->|否| Error6[抛异常: 提交文件路径不合法<br/>防止路径穿越和越权]
-    PathCheck2 -->|是| Step5[步骤5: 查询已有提交记录<br/>selectByHomeworkIdAndStudentId]
-    
-    Step5 --> Check5{已有提交记录?}
-    
-    Check5 -->|否| Insert[插入新记录<br/>homeworkSubmissionMapper.insert]
-    Check5 -->|是| Update[覆盖更新<br/>homeworkSubmissionMapper.updateSubmit<br/>只更新文件信息和提交时间]
-    
-    Insert --> Fill[填充字段<br/>homeworkId, studentId, classId<br/>contentObjectKey, contentFileName<br/>submitTime, lateSubmitted=false]
-    Update --> Fill
-    
-    Fill --> Return[返回提交结果<br/>StudentHomeworkSubmitRes]
-    
-    Return --> End([提交成功])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Error2 fill:#ffebee
-    style Error3 fill:#ffebee
-    style Error4 fill:#ffebee
-    style Error5 fill:#ffebee
-    style Error6 fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style Check3 fill:#fff4e6
-    style Check4 fill:#fff4e6
-    style PathCheck1 fill:#fff4e6
-    style PathCheck2 fill:#fff4e6
-    style Check5 fill:#fff4e6
+graph TB
+    A[学生上传文件到OSS] --> B[获得objectKey]
+    B --> C[提交作业接口]
+    C --> D[获取当前学生]
+    D --> E[校验作业存在]
+    E --> F{作业属于当前班级?}
+    F -->|否| G[抛异常]
+    F -->|是| H{已到开始时间?}
+    H -->|否| I[抛异常]
+    H -->|是| J{已过截止时间?}
+    J -->|是| K[抛异常]
+    J -->|否| L[校验文件路径]
+    L --> M{文件格式为md?}
+    M -->|否| N[抛异常]
+    M -->|是| O{路径合法?}
+    O -->|否| P[抛异常]
+    O -->|是| Q{已有提交?}
+    Q -->|是| R[覆盖更新]
+    Q -->|否| S[插入新记录]
+    R --> T[提交成功]
+    S --> T
 ```
 
 **学生查看作业列表：**
@@ -6784,51 +6664,41 @@ public PageResult<HomeworkSubmissionPageRes> pageSubmissions(Long homeworkId, Ho
 ### 13.8 作业系统数据流
 
 ```mermaid
-flowchart TB
-    subgraph Teacher [教师端操作流程]
-        direction TB
-        T1[1. prepareHomework<br/>预填作业信息<br/>获取班期、日期、课程内容] --> T2[2. addHomework<br/>发布作业<br/>上传作业文件到TOS]
-        T2 --> T3[3. pageSubmissions<br/>查看学生提交列表<br/>批量查询学生信息]
-        T3 --> T4[4. gradeSubmission<br/>批改作业<br/>填写分数和评语]
-        T4 --> T5[5. publishAnswer<br/>发布答案<br/>设置学生可见性]
+graph TB
+    subgraph Teacher[教师端流程]
+        T1[预填作业信息] --> T2[发布作业]
+        T2 --> T3[查看提交列表]
+        T3 --> T4[批改作业]
+        T4 --> T5[发布答案]
     end
     
-    subgraph Student [学生端操作流程]
-        direction TB
-        S1[1. pageHomework<br/>查看作业列表<br/>过滤: 已分配班级+已到开始时间] --> S2[2. createDownloadUrl<br/>下载作业内容<br/>校验: 班级归属+开始时间]
-        S2 --> S3[3. 上传 .md 文件到 TOS<br/>路径: homework/submission/hwId/stuId/]
-        S3 --> S4[4. submitHomework<br/>提交作业<br/>校验: 截止时间+路径安全]
-        S4 --> S5[5. 查看分数和评语<br/>在作业列表中显示]
-        S5 --> S6[6. createDownloadUrl type=ANSWER<br/>下载答案<br/>校验: answerStudentVisible]
-        S4 --> S7[7. createSubmissionDownloadUrl<br/>下载自己的提交<br/>校验: 提交记录存在]
+    subgraph Student[学生端流程]
+        S1[查看作业列表] --> S2[下载作业内容]
+        S2 --> S3[上传文件到TOS]
+        S3 --> S4[提交作业]
+        S4 --> S5[查看分数评语]
+        S5 --> S6[下载答案]
+        S4 --> S7[下载自己的提交]
     end
     
-    subgraph Data [核心数据表]
-        direction LR
-        D1[(HomeworkEntity<br/>作业表)]
-        D2[(HomeworkSubmissionEntity<br/>提交表)]
-        D3[(TOS 对象存储<br/>文件存储)]
+    subgraph Data[核心数据]
+        D1[(作业表)]
+        D2[(提交表)]
+        D3[(TOS存储)]
     end
     
-    T2 -->|插入| D1
-    T4 -->|更新 score/remark| D2
-    T5 -->|更新 answer 字段| D1
-    
-    S1 -->|查询| D1
-    S1 -->|批量查询| D2
-    S4 -->|插入或覆盖更新| D2
-    
-    T2 -->|上传作业文件| D3
-    T5 -->|上传答案文件| D3
-    S3 -->|上传提交文件| D3
-    
-    S2 -->|生成预签名URL| D3
-    S6 -->|生成预签名URL| D3
-    S7 -->|生成预签名URL| D3
-    
-    style Teacher fill:#e8f5e9
-    style Student fill:#e3f2fd
-    style Data fill:#fff9c4
+    T2 --> D1
+    T4 --> D2
+    T5 --> D1
+    S1 --> D1
+    S1 --> D2
+    S4 --> D2
+    T2 --> D3
+    T5 --> D3
+    S3 --> D3
+    S2 --> D3
+    S6 --> D3
+    S7 --> D3
 ```
 
 ### 13.9 API 接口汇总
@@ -6879,75 +6749,32 @@ flowchart TB
 **退款完整流程图：**
 
 ```mermaid
-flowchart TB
-    Start([管理员发起退款]) --> Step1[步骤1: 生成退款单号<br/>POST /api/refundOrders/createRefundOrder]
-    
-    Step1 --> Generate[生成退款单号<br/>格式: 1011 + yyyyMMddHHmmss + 6位随机数]
-    
-    Generate --> Return1[返回退款单号<br/>RefundOrderNoRes]
-    
-    Return1 --> Step2[步骤2: 申请退款<br/>POST /api/refundOrders/applyRefund]
-    
-    Step2 --> Validate1[校验原支付订单<br/>getRefundablePaymentOrder]
-    
-    Validate1 --> Check1{订单状态是否为 SUCCESS?}
-    Check1 -->|否| Error1[抛异常: 订单未支付成功]
-    Check1 -->|是| Check2{退款金额是否合法?<br/>refundAmount > 0<br/>refundAmount <= paymentAmount - refundedAmount}
-    
-    Check2 -->|否| Error2[抛异常: 退款金额不合法]
-    Check2 -->|是| Step3[步骤3: 保存退款单<br/>saveApplyingRefundOrder]
-    
-    Step3 --> Idempotent{退款单是否已存在?<br/>按 refundOrderNo 查询}
-    
-    Idempotent -->|是| Return2[返回已有退款单<br/>幂等保护]
-    Idempotent -->|否| Insert[插入退款单<br/>状态: INIT]
-    
-    Insert --> CatchDuplicate{捕获 DuplicateKeyException?<br/>唯一索引: refundOrderNo}
-    
-    CatchDuplicate -->|是| Return3[查询并返回已有退款单<br/>并发幂等保护]
-    CatchDuplicate -->|否| Step4[步骤4: 增加原订单已退金额<br/>orderService.increaseRefundedAmount]
-    
-    Step4 --> UpdateAmount[乐观锁更新<br/>refundedAmount += refundAmount<br/>WHERE version = oldVersion]
-    
-    UpdateAmount --> Step5[步骤5: 调用易宝退款接口<br/>yeepayCashierService.refund]
-    
-    Step5 --> TryCatch{易宝调用是否成功?}
-    
-    TryCatch -->|失败| Rollback[回退已退金额<br/>decreaseRefundedAmount]
-    Rollback --> UpdateFail[更新退款单状态: FAIL]
-    UpdateFail --> Error3[抛异常: 申请退款失败]
-    
-    TryCatch -->|成功| YeepayRes[易宝返回退款流水号<br/>uniqueRefundNo]
-    
-    YeepayRes --> Step6[步骤6: 更新退款单状态<br/>INIT → PROCESSING]
-    
-    Step6 --> UpdateProcessing[更新字段:<br/>status = PROCESSING<br/>uniqueRefundNo<br/>updatedAt]
-    
-    UpdateProcessing --> Return4[返回退款申请结果<br/>RefundApplyRes]
-    
-    Return4 --> Wait[等待易宝异步回调]
-    
-    Wait --> Callback{易宝回调类型}
-    
-    Callback -->|SUCCESS| Success[更新状态: SUCCESS<br/>记录退款成功时间]
-    Callback -->|FAIL| Fail[更新状态: FAIL<br/>回退已退金额<br/>记录失败原因]
-    
-    Success --> End([退款完成])
-    Fail --> End
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Error2 fill:#ffebee
-    style Error3 fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style Idempotent fill:#fff4e6
-    style CatchDuplicate fill:#fff4e6
-    style TryCatch fill:#fff4e6
-    style Callback fill:#fff4e6
-    style Step4 fill:#f3e5f5
-    style Rollback fill:#ffcdd2
+graph TB
+    A[管理员发起退款] --> B[生成退款单号]
+    B --> C[申请退款]
+    C --> D[校验原订单]
+    D --> E{订单状态SUCCESS?}
+    E -->|否| F[抛异常]
+    E -->|是| G{退款金额合法?}
+    G -->|否| H[抛异常]
+    G -->|是| I[保存退款单]
+    I --> J{退款单已存在?}
+    J -->|是| K[返回已有退款单]
+    J -->|否| L[插入INIT状态]
+    L --> M[增加原订单已退金额]
+    M --> N[调用易宝退款接口]
+    N --> O{易宝调用成功?}
+    O -->|失败| P[回退已退金额]
+    P --> Q[更新状态FAIL]
+    Q --> R[抛异常]
+    O -->|成功| S[更新状态PROCESSING]
+    S --> T[等待易宝回调]
+    T --> U{回调类型}
+    U -->|SUCCESS| V[更新状态SUCCESS]
+    U -->|FAIL| W[更新状态FAIL]
+    W --> X[回退已退金额]
+    V --> Y[退款完成]
+    X --> Y
 ```
 
 ### 14.2 退款订单实体
@@ -7216,13 +7043,21 @@ erDiagram
 **数据流：**
 
 ```mermaid
-flowchart TD
-    A[题库管理] --> B[试卷管理]
-    B --> C[考试管理]
-    C --> D[学生考试]
-    D --> E[自动判分]
-    E --> F[教师批改]
-    F --> G[公布成绩]
+graph TD
+    A[题库管理]
+    B[试卷管理]
+    C[考试管理]
+    D[学生考试]
+    E[自动判分]
+    F[教师批改]
+    G[公布成绩]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
 ```
 
 ### 16.2 题库管理（ExamQuestion）
@@ -7331,142 +7166,141 @@ public class ExamPaperQuestionEntity {
 **组卷流程图：**
 
 ```mermaid
-flowchart TB
-    Start([教师创建试卷]) --> Step1[步骤1: 填写试卷基本信息<br/>试卷名称、课程、阶段]
+graph TB
+    Start([教师创建试卷])
+    Step1[步骤1: 填写试卷基本信息]
+    Step2[步骤2: 从题库选题]
+    Validate1[校验课程存在]
+    Check1{课程是否存在?}
+    Error1[抛异常: 课程不存在]
+    Validate2[校验题目ID列表非空]
+    Check2{题目列表是否为空?}
+    Error2[抛异常: 题目列表不能为空]
+    Step3[步骤3: 批量查询题目]
+    Check3{题目数量是否匹配?}
+    Error3[抛异常: 部分题目不存在]
+    TxStart[开启事务]
+    Step4[步骤4: 创建试卷记录]
+    Insert1[插入试卷基本信息]
+    Step5[步骤5: 批量创建试卷-题目关联]
+    Loop[遍历每道题目]
+    BuildAssoc[构建关联记录]
+    CalcTotal[累加总分]
+    NextQuestion{还有题目?}
+    Step6[步骤6: 更新试卷总分]
+    UpdateTotal[更新totalScore]
+    TxCommit[事务提交]
+    Return[返回试卷ID]
+    End([试卷创建成功])
     
-    Step1 --> Step2[步骤2: 从题库选题<br/>POST /api/examPapers]
-    
-    Step2 --> Validate1[校验课程存在<br/>courseMapper.selectById]
-    
-    Validate1 --> Check1{课程是否存在?}
-    Check1 -->|否| Error1[抛异常: 课程不存在]
-    Check1 -->|是| Validate2[校验题目ID列表非空]
-    
-    Validate2 --> Check2{题目列表是否为空?}
-    Check2 -->|是| Error2[抛异常: 题目列表不能为空]
-    Check2 -->|否| Step3[步骤3: 批量查询题目<br/>questionMapper.selectByIds]
-    
-    Step3 --> Check3{题目数量是否匹配?<br/>实际查询数 == 请求数}
-    
-    Check3 -->|否| Error3[抛异常: 部分题目不存在]
-    Check3 -->|是| TxStart[开启事务<br/>@Transactional]
-    
-    TxStart --> Step4[步骤4: 创建试卷记录<br/>examPaperMapper.insert]
-    
-    Step4 --> Insert1[插入试卷基本信息<br/>paperName, courseId, stageName<br/>totalScore = 0 暂时]
-    
-    Insert1 --> Step5[步骤5: 批量创建试卷-题目关联<br/>examPaperQuestionMapper.batchInsert]
-    
-    Step5 --> Loop{遍历每道题目}
-    
-    Loop --> BuildAssoc[构建关联记录<br/>paperId, questionId, questionScore]
-    BuildAssoc --> CalcTotal[累加总分<br/>totalScore += questionScore]
-    
-    CalcTotal --> NextQuestion{还有题目?}
+    Start --> Step1
+    Step1 --> Step2
+    Step2 --> Validate1
+    Validate1 --> Check1
+    Check1 -->|否| Error1
+    Check1 -->|是| Validate2
+    Validate2 --> Check2
+    Check2 -->|是| Error2
+    Check2 -->|否| Step3
+    Step3 --> Check3
+    Check3 -->|否| Error3
+    Check3 -->|是| TxStart
+    TxStart --> Step4
+    Step4 --> Insert1
+    Insert1 --> Step5
+    Step5 --> Loop
+    Loop --> BuildAssoc
+    BuildAssoc --> CalcTotal
+    CalcTotal --> NextQuestion
     NextQuestion -->|是| Loop
-    NextQuestion -->|否| Step6[步骤6: 更新试卷总分<br/>examPaperMapper.updateTotalScore]
-    
-    Step6 --> UpdateTotal[更新 totalScore<br/>值为所有题目分值之和]
-    
-    UpdateTotal --> TxCommit[事务提交]
-    
-    TxCommit --> Return[返回试卷ID<br/>ExamPaperCreateRes]
-    
-    Return --> End([试卷创建成功])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Error2 fill:#ffebee
-    style Error3 fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style Check3 fill:#fff4e6
-    style TxStart fill:#f3e5f5
-    style TxCommit fill:#f3e5f5
+    NextQuestion -->|否| Step6
+    Step6 --> UpdateTotal
+    UpdateTotal --> TxCommit
+    TxCommit --> Return
+    Return --> End
 ```
 
 **学生考试流程图：**
 
 ```mermaid
-flowchart TB
-    Start([学生进入考试]) --> Step1[步骤1: 查询考试信息<br/>GET /student/exams/id]
+graph TB
+    Start([学生进入考试])
+    Step1[步骤1: 查询考试信息]
+    Validate1[校验学生存在]
+    Validate2[校验考试归属]
+    Check1{班级匹配?}
+    Error1[抛异常: 考试不存在]
+    Check2{时间窗口内?}
+    Error2[抛异常: 不在考试时间]
+    Step2[步骤2: 查询或创建考试记录]
+    Check3{已有记录?}
+    Create[创建新记录]
+    CalcDeadline[计算截止时间]
+    InsertRecord[插入记录]
+    CheckStatus{记录状态?}
+    Error3[抛异常: 已提交]
+    LoadAnswers[加载已答题目]
+    Step3[步骤3: 加载试卷题目]
+    Step4[步骤4: 查询题目详情]
+    Filter{答案可见?}
+    HideAnswer[隐藏答案和解析]
+    ShowAnswer[返回完整信息]
+    Return1[返回考试信息]
+    StudentAnswer([学生答题])
+    Save[实时保存答案]
+    Upsert[插入或更新]
+    Submit{提交考试?}
+    Continue[继续答题]
+    Step5[步骤5: 自动判分]
+    Auto[遍历所有题目]
+    TypeCheck{题型判断}
+    AutoGrade[自动判分]
+    ManualGrade[需教师批改]
+    AddScore[累加得分]
+    NextQ{还有题目?}
+    Step6[步骤6: 更新记录状态]
+    End([提交成功])
     
-    Step1 --> Validate1[校验学生存在<br/>StudentThreadLocal.get]
-    
-    Validate1 --> Validate2[校验考试归属<br/>exam.classId == student.classId]
-    
-    Validate2 --> Check1{班级是否匹配?}
-    Check1 -->|否| Error1[抛异常: 考试不存在<br/>防止跨班访问]
-    Check1 -->|是| Check2{当前时间是否在考试窗口内?<br/>startTime <= now <= endTime}
-    
-    Check2 -->|否| Error2[抛异常: 不在考试时间范围内]
-    Check2 -->|是| Step2[步骤2: 查询或创建考试记录<br/>studentExamRecordMapper.selectByExamIdAndStudentId]
-    
-    Step2 --> Check3{已有考试记录?}
-    
-    Check3 -->|否| Create[创建新考试记录<br/>status = IN_PROGRESS]
-    Create --> CalcDeadline[计算个人截止时间<br/>deadline = now + durationMinutes]
-    CalcDeadline --> InsertRecord[插入 StudentExamRecordEntity]
-    
-    Check3 -->|是| CheckStatus{考试记录状态?}
-    
-    CheckStatus -->|SUBMITTED| Error3[抛异常: 已提交，不能重复考试]
-    CheckStatus -->|IN_PROGRESS| LoadAnswers[加载已答题目<br/>studentExamAnswerMapper.selectByRecordId]
-    
-    InsertRecord --> Step3[步骤3: 加载试卷题目<br/>examPaperQuestionMapper.selectByPaperId]
+    Start --> Step1
+    Step1 --> Validate1
+    Validate1 --> Validate2
+    Validate2 --> Check1
+    Check1 -->|否| Error1
+    Check1 -->|是| Check2
+    Check2 -->|否| Error2
+    Check2 -->|是| Step2
+    Step2 --> Check3
+    Check3 -->|否| Create
+    Create --> CalcDeadline
+    CalcDeadline --> InsertRecord
+    Check3 -->|是| CheckStatus
+    CheckStatus -->|SUBMITTED| Error3
+    CheckStatus -->|IN_PROGRESS| LoadAnswers
+    InsertRecord --> Step3
     LoadAnswers --> Step3
-    
-    Step3 --> Step4[步骤4: 批量查询题目详情<br/>examQuestionMapper.selectByIds]
-    
-    Step4 --> Filter{答案是否对学生可见?<br/>exam.answerVisible}
-    
-    Filter -->|否| HideAnswer[隐藏正确答案和解析<br/>answerContent = null<br/>analysisContent = null]
-    Filter -->|是| ShowAnswer[返回完整题目信息]
-    
-    HideAnswer --> Return1[返回考试信息<br/>题目列表 + 已答答案 + 截止时间]
+    Step3 --> Step4
+    Step4 --> Filter
+    Filter -->|否| HideAnswer
+    Filter -->|是| ShowAnswer
+    HideAnswer --> Return1
     ShowAnswer --> Return1
-    
-    Return1 --> StudentAnswer([学生开始答题])
-    
-    StudentAnswer --> Save[实时保存答案<br/>POST /student/exams/records/id/answers]
-    
-    Save --> Upsert[插入或更新答案<br/>studentExamAnswerMapper.upsert]
-    
-    Upsert --> Submit{学生提交考试?<br/>POST /student/exams/records/id/submit}
-    
-    Submit -->|否| Continue[继续答题]
+    Return1 --> StudentAnswer
+    StudentAnswer --> Save
+    Save --> Upsert
+    Upsert --> Submit
+    Submit -->|否| Continue
     Continue --> Save
-    
-    Submit -->|是| Step5[步骤5: 自动判分<br/>calculateScore]
-    
-    Step5 --> Auto{遍历所有题目}
-    
-    Auto --> TypeCheck{题型判断}
-    
-    TypeCheck -->|SINGLE/MULTIPLE/JUDGE| AutoGrade[自动判分<br/>比对学生答案与正确答案]
-    TypeCheck -->|FILL/SHORT/PROGRAMMING| ManualGrade[需要教师批改<br/>分数暂为0]
-    
-    AutoGrade --> AddScore[累加得分<br/>totalScore += questionScore]
+    Submit -->|是| Step5
+    Step5 --> Auto
+    Auto --> TypeCheck
+    TypeCheck -->|客观题| AutoGrade
+    TypeCheck -->|主观题| ManualGrade
+    AutoGrade --> AddScore
     ManualGrade --> AddScore
-    
-    AddScore --> NextQ{还有题目?}
+    AddScore --> NextQ
     NextQ -->|是| Auto
-    NextQ -->|否| Step6[步骤6: 更新考试记录<br/>status = SUBMITTED<br/>totalScore, submitTime]
-    
-    Step6 --> End([考试提交成功])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Error2 fill:#ffebee
-    style Error3 fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style Check3 fill:#fff4e6
-    style CheckStatus fill:#fff4e6
-    style Filter fill:#fff4e6
-    style TypeCheck fill:#fff4e6
+    NextQ -->|否| Step6
+    Step6 --> End
 ```
 
 ### 16.4 考试管理（Exam）
@@ -7547,24 +7381,37 @@ stateDiagram-v2
 **开始考试流程图：**
 
 ```mermaid
-flowchart TD
-    A[学生点击开始考试] --> B[查询学生信息]
-    B --> C[校验学生属于该班级]
-    C --> D[查询考试信息]
-    D --> E{考试是否在时间窗口内?}
-
-    E -- 未开始 --> F[抛异常: 考试暂未开始]
-    E -- 已结束 --> G[抛异常: 考试进入时间已结束]
-    E -- 在窗口内 --> H{已有考试记录?}
-
-    H -- 是 --> I{记录状态?}
-    I -- SUBMITTED --> J[抛异常: 考试已提交]
-    I -- IN_PROGRESS + 超时 --> K[抛异常: 考试已超时]
-    I -- IN_PROGRESS --> L[返回已有记录]
-
-    H -- 否 --> M[创建考试记录]
-    M --> N[计算个人截止时间]
-    N --> O[返回考试信息]
+graph TB
+    A[学生点击开始考试]
+    B[查询学生信息]
+    C[校验学生属于该班级]
+    D[查询考试信息]
+    E{考试是否在时间窗口内?}
+    F[抛异常: 考试暂未开始]
+    G[抛异常: 考试进入时间已结束]
+    H{已有考试记录?}
+    I{记录状态?}
+    J[抛异常: 考试已提交]
+    K[抛异常: 考试已超时]
+    L[返回已有记录]
+    M[创建考试记录]
+    N[计算个人截止时间]
+    O[返回考试信息]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E -->|未开始| F
+    E -->|已结束| G
+    E -->|在窗口内| H
+    H -->|是| I
+    I -->|SUBMITTED| J
+    I -->|IN_PROGRESS + 超时| K
+    I -->|IN_PROGRESS| L
+    H -->|否| M
+    M --> N
+    N --> O
 ```
 
 **开始考试核心代码：**
@@ -7641,27 +7488,42 @@ public StudentExamPaperRes getExamPaper(Long recordId) {
 **交卷流程图：**
 
 ```mermaid
-flowchart TD
-    A[学生点击交卷] --> B[校验学生身份]
-    B --> C[校验考试记录]
-    C --> D{已提交?}
-    D -- 是 --> E[抛异常: 已提交]
-    D -- 否 --> F{已超时?}
-
-    F -- 是 --> G[抛异常: 已超时不能交卷]
-    F -- 否 --> H[查询试卷题目]
-    H --> I[校验提交的题目属于该试卷]
-    I --> J[遍历每道题]
-
-    J --> K{题目类型?}
-    K -- 客观题 --> L[自动判分]
-    K -- 主观题 --> M[标记待批改]
-
-    L --> N[组装答题记录]
+graph TB
+    A[学生点击交卷]
+    B[校验学生身份]
+    C[校验考试记录]
+    D{已提交?}
+    E[抛异常: 已提交]
+    F{已超时?}
+    G[抛异常: 已超时不能交卷]
+    H[查询试卷题目]
+    I[校验题目属于该试卷]
+    J[遍历每道题]
+    K{题目类型?}
+    L[自动判分]
+    M[标记待批改]
+    N[组装答题记录]
+    O[批量保存答题记录]
+    P[更新考试记录状态]
+    Q[返回结果]
+    
+    A --> B
+    B --> C
+    C --> D
+    D -->|是| E
+    D -->|否| F
+    F -->|是| G
+    F -->|否| H
+    H --> I
+    I --> J
+    J --> K
+    K -->|客观题| L
+    K -->|主观题| M
+    L --> N
     M --> N
-    N --> O[批量保存答题记录]
-    O --> P[更新考试记录状态]
-    P --> Q[返回结果]
+    N --> O
+    O --> P
+    P --> Q
 ```
 
 **交卷核心代码：**
@@ -8039,109 +7901,103 @@ erDiagram
 **学习计划创建流程图：**
 
 ```mermaid
-flowchart TB
-    Start([管理员创建学习计划]) --> Step1[步骤1: 校验SOP已完成<br/>studentSopMapper.selectByStudentId]
+graph TB
+    Start([管理员创建学习计划])
+    Step1[步骤1: 校验SOP已完成]
+    Check1{SOP是否存在?}
+    Error1[抛异常: 学生SOP不存在]
+    Check2{SOP状态是否为COMPLETED?}
+    Error2[抛异常: 只有完成SOP后才能定制学习计划]
+    Step2[步骤2: 校验学生是线上学员]
+    Check3{teachingMode是否为ONLINE?}
+    Error3[抛异常: 只有线上学员可以定制学习计划]
+    Step3[步骤3: 校验是否已有生效计划]
+    Check4{已有生效计划?}
+    Error4[抛异常: 该学员已有生效学习计划]
+    Step4[步骤4: 校验课程是线上课程]
+    Check5{课程teachingMode是否为ONLINE?}
+    Error5[抛异常: 只能选择线上课程]
+    Step5[步骤5: 校验阶段配置]
+    SubStep1[5.1: 查询课程所有阶段]
+    SubStep2[5.2: 提取课程阶段名称列表]
+    Loop1[遍历请求的阶段]
+    Check6{阶段名称是否属于课程?}
+    Error6[抛异常: 阶段不属于所选课程]
+    NextStage1{还有阶段?}
+    SubStep3[5.3: 按课程阶段顺序重排]
+    Loop2[遍历课程阶段]
+    Check7{请求中是否包含该阶段?}
+    Error7[抛异常: 请填写阶段学习天数]
+    AddStage[加入已排序列表]
+    NextStage2{还有课程阶段?}
+    TxStart[开启事务]
+    Step6[步骤6: 创建学习计划]
+    Insert1[插入计划记录]
+    Step7[步骤7: 生成学习日历]
+    InitVars[初始化变量 dayIndex=1]
+    Loop3[遍历阶段]
+    GetStage[获取阶段信息]
+    Loop4[遍历阶段天数]
+    BuildCalendar[构建日历记录]
+    Fill1[填充字段]
+    AddCalendar[加入日历列表]
+    Increment[dayIndex++]
+    NextDay{还有天数?}
+    NextStage3{还有阶段?}
+    Step8[步骤8: 批量插入日历]
+    TxCommit[事务提交]
+    Return[返回结果]
+    End([学习计划创建成功])
     
-    Step1 --> Check1{SOP是否存在?}
-    Check1 -->|否| Error1[抛异常: 学生SOP不存在]
-    Check1 -->|是| Check2{SOP状态是否为 COMPLETED?}
-    
-    Check2 -->|否| Error2[抛异常: 只有完成SOP后<br/>才能定制学习计划]
-    Check2 -->|是| Step2[步骤2: 校验学生是线上学员<br/>studentMapper.selectById]
-    
-    Step2 --> Check3{teachingMode 是否为 ONLINE?}
-    
-    Check3 -->|否| Error3[抛异常: 只有线上学员<br/>可以定制学习计划]
-    Check3 -->|是| Step3[步骤3: 校验是否已有生效计划<br/>learningPlanMapper.selectActiveByStudentId]
-    
-    Step3 --> Check4{已有生效计划?<br/>status = ACTIVE}
-    
-    Check4 -->|是| Error4[抛异常: 该学员已有生效学习计划]
-    Check4 -->|否| Step4[步骤4: 校验课程是线上课程<br/>courseMapper.selectById]
-    
-    Step4 --> Check5{课程 teachingMode 是否为 ONLINE?}
-    
-    Check5 -->|否| Error5[抛异常: 只能选择线上课程]
-    Check5 -->|是| Step5[步骤5: 校验阶段配置<br/>validateStages]
-    
-    Step5 --> SubStep1[5.1: 查询课程所有阶段<br/>courseDetailMapper.selectByCourseId]
-    
-    SubStep1 --> SubStep2[5.2: 提取课程阶段名称列表<br/>去重]
-    
-    SubStep2 --> Loop1{遍历请求的阶段}
-    
-    Loop1 --> Check6{阶段名称是否属于课程?}
-    
-    Check6 -->|否| Error6[抛异常: 阶段不属于所选课程]
-    Check6 -->|是| NextStage1{还有阶段?}
-    
+    Start --> Step1
+    Step1 --> Check1
+    Check1 -->|否| Error1
+    Check1 -->|是| Check2
+    Check2 -->|否| Error2
+    Check2 -->|是| Step2
+    Step2 --> Check3
+    Check3 -->|否| Error3
+    Check3 -->|是| Step3
+    Step3 --> Check4
+    Check4 -->|是| Error4
+    Check4 -->|否| Step4
+    Step4 --> Check5
+    Check5 -->|否| Error5
+    Check5 -->|是| Step5
+    Step5 --> SubStep1
+    SubStep1 --> SubStep2
+    SubStep2 --> Loop1
+    Loop1 --> Check6
+    Check6 -->|否| Error6
+    Check6 -->|是| NextStage1
     NextStage1 -->|是| Loop1
-    NextStage1 -->|否| SubStep3[5.3: 按课程阶段顺序重排<br/>防止前端传参顺序错误]
-    
-    SubStep3 --> Loop2{遍历课程阶段}
-    
-    Loop2 --> Check7{请求中是否包含该阶段?}
-    
-    Check7 -->|否| Error7[抛异常: 请填写阶段学习天数]
-    Check7 -->|是| AddStage[加入已排序列表]
-    
-    AddStage --> NextStage2{还有课程阶段?}
+    NextStage1 -->|否| SubStep3
+    SubStep3 --> Loop2
+    Loop2 --> Check7
+    Check7 -->|否| Error7
+    Check7 -->|是| AddStage
+    AddStage --> NextStage2
     NextStage2 -->|是| Loop2
-    NextStage2 -->|否| TxStart[开启事务<br/>@Transactional]
-    
-    TxStart --> Step6[步骤6: 创建学习计划<br/>learningPlanMapper.insert]
-    
-    Step6 --> Insert1[插入计划记录<br/>studentId, courseId, sopId<br/>startDate, status=ACTIVE]
-    
-    Insert1 --> Step7[步骤7: 生成学习日历<br/>buildCalendars]
-    
-    Step7 --> InitVars[初始化变量<br/>dayIndex = 1<br/>calendars = 空列表]
-    
-    InitVars --> Loop3{遍历阶段}
-    
-    Loop3 --> GetStage[获取阶段信息<br/>stageName, stageDays]
-    
-    GetStage --> Loop4{遍历阶段天数<br/>1 to stageDays}
-    
-    Loop4 --> BuildCalendar[构建日历记录]
-    
-    BuildCalendar --> Fill1[填充字段:<br/>planId, studentId<br/>studyDate = startDate + dayIndex - 1<br/>stageName<br/>dayIndex 全局序号<br/>stageDayIndex 阶段内序号<br/>status = TODO]
-    
-    Fill1 --> AddCalendar[加入日历列表]
-    AddCalendar --> Increment[dayIndex++]
-    
-    Increment --> NextDay{还有天数?}
+    NextStage2 -->|否| TxStart
+    TxStart --> Step6
+    Step6 --> Insert1
+    Insert1 --> Step7
+    Step7 --> InitVars
+    InitVars --> Loop3
+    Loop3 --> GetStage
+    GetStage --> Loop4
+    Loop4 --> BuildCalendar
+    BuildCalendar --> Fill1
+    Fill1 --> AddCalendar
+    AddCalendar --> Increment
+    Increment --> NextDay
     NextDay -->|是| Loop4
-    NextDay -->|否| NextStage3{还有阶段?}
-    
+    NextDay -->|否| NextStage3
     NextStage3 -->|是| Loop3
-    NextStage3 -->|否| Step8[步骤8: 批量插入日历<br/>calendarMapper.batchInsert]
-    
-    Step8 --> TxCommit[事务提交]
-    
-    TxCommit --> Return[返回结果<br/>planId, 日历数量]
-    
-    Return --> End([学习计划创建成功])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Error2 fill:#ffebee
-    style Error3 fill:#ffebee
-    style Error4 fill:#ffebee
-    style Error5 fill:#ffebee
-    style Error6 fill:#ffebee
-    style Error7 fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style Check3 fill:#fff4e6
-    style Check4 fill:#fff4e6
-    style Check5 fill:#fff4e6
-    style Check6 fill:#fff4e6
-    style Check7 fill:#fff4e6
-    style TxStart fill:#f3e5f5
-    style TxCommit fill:#f3e5f5
-    style Step7 fill:#e3f2fd
+    NextStage3 -->|否| Step8
+    Step8 --> TxCommit
+    TxCommit --> Return
+    Return --> End
 ```
 
 **为什么学习计划只针对线上学员？**
@@ -8539,30 +8395,29 @@ public class StudentFollowupTagEntity {
 **回访标签配置流程：**
 
 ```mermaid
-flowchart TB
-    Start([管理员配置回访标签]) --> Form[填写配置信息<br/>学生标签、回访间隔天数]
+graph TB
+    Start([管理员配置回访标签])
+    Form[填写配置信息]
+    Submit[提交POST请求]
+    Step1[步骤1: 校验学生标签]
+    GetConfig[获取系统配置的学生标签列表]
+    Check1{标签是否在配置范围内?}
+    Error1[抛异常: 学生标签不在配置范围内]
+    Step2[步骤2: 插入配置记录]
+    Insert[插入字段]
+    Return[返回配置ID]
+    End([配置创建成功])
     
-    Form --> Submit[POST /api/studentFollowupTags]
-    
-    Submit --> Step1[步骤1: 校验学生标签<br/>validateStudentTag]
-    
-    Step1 --> GetConfig[获取系统配置的学生标签列表<br/>studentTagConfig.getStudentTagList]
-    
-    GetConfig --> Check1{标签是否在配置范围内?}
-    
-    Check1 -->|否| Error1[抛异常: 学生标签不在配置范围内]
-    Check1 -->|是| Step2[步骤2: 插入配置记录<br/>followupTagMapper.insert]
-    
-    Step2 --> Insert[插入字段:<br/>studentTag<br/>followupIntervalDays<br/>status = ACTIVE<br/>remark]
-    
-    Insert --> Return[返回配置ID<br/>StudentFollowupTagCreateRes]
-    
-    Return --> End([配置创建成功])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error1 fill:#ffebee
-    style Check1 fill:#fff4e6
+    Start --> Form
+    Form --> Submit
+    Submit --> Step1
+    Step1 --> GetConfig
+    GetConfig --> Check1
+    Check1 -->|否| Error1
+    Check1 -->|是| Step2
+    Step2 --> Insert
+    Insert --> Return
+    Return --> End
 ```
 
 **回访记录生成流程图：**
@@ -8795,56 +8650,54 @@ public class StudentFollowupRecordJob {
 **枚举验证流程图：**
 
 ```mermaid
-flowchart TB
-    Start([请求到达 Controller]) --> Step1[Spring MVC 参数绑定<br/>@Valid 或 @Validated 触发]
+graph TB
+    Start([请求到达Controller])
+    Step1[Spring MVC参数绑定]
+    Step2[遍历字段验证注解]
+    Check1{字段有@EnumValue注解?}
+    Skip[跳过该字段]
+    Step3[调用EnumValueValidator.initialize]
+    GetEnum[获取枚举类]
+    Step4[调用EnumValueValidator.isValid]
+    Check2{字段值是否为空?}
+    Return1[返回true]
+    Step5[获取枚举所有常量]
+    GetConstants[获取枚举列表]
+    Loop[遍历所有枚举常量]
+    Compare{enumConstant.name == 字段值?}
+    Return2[返回true 验证通过]
+    NextEnum{还有枚举常量?}
+    Return3[返回false 验证失败]
+    Continue[继续验证其他注解]
+    Error[抛出MethodArgumentNotValidException]
+    Check3{所有字段验证通过?}
+    Controller[进入Controller方法]
+    End([处理业务逻辑])
     
-    Step1 --> Step2[遍历字段上的验证注解]
-    
-    Step2 --> Check1{字段有 @EnumValue 注解?}
-    
-    Check1 -->|否| Skip[跳过该字段]
-    Check1 -->|是| Step3[调用 EnumValueValidator.initialize<br/>获取 enumClass 参数]
-    
-    Step3 --> GetEnum[获取枚举类<br/>例如: TeachingModeEnum.class]
-    
-    GetEnum --> Step4[调用 EnumValueValidator.isValid<br/>传入字段值]
-    
-    Step4 --> Check2{字段值是否为空?}
-    
-    Check2 -->|是| Return1[返回 true<br/>空值由 @NotBlank 等注解处理]
-    
-    Check2 -->|否| Step5[获取枚举所有常量<br/>enumClass.getEnumConstants]
-    
-    Step5 --> GetConstants[获取枚举列表<br/>例如: ONLINE, OFFLINE]
-    
-    GetConstants --> Loop{遍历所有枚举常量}
-    
-    Loop --> Compare{enumConstant.name == 字段值?}
-    
-    Compare -->|是| Return2[返回 true<br/>验证通过]
-    Compare -->|否| NextEnum{还有枚举常量?}
-    
+    Start --> Step1
+    Step1 --> Step2
+    Step2 --> Check1
+    Check1 -->|否| Skip
+    Check1 -->|是| Step3
+    Step3 --> GetEnum
+    GetEnum --> Step4
+    Step4 --> Check2
+    Check2 -->|是| Return1
+    Check2 -->|否| Step5
+    Step5 --> GetConstants
+    GetConstants --> Loop
+    Loop --> Compare
+    Compare -->|是| Return2
+    Compare -->|否| NextEnum
     NextEnum -->|是| Loop
-    NextEnum -->|否| Return3[返回 false<br/>验证失败]
-    
-    Return1 --> Continue[继续验证其他注解]
+    NextEnum -->|否| Return3
+    Return1 --> Continue
     Return2 --> Continue
-    Return3 --> Error[抛出 MethodArgumentNotValidException<br/>返回 400 错误]
-    
-    Continue --> Check3{所有字段验证通过?}
-    
+    Return3 --> Error
+    Continue --> Check3
     Check3 -->|否| Error
-    Check3 -->|是| Controller[进入 Controller 方法]
-    
-    Controller --> End([处理业务逻辑])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e8f5e9
-    style Error fill:#ffebee
-    style Check1 fill:#fff4e6
-    style Check2 fill:#fff4e6
-    style Compare fill:#fff4e6
-    style Check3 fill:#fff4e6
+    Check3 -->|是| Controller
+    Controller --> End
 ```
 
 **注解定义：**
@@ -9135,3 +8988,149 @@ public List<StudentLearningCalendarFrontRes> calendar() {
 |------|------|----------|
 | `StudentLearningPlanMapper.selectActiveByStudentId` | 查询学生生效计划 | 学生端展示 |
 | `StudentLearningCalendarMapper.selectByPlanId` | 查询计划日历 | 学习日历 |
+
+---
+
+## 第 21 章：考勤与课时账户 — 上课环节的闭环
+
+### 21.1 为什么需要这个模块
+
+教培业务闭环：招生 → 报名缴费 → 排课 → **上课** → 作业/考试 → 回访 → 续费。
+此前系统在「上课」环节是空白：排了课（`sys_class_schedule`）、发了作业、组织了考试，
+但**学生是否到课、买的课时消耗了多少**，系统并不知道。本模块补齐这一断层，由两部分组成：
+
+- **考勤**：按课次对班级学生点名（出勤/迟到/请假/旷课）。
+- **课时账户**：记录每个学生的课时余额，点名时自动扣减、不足时预警。
+
+**关键约束（设计的出发点）**：原系统的 `order_product`（产品）只有课程内容与价格，
+`student_product`（学生-产品关联）只有「买了哪个产品包」，**都没有"还剩多少课时"的字段**。
+因此课时账户是一组全新的表，并与订单**解耦**：充值入口先做管理员手动调整，
+不侵入老师已有的下单/支付逻辑，后续若要"下单即充课时"再接监听即可。
+
+### 21.2 三张表
+
+```sql
+-- 考勤记录：一条 = 某课次某学生的考勤
+class_attendance(
+  schedule_id, class_id, student_id, schedule_date,
+  status,              -- PRESENT/LATE/LEAVE/ABSENT
+  hour_deducted,       -- 本次扣减课时(快照，改点名时用于回退)
+  operator_id,
+  unique key uk_schedule_student (schedule_id, student_id)  -- 防重复点名
+)
+
+-- 课时账户：一人一条
+student_course_hour(
+  student_id unique, total_hours, used_hours,
+  remaining_hours      -- 可为负，表示欠课时
+)
+
+-- 课时流水：每次变动留痕，用于审计/追溯
+student_course_hour_log(
+  student_id, change_type,   -- CONSUME/ADJUST/REVERT
+  change_hours, remaining_after, schedule_id, reason, operator_id
+)
+```
+
+**为什么课时账户和流水分两张表？** 账户表存"当前余额"（查询快），流水表存"变动历史"（可追溯）。
+就像银行卡：余额是一个数，但每一笔进出都要有账单。
+
+### 21.3 课时账户：守恒与原子更新
+
+账户维持一个不变式：**`total_hours = used_hours + remaining_hours`**。三类变动都遵守它：
+
+| 操作 | total | used | remaining | 场景 |
+|------|-------|------|-----------|------|
+| 消耗 CONSUME | — | +h | −h | 考勤扣课时 |
+| 回退 REVERT | — | −h | +h | 改点名退回旧扣减 |
+| 调整 ADJUST | +h(若正) | +\|h\|(若负) | +h | 管理员手动充值/扣减 |
+
+**关键技巧：原子增量更新。** Mapper 不用"先查出来、加减、再写回"，而是：
+
+```xml
+update student_course_hour
+set used_hours = used_hours + #{deltaUsed},
+    remaining_hours = remaining_hours + #{deltaRemaining}
+where student_id = #{studentId}
+```
+
+为什么？"读-改-写"在并发下会丢更新（两个请求都读到 10，各 −1，最终写成 9 而非 8）。
+把加减交给数据库在一条 UPDATE 内完成，天然是原子的，无需加锁。
+
+### 21.4 考勤提交与课时扣减（核心）
+
+扣减规则：**出勤/迟到/旷课各扣 1 课时，请假不扣**（请假是事先报备，不消耗课时）。
+
+最容易出错的是**改点名**：老师先标了"出勤"（已扣 1），后来改成"请假"（应退回）。
+若直接按新状态扣，会重复扣、或漏退。解决办法是**用 `hour_deducted` 快照先回退、再按新状态扣**：
+
+```
+提交点名 { scheduleId, items:[{studentId, status, leaveReason}] }
+        │
+        ▼
+1. 校验课次存在 且 classType=CLASS        ──否→ 抛业务异常
+2. operatorId = request.getAttribute("userId")   // JwtAuth 注入的当前用户
+3. 加载该课次已有考勤 → Map<studentId, 记录>   // 支持改点名
+        │
+        ▼ 开启事务，逐个学生：
+4. newDeduct = 规则(status)               // 出勤/迟到/旷课=1，请假=0
+   ┌ 已有旧记录？
+   │  是 → ① 按旧 hour_deducted 回退课时(REVERT)
+   │       ② 更新考勤记录(status / hour_deducted=newDeduct)
+   │  否 → 插入考勤记录
+   ├ newDeduct>0 → 扣课时(CONSUME)，返回扣后 remaining
+   └ remaining<0 → 计入"欠课时预警"名单(仍记考勤，不拦截)
+        │
+        ▼
+5. 提交事务 → 返回 { 成功条数, 欠课时预警名单 }
+```
+
+**为什么欠课时不拦截？** 课已经上了，考勤必须如实记录；余额不足是运营问题，
+用预警提示管理员去催费，而不是因为"扣不动"就拒绝记考勤。
+
+### 21.5 跨模块协作与事务
+
+考勤属 `teaching` 域，课时账户属 `student` 域。考勤服务**注入并调用**课时服务的
+`consume/revert`。两者的事务通过 Spring 的传播机制合为一体：
+
+- `AttendanceServiceImpl.commit` 标注 `@Transactional`，开启事务；
+- `StudentCourseHourService.consume/revert` 也标注 `@Transactional`，默认传播 `REQUIRED`，
+  **加入**调用方的事务而非另起；
+- 因此"写考勤 + 扣课时"是一个原子单元，任一步抛异常整批回滚，绝不会出现"扣了课时没记考勤"。
+
+> 注意：跨 Bean 调用才会走 Spring 代理使 `@Transactional` 生效；同类内部 `this.xxx()` 调用不会。
+
+**一个工程取舍**：`ClassScheduleMapper` 没有 `selectById`。为了不改动老师的 schedule 域文件，
+考勤 Mapper 自建了一个**只读**的 `selectScheduleById` 查 `sys_class_schedule`，复用其实体接收。
+
+### 21.6 学生端：用 ThreadLocal 锁定本人
+
+学生端接口（`/student/learning-record/*`）查询"我的考勤""我的剩余课时"，
+**不接受前端传 studentId**，而是从 `StudentThreadLocal.get()`（学生 JWT 拦截器写入）取当前登录学生：
+
+```java
+Long studentId = StudentThreadLocal.get().getId();
+```
+
+这样从根上杜绝了"传别人的 id 查别人数据"的越权风险——能查的永远只有自己。
+
+### 21.7 设计取舍小结
+
+- **列表展示学生姓名**：用"单表分页 + `selectByIds` 内存组装"，而非 SQL `join student`，
+  降低跨表耦合（账户/考勤表只管自己的字段）。
+- **`hour_deducted` 记在考勤行**：让"改点名回退"无需再查流水即可精确还原扣减量。
+- **`remaining` 允许为负**：已发生的上课必须记录，欠费用预警表达，而非阻断业务。
+
+### 附录 E：本模块 Mapper 方法汇总
+
+| 方法 | 作用 | 使用场景 |
+|------|------|----------|
+| `AttendanceMapper.selectScheduleById` | 只读查询课次 | 校验/取班级与日期 |
+| `AttendanceMapper.selectByScheduleId` | 查课次已有考勤 | 名单回显/改点名 |
+| `AttendanceMapper.insert` / `updateById` | 写/改考勤记录 | 点名提交 |
+| `AttendanceMapper.selectPage` | 分页查考勤 | 考勤记录列表 |
+| `StudentCourseHourMapper.selectByStudentId` | 查课时账户 | 余额查询/扣减前 |
+| `StudentCourseHourMapper.addHours` | 原子增量改余额 | 充值/消耗/回退 |
+| `StudentCourseHourMapper.insert` | 建账户 | 首次变动时初始化 |
+| `StudentCourseHourMapper.selectPage` | 分页查账户 | 课时账户列表 |
+| `StudentCourseHourLogMapper.insert` | 写课时流水 | 每次变动留痕 |

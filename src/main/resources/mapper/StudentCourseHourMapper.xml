@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.student.coursehour.mapper.StudentCourseHourMapper">
+
+    <resultMap id="CourseHourMap" type="cn.yanque.models.student.coursehour.pojo.entity.StudentCourseHourEntity">
+        <id property="id" column="id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="totalHours" column="total_hours"/>
+        <result property="usedHours" column="used_hours"/>
+        <result property="remainingHours" column="remaining_hours"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, student_id, total_hours, used_hours, remaining_hours, created_at, updated_at
+    </sql>
+
+    <select id="selectByStudentId" resultMap="CourseHourMap">
+        select <include refid="BaseColumns"/>
+        from student_course_hour
+        where student_id = #{studentId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into student_course_hour (student_id, total_hours, used_hours, remaining_hours, created_at, updated_at)
+        values (#{studentId}, #{totalHours}, #{usedHours}, #{remainingHours}, now(), now())
+    </insert>
+
+    <update id="addHours">
+        update student_course_hour
+        set total_hours = total_hours + #{deltaTotal},
+            used_hours = used_hours + #{deltaUsed},
+            remaining_hours = remaining_hours + #{deltaRemaining},
+            updated_at = now()
+        where student_id = #{studentId}
+    </update>
+
+    <select id="selectPage" resultMap="CourseHourMap">
+        select <include refid="BaseColumns"/>
+        from student_course_hour
+        <where>
+            <if test="studentId != null">
+                and student_id = #{studentId}
+            </if>
+        </where>
+        order by updated_at desc
+    </select>
+</mapper>

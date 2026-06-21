@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.student.coursehour.mapper.StudentCourseHourLogMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into student_course_hour_log
+            (student_id, change_type, change_hours, remaining_after, schedule_id, reason, operator_id, created_at)
+        values
+            (#{studentId}, #{changeType}, #{changeHours}, #{remainingAfter}, #{scheduleId}, #{reason}, #{operatorId}, now())
+    </insert>
+</mapper>

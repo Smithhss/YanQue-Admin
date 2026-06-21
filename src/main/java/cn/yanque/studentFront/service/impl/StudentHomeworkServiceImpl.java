@@ -28,29 +28,46 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 学生端作业服务实现。
+ *
+ * <p>核心功能：
+ * <ul>
+ *   <li>查看作业列表(带提交状态和答案可见性)
+ *   <li>下载作业文件/答案(权限校验)
+ *   <li>提交作业(路径校验、截止时间校验、允许覆盖提交)
+ *   <li>下载自己的提交记录
+ * </ul>
+ *
+ * <p>数据权限：
+ * <ul>
+ *   <li>学生只能看到自己班级的作业
+ *   <li>答案需要教师设置为可见后才能下载
+ *   <li>学生只能下载自己的提交记录
+ * </ul>
+ */
 @Service
 public class StudentHomeworkServiceImpl implements StudentHomeworkService {
 
     private static final String DOWNLOAD_TYPE_CONTENT = "CONTENT";
-
     private static final String DOWNLOAD_TYPE_ANSWER = "ANSWER";
-
     private static final String HOMEWORK_SUBMISSION_PREFIX = "homework/submission/";
 
     @Autowired
     private StudentMapper studentMapper;
-
     @Autowired
     private HomeworkMapper homeworkMapper;
-
     @Autowired
     private HomeworkSubmissionMapper homeworkSubmissionMapper;
-
     @Autowired
     private UploadService uploadService;
 
+    /**
+     * 分页查询作业列表(学生端)。
+     * 未分配班级的学生返回空列表,已分配班级的学生只能看到本班级的作业。
+     */
     @Override
-    public PageResult<StudentHomeworkPageRes> pageHomework( StudentHomeworkPageReq req) {
+    public PageResult<StudentHomeworkPageRes> pageHomework(StudentHomeworkPageReq req) {
         StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
         if (student.getClassId() == null) {
             return new PageResult<>(0L, req.getPageNum(), req.getPageSize(), List.of());
@@ -61,12 +78,19 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         PageHelper.startPage(pageNum, pageSize);
         List<HomeworkEntity> list = homeworkMapper.selectStudentPage(student.getClassId(), new Date());
         PageInfo<HomeworkEntity> pageInfo = new PageInfo<>(list);
-        // 作业分页以homework为主表，提交状态按当前学生批量补齐，避免分页SQL做不必要的关联。
+
+        // 批量查询当前学生的提交状态
         Map<Long, HomeworkSubmissionEntity> submissionMap = buildSubmissionMap(list, student.getId());
-        List<StudentHomeworkPageRes> records = list.stream().map(item -> buildHomeworkRes(item, submissionMap.get(item.getId()))).toList();
+        List<StudentHomeworkPageRes> records = list.stream()
+                .map(item -> buildHomeworkRes(item, submissionMap.get(item.getId())))
+                .toList();
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, records);
     }
 
+    /**
+     * 生成作业文件/答案的下载 URL。
+     * 答案需要教师设置为可见后才能下载。
+     */
     @Override
     public StudentHomeworkDownloadUrlRes createDownloadUrl(Long homeworkId, String type) {
         StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
@@ -90,7 +114,7 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         if (isBlank(objectKey)) {
             throw BusinessException.DateError.newInstance("文件不存在");
         }
-        // 下载签名统一交给upload模块生成，这里只负责学生作业的班级、开始时间、答案可见性校验。
+
         DownloadPresignRes presign = uploadService.createDownloadPresign(objectKey);
         StudentHomeworkDownloadUrlRes res = new StudentHomeworkDownloadUrlRes();
         res.setFileName(fileName);
@@ -99,18 +123,25 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         return res;
     }
 
+    /**
+     * 提交作业。
+     * 允许重新提交覆盖旧文件,但截止时间后不允许提交。
+     */
     @Override
     public StudentHomeworkSubmitRes submitHomework(Long homeworkId, StudentHomeworkSubmitReq req) {
         StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
         HomeworkEntity homework = validateStudentHomework(student, homeworkId);
         Date now = new Date();
-        // 截止时间是提交硬边界，超过后不允许首次提交，也不允许重新提交覆盖旧文件。
+
+        // 校验截止时间
         if (homework.getDeadline() != null && now.after(homework.getDeadline())) {
-            throw BusinessException.DateError.newInstance("作业已截止，不能提交");
+            throw BusinessException.DateError.newInstance("作业已截止,不能提交");
         }
 
+        // 校验文件路径安全性
         validateSubmissionObjectKey(req.getObjectKey(), homeworkId, student.getId());
 
+        // 查询或创建提交记录
         HomeworkSubmissionEntity submission = homeworkSubmissionMapper.selectByHomeworkIdAndStudentId(homeworkId, student.getId());
         if (submission == null) {
             submission = new HomeworkSubmissionEntity();
@@ -125,7 +156,7 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         submission.setLateSubmitted(false);
         submission.setUpdatedAt(now);
 
-        // 一个学生对一份作业只保留一条提交记录，重新提交时覆盖文件信息和提交时间。
+        // 插入或更新
         if (submission.getId() == null) {
             homeworkSubmissionMapper.insert(submission);
         } else {
@@ -141,6 +172,10 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         return res;
     }
 
+    /**
+     * 生成学生提交记录的下载 URL。
+     * 学生只能下载自己的提交记录。
+     */
     @Override
     public StudentHomeworkDownloadUrlRes createSubmissionDownloadUrl(Long homeworkId) {
         StudentEntity student = validateStudent(StudentThreadLocal.get().getId());
@@ -149,7 +184,7 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         if (submission == null || isBlank(submission.getContentObjectKey())) {
             throw BusinessException.DateError.newInstance("尚未提交作业");
         }
-        // 学生只能下载自己的提交记录，不能通过通用objectKey下载接口绕过归属校验。
+
         DownloadPresignRes presign = uploadService.createDownloadPresign(submission.getContentObjectKey());
         StudentHomeworkDownloadUrlRes res = new StudentHomeworkDownloadUrlRes();
         res.setFileName(submission.getContentFileName());
@@ -182,7 +217,6 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         if (homeworkIds.isEmpty()) {
             return Map.of();
         }
-        // 当前接口只展示“我的提交状态”，所以按当前学生维度批量查询即可。
         return homeworkSubmissionMapper.selectByHomeworkIdsAndStudentId(homeworkIds, studentId).stream()
                 .collect(Collectors.toMap(HomeworkSubmissionEntity::getHomeworkId, item -> item));
     }
@@ -190,13 +224,16 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
     private StudentHomeworkPageRes buildHomeworkRes(HomeworkEntity homework, HomeworkSubmissionEntity submission) {
         StudentHomeworkPageRes res = new StudentHomeworkPageRes();
         BeanUtils.copyProperties(homework, res);
+
+        // 答案可见性控制
         boolean answerVisible = Boolean.TRUE.equals(homework.getAnswerStudentVisible()) && !isBlank(homework.getAnswerObjectKey());
         res.setAnswerVisible(answerVisible);
         if (!answerVisible) {
-            // 答案未公布时不向学生端透出答案objectKey和文件名，避免前端误用或泄露。
             res.setAnswerObjectKey(null);
             res.setAnswerFileName(null);
         }
+
+        // 提交状态填充
         boolean submitted = submission != null && !isBlank(submission.getContentObjectKey());
         res.setSubmitted(submitted);
         if (submitted) {
@@ -215,7 +252,6 @@ public class StudentHomeworkServiceImpl implements StudentHomeworkService {
         }
         String normalizedObjectKey = objectKey.trim();
         String expectedPrefix = HOMEWORK_SUBMISSION_PREFIX + homeworkId + "/" + studentId + "/";
-        // 学生提交文件必须落在自己的作业目录，避免用别人的objectKey覆盖提交记录。
         if (normalizedObjectKey.startsWith("/") || normalizedObjectKey.contains("..") || !normalizedObjectKey.startsWith(expectedPrefix)) {
             throw BusinessException.DateError.newInstance("提交文件路径不合法");
         }
