@@ -1,5 +1,6 @@
 package cn.yanque.models.student.coursehour.pojo.vo.res;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -22,5 +23,6 @@ public class StudentCourseHourPageRes {
 
     private BigDecimal remainingHours;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
     private Date updatedAt;
 }

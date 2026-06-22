@@ -1,5 +1,6 @@
 package cn.yanque.models.teaching.attendance.pojo.vo.res;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -20,6 +21,7 @@ public class AttendancePageRes {
 
     private String studentNo;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
     private Date scheduleDate;
 
     private String status;
