@@ -18,6 +18,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+
 /**
  * 学生完善资料服务实现。
  *
@@ -42,6 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class StudentFrontProfileServiceImpl implements StudentFrontProfileService {
+
+    private static final Set<String> SUPPORTED_GENDERS = Set.of("MALE", "FEMALE");
 
     @Autowired
     private OrderService orderService;
@@ -76,6 +80,9 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
         if (!req.getPassword().equals(req.getConfirmPassword())) {
             throw BusinessException.ParamsError.newInstance("两次输入的密码不一致");
         }
+        if (!SUPPORTED_GENDERS.contains(req.getGender())) {
+            throw BusinessException.ParamsError.newInstance("性别只能是MALE或FEMALE");
+        }
 
         // 2. 校验订单存在且已支付成功
         OrderEntity order = orderService.selectByOrderNo(req.getOrderNo());
@@ -96,6 +103,7 @@ public class StudentFrontProfileServiceImpl implements StudentFrontProfileServic
         StudentEntity student = new StudentEntity();
         student.setStudentName(order.getStudentName());      // 从订单自动填充
         student.setStudentPhone(order.getStudentPhone());    // 从订单自动填充
+        student.setGender(req.getGender());                  // 宿舍分配性别隔离依赖
         student.setPassword(req.getPassword());              // 学生填写的密码
         student.setEducation(req.getEducation());            // 学历
         student.setGradeYear(req.getGradeYear());            // 届数

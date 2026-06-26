@@ -28,6 +28,10 @@ public class CompleteStudentProfileReq {
     @Schema(description = "学历")
     private String education;
 
+    @NotBlank(message = "性别不能为空")
+    @Schema(description = "性别：MALE男/FEMALE女")
+    private String gender;
+
     @NotNull(message = "届数不能为空")
     @Schema(description = "届数")
     private Integer gradeYear;

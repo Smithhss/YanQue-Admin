@@ -54,6 +54,7 @@ public class StudentFrontAuthServiceImpl implements StudentFrontAuthService {
         res.setId(student.getId());
         res.setName(student.getStudentName());
         res.setPhone(student.getStudentPhone());
+        res.setGender(student.getGender());
         return res;
     }
 }
