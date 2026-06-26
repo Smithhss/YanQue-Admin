@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.dorm.mapper.DormBedMapper">
+
+    <resultMap id="DormBedMap" type="cn.yanque.models.dorm.pojo.entity.DormBedEntity">
+        <id property="id" column="id"/>
+        <result property="roomId" column="room_id"/>
+        <result property="bedNo" column="bed_no"/>
+        <result property="status" column="status"/>
+        <result property="currentStudentId" column="current_student_id"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, room_id, bed_no, status, current_student_id, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into dorm_bed (room_id, bed_no, status, current_student_id, created_at, updated_at)
+        values (#{roomId}, #{bedNo}, #{status}, #{currentStudentId}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <insert id="batchInsert">
+        insert into dorm_bed (room_id, bed_no, status, current_student_id, created_at, updated_at)
+        values
+        <foreach collection="beds" item="bed" separator=",">
+            (#{bed.roomId}, #{bed.bedNo}, #{bed.status}, #{bed.currentStudentId}, #{bed.createdAt}, #{bed.updatedAt})
+        </foreach>
+    </insert>
+
+    <update id="updateById">
+        update dorm_bed
+        set room_id = #{roomId},
+            bed_no = #{bedNo},
+            status = #{status},
+            current_student_id = #{currentStudentId},
+            updated_at = #{updatedAt}
+        where id = #{id}
+    </update>
+
+    <update id="updateStatusAndStudent">
+        update dorm_bed
+        set status = #{status},
+            current_student_id = #{currentStudentId},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="DormBedMap">
+        select <include refid="BaseColumns"/>
+        from dorm_bed
+        where id = #{id}
+    </select>
+
+    <select id="selectPage" resultMap="DormBedMap">
+        select <include refid="BaseColumns"/>
+        from dorm_bed
+        <where>
+            <if test="roomId != null">
+                and room_id = #{roomId}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+        order by id asc
+    </select>
+
+    <delete id="deleteById">
+        delete from dorm_bed where id = #{id}
+    </delete>
+
+    <select id="countByRoomId" resultType="int">
+        select count(*) from dorm_bed where room_id = #{roomId}
+    </select>
+</mapper>

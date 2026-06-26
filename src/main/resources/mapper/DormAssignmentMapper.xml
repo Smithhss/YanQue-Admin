@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.yanque.models.dorm.mapper.DormAssignmentMapper">
+
+    <resultMap id="DormAssignmentMap" type="cn.yanque.models.dorm.pojo.entity.DormAssignmentEntity">
+        <id property="id" column="id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="bedId" column="bed_id"/>
+        <result property="roomId" column="room_id"/>
+        <result property="buildingId" column="building_id"/>
+        <result property="checkInDate" column="check_in_date"/>
+        <result property="checkOutDate" column="check_out_date"/>
+        <result property="status" column="status"/>
+        <result property="assignedBy" column="assigned_by"/>
+        <result property="remark" column="remark"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <resultMap id="DormAssignmentResMap" type="cn.yanque.models.dorm.pojo.vo.res.DormAssignmentRes">
+        <id property="id" column="id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="studentName" column="student_name"/>
+        <result property="bedId" column="bed_id"/>
+        <result property="bedNo" column="bed_no"/>
+        <result property="roomId" column="room_id"/>
+        <result property="roomNo" column="room_no"/>
+        <result property="buildingId" column="building_id"/>
+        <result property="buildingName" column="building_name"/>
+        <result property="checkInDate" column="check_in_date"/>
+        <result property="checkOutDate" column="check_out_date"/>
+        <result property="status" column="status"/>
+        <result property="assignedBy" column="assigned_by"/>
+        <result property="remark" column="remark"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, student_id, bed_id, room_id, building_id, check_in_date, check_out_date, status, assigned_by, remark, created_at, updated_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into dorm_assignment (student_id, bed_id, room_id, building_id, check_in_date, check_out_date, status, assigned_by, remark, created_at, updated_at)
+        values (#{studentId}, #{bedId}, #{roomId}, #{buildingId}, #{checkInDate}, #{checkOutDate}, #{status}, #{assignedBy}, #{remark}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <select id="selectById" resultMap="DormAssignmentMap">
+        select <include refid="BaseColumns"/>
+        from dorm_assignment
+        where id = #{id}
+    </select>
+
+    <select id="selectLivingByStudentId" resultMap="DormAssignmentMap">
+        select <include refid="BaseColumns"/>
+        from dorm_assignment
+        where student_id = #{studentId} and status = 'LIVING'
+        limit 1
+    </select>
+
+    <update id="checkout">
+        update dorm_assignment
+        set status = 'CHECKED_OUT',
+            check_out_date = #{checkOutDate},
+            updated_at = now()
+        where id = #{id} and status = 'LIVING'
+    </update>
+
+    <select id="selectPage" resultMap="DormAssignmentResMap">
+        select a.id, a.student_id, s.student_name, a.bed_id, bed.bed_no, a.room_id, r.room_no,
+               a.building_id, b.building_name, a.check_in_date, a.check_out_date, a.status,
+               a.assigned_by, a.remark, a.created_at
+        from dorm_assignment a
+        left join student s on s.id = a.student_id
+        left join dorm_bed bed on bed.id = a.bed_id
+        left join dorm_room r on r.id = a.room_id
+        left join dorm_building b on b.id = a.building_id
+        <where>
+            <if test="buildingId != null">
+                and a.building_id = #{buildingId}
+            </if>
+            <if test="status != null and status != ''">
+                and a.status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (s.student_name like concat('%', #{keyword}, '%')
+                or s.student_phone like concat('%', #{keyword}, '%'))
+            </if>
+        </where>
+        order by a.id desc
+    </select>
+</mapper>

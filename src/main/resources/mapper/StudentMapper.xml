@@ -7,6 +7,7 @@
         <result property="studentNo" column="student_no"/>
         <result property="studentName" column="student_name"/>
         <result property="studentPhone" column="student_phone"/>
+        <result property="gender" column="gender"/>
         <result property="password" column="password"/>
         <result property="education" column="education"/>
         <result property="gradeYear" column="grade_year"/>
@@ -21,7 +22,7 @@
     </resultMap>
 
     <sql id="BaseColumns">
-        id, student_no, student_name, student_phone, password, education, grade_year, school, major, teaching_mode, class_id, student_tag, status, created_at, updated_at
+        id, student_no, student_name, student_phone, gender, password, education, grade_year, school, major, teaching_mode, class_id, student_tag, status, created_at, updated_at
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
@@ -29,6 +30,7 @@
             student_no,
             student_name,
             student_phone,
+            gender,
             password,
             education,
             grade_year,
@@ -45,6 +47,7 @@
             #{studentNo},
             #{studentName},
             #{studentPhone},
+            #{gender},
             #{password},
             #{education},
             #{gradeYear},

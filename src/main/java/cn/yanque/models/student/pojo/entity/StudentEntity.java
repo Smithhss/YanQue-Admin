@@ -22,6 +22,9 @@ public class StudentEntity {
     /** 手机号 */
     private String studentPhone;
 
+    /** 性别：MALE男/FEMALE女（F014宿舍分配用，历史数据可能为null） */
+    private String gender;
+
     /** 登录密码 */
     private String password;
 

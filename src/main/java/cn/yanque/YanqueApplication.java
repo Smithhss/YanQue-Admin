@@ -24,7 +24,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         @MapperScan("cn.yanque.models.exam.exam.mapper"),
         @MapperScan("cn.yanque.models.student.mapper"),
         @MapperScan("cn.yanque.models.student.coursehour.mapper"),
-        @MapperScan("cn.yanque.models.teaching.attendance.mapper")
+        @MapperScan("cn.yanque.models.teaching.attendance.mapper"),
+        @MapperScan("cn.yanque.models.dorm.mapper")
 })
 public class YanqueApplication {
 
