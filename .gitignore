@@ -40,3 +40,7 @@ build/
 
 ### 本地联调配置（含本机数据库口令，勿提交，勿同步到 LA） ###
 src/main/resources/application-local.yaml
+
+### 本地启动日志（运行时产物，勿提交） ###
+startup.log
+startup.err.log

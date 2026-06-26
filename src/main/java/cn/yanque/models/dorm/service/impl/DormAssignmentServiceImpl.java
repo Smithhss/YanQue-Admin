@@ -116,6 +116,11 @@ public class DormAssignmentServiceImpl implements DormAssignmentService {
         return new PageResult<>(pageInfo.getTotal(), pageNum, pageSize, list);
     }
 
+    @Override
+    public DormAssignmentRes getLivingByStudentId(Long studentId) {
+        return assignmentMapper.selectLivingResByStudentId(studentId);
+    }
+
     /** 宿舍只接收线下且已完善性别的学生。 */
     private void validateStudentCanLive(StudentEntity student) {
         if (student == null) {

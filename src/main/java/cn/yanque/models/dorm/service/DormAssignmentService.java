@@ -24,4 +24,7 @@ public interface DormAssignmentService {
 
     /** 分页查询入住记录。 */
     PageResult<DormAssignmentRes> pageAssignment(DormAssignmentPageReq req);
+
+    /** 查询某学生当前在住的入住记录（带楼栋/房间/床位名称，供学生端"我的宿舍"展示），无则返回null。 */
+    DormAssignmentRes getLivingByStudentId(Long studentId);
 }

@@ -65,6 +65,19 @@
         where id = #{id} and status = 'LIVING'
     </update>
 
+    <select id="selectLivingResByStudentId" resultMap="DormAssignmentResMap">
+        select a.id, a.student_id, s.student_name, a.bed_id, bed.bed_no, a.room_id, r.room_no,
+               a.building_id, b.building_name, a.check_in_date, a.check_out_date, a.status,
+               a.assigned_by, a.remark, a.created_at
+        from dorm_assignment a
+        left join student s on s.id = a.student_id
+        left join dorm_bed bed on bed.id = a.bed_id
+        left join dorm_room r on r.id = a.room_id
+        left join dorm_building b on b.id = a.building_id
+        where a.student_id = #{studentId} and a.status = 'LIVING'
+        limit 1
+    </select>
+
     <select id="selectPage" resultMap="DormAssignmentResMap">
         select a.id, a.student_id, s.student_name, a.bed_id, bed.bed_no, a.room_id, r.room_no,
                a.building_id, b.building_name, a.check_in_date, a.check_out_date, a.status,
