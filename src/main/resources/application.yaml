@@ -29,13 +29,17 @@ mybatis:
 
 # ==================== 易宝支付配置 ====================
 yeepay:
-  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:10093003553}  # 父商户号
-  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:10093003553}                # 商户号
-  pay-success-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
-                                                                   # 支付成功回调地址（易宝通知）
-  pay-success-return-url: "xxxxx"                                  # 支付成功页面跳转地址
-  refund-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/refund"
-                                                                   # 退款成功回调地址
+  mode: ${YQ_YEEPAY_MODE:mock}                                      # mock / sandbox / prod
+  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:}              # 父商户号
+  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:}                            # 商户号
+  pay-success-notify-url: ${YQ_YEEPAY_PAY_SUCCESS_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/paySuccess}
+  pay-success-return-url: ${YQ_YEEPAY_PAY_SUCCESS_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  refund-notify-url: ${YQ_YEEPAY_REFUND_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/refund}
+  mock-cashier-url: ${YQ_YEEPAY_MOCK_CASHIER_URL:http://127.0.0.1:5174/payment-return}
+  sdk-config-file: ${YQ_YEEPAY_SDK_CONFIG_FILE:}
+  # 老师环境历史值仅保留为注释，不作为默认配置：
+  # pay-success-notify-url: http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/paySuccess
+  # refund-notify-url: http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/refund
 
 # ==================== TOS 对象存储配置 ====================
 # TOS 是火山引擎的对象存储服务（类似阿里云 OSS）

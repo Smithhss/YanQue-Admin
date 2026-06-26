@@ -1,21 +1,28 @@
 spring:
   data:
     redis:
-      host: redis-shzl6tz4l7lst4rga.redis.volces.com
-      port: 6379
-      password: QWer1234!!!
-      database: 3
+      host: ${YQ_REDIS_HOST:127.0.0.1}
+      port: ${YQ_REDIS_PORT:6379}
+      password: ${YQ_REDIS_PASSWORD:}
+      database: ${YQ_REDIS_DATABASE:0}
 
   datasource:
-    url: jdbc:mysql://mysql-02a756b9c0e4-public.rds.volces.com:3306/yanque-shiyi?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    password: QWer1234!!!
+    url: jdbc:mysql://${YQ_DB_HOST:127.0.0.1}:${YQ_DB_PORT:3306}/${YQ_DB_NAME:yanque}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${YQ_DB_USERNAME:root}
+    password: ${YQ_DB_PASSWORD:}
+
+# 老师数据库/Redis 历史值仅保留为注释，避免本地开发默认误连老师环境：
+# spring.data.redis.host: redis-shzl6tz4l7lst4rga.redis.volces.com
+# spring.data.redis.database: 3
+# spring.datasource.url: jdbc:mysql://mysql-02a756b9c0e4-public.rds.volces.com:3306/yanque-shiyi
 
 logging:
   level:
     cn.yanque: INFO
 
 yeepay:
-  pay-success-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/paySuccess"
-  pay-success-return-url: "http://127.0.0.1:5174/payment-return"
-  refund-notify-url: "http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/refund"
+  mode: ${YQ_YEEPAY_MODE:mock}
+  pay-success-notify-url: ${YQ_YEEPAY_PAY_SUCCESS_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/paySuccess}
+  pay-success-return-url: ${YQ_YEEPAY_PAY_SUCCESS_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  refund-notify-url: ${YQ_YEEPAY_REFUND_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/refund}
+  mock-cashier-url: ${YQ_YEEPAY_MOCK_CASHIER_URL:http://127.0.0.1:5174/payment-return}

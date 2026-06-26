@@ -15,6 +15,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.yeepay.yop.sdk.service.common.request.YopRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -33,6 +34,15 @@ public class YeepayCashierServiceImpl implements YeepayCashierService {
     private SysConfigService sysConfigService;
 
     public YeepayUnifiedOrderRes unifiedOrder(YeepayUnifiedOrderReq req) {
+        if (isMockMode()) {
+            YeepayUnifiedOrderRes res = new YeepayUnifiedOrderRes();
+            res.setUniqueOrderNo("MOCK-" + req.getOrderNo());
+            String baseUrl = StringUtils.hasText(yeepayProperties.getMockCashierUrl())
+                    ? yeepayProperties.getMockCashierUrl()
+                    : yeepayProperties.getPaySuccessReturnUrl();
+            res.setCashierUrl(baseUrl + "?orderNo=" + req.getOrderNo() + "&mockPay=true");
+            return res;
+        }
 
         YopRequest request = new YopRequest("/rest/v1.0/cashier/unified/order", "POST");
         request.addParameter("parentMerchantNo", yeepayProperties.getParentMerchantNo());
@@ -49,6 +59,16 @@ public class YeepayCashierServiceImpl implements YeepayCashierService {
     }
 
     public YeepayRefundRes refund(YeepayRefundReq req) {
+        if (isMockMode()) {
+            YeepayRefundRes res = new YeepayRefundRes();
+            res.setCode("OPR00000");
+            res.setMessage("mock refund success");
+            res.setUniqueRefundNo("MOCK-" + req.getRefundOrderNo());
+            res.setRefundRequestId(req.getRefundOrderNo());
+            res.setStatus("SUCCESS");
+            return res;
+        }
+
         YopRequest request = new YopRequest("/rest/v1.0/trade/refund", "POST");
         request.addParameter("parentMerchantNo", yeepayProperties.getParentMerchantNo());
         request.addParameter("merchantNo", yeepayProperties.getMerchantNo());
@@ -61,5 +81,10 @@ public class YeepayCashierServiceImpl implements YeepayCashierService {
 
         JSONObject result = yeepayGatewayService.request(request, "refund");
         return JSONObject.parseObject(result.toJSONString(), YeepayRefundRes.class);
+    }
+
+    private boolean isMockMode() {
+        return !StringUtils.hasText(yeepayProperties.getMode())
+                || "mock".equalsIgnoreCase(yeepayProperties.getMode());
     }
 }
