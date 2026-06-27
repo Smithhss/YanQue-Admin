@@ -8,8 +8,6 @@ import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
 import cn.yanque.models.order.prepay.pojo.info.UpdateOrderStatusInfo;
 import cn.yanque.models.order.prepay.service.OrderService;
 import cn.yanque.models.order.prepay.service.PrepayOrderService;
-import com.alipay.api.AlipayApiException;
-import com.alipay.api.internal.util.AlipaySignature;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -61,16 +59,7 @@ public class AlipayController {
     @ResponseBody
     public String notify(HttpServletRequest request) {
         Map<String, String> params = extractParams(request);
-        try {
-            boolean verified = AlipaySignature.rsaCheckV1(
-                    params,
-                    alipayProperties.getAlipayPublicKey(),
-                    alipayProperties.getCharset(),
-                    alipayProperties.getSignType());
-            if (!verified) {
-                return "failure";
-            }
-        } catch (AlipayApiException e) {
+        if (!alipayCashierService.verifyNotify(params)) {
             return "failure";
         }
 
