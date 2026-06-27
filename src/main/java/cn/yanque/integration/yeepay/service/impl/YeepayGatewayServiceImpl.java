@@ -10,11 +10,13 @@ import com.yeepay.yop.sdk.service.common.request.YopRequest;
 import com.yeepay.yop.sdk.service.common.response.YopResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 @Slf4j
+@ConditionalOnProperty(prefix = "payment", name = "provider", havingValue = "yeepay")
 public class YeepayGatewayServiceImpl implements YeepayGatewayService {
 
 

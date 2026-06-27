@@ -6,9 +6,9 @@ import cn.hutool.core.util.RandomUtil;
 import cn.yanque.common.enums.OrderStatusEnum;
 import cn.yanque.common.enums.RefundStatusEnum;
 import cn.yanque.common.exception.BusinessException;
-import cn.yanque.integration.yeepay.pojo.req.YeepayRefundReq;
-import cn.yanque.integration.yeepay.pojo.res.YeepayRefundRes;
-import cn.yanque.integration.yeepay.service.YeepayCashierService;
+import cn.yanque.integration.payment.pojo.req.PaymentRefundReq;
+import cn.yanque.integration.payment.pojo.res.PaymentRefundRes;
+import cn.yanque.integration.payment.service.PaymentCashierService;
 import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
 import cn.yanque.models.order.prepay.service.OrderService;
 import cn.yanque.models.order.refund.biz.RefundOrderBiz;
@@ -51,7 +51,7 @@ public class RefundOrderBizImpl implements RefundOrderBiz {
     private OrderService orderService;
 
     @Autowired
-    private YeepayCashierService yeepayCashierService;
+    private PaymentCashierService paymentCashierService;
 
     /**
      * 第一步：创建退款单号。
@@ -97,9 +97,9 @@ public class RefundOrderBizImpl implements RefundOrderBiz {
 
         // 4. 调用易宝退款接口
         //    失败则：回退已退金额 + 标记退款单为 FAIL
-        YeepayRefundRes yeepayRefundRes;
+        PaymentRefundRes paymentRefundRes;
         try {
-            yeepayRefundRes = requestYeepayRefund(order, refundOrderNo, req);
+            paymentRefundRes = requestRefund(order, refundOrderNo, req);
         } catch (Exception e) {
             orderService.decreaseRefundedAmount(order.getOrderNo(), req.getRefundAmount());
             refundOrderService.updateRefundFail(refundOrderNo, RefundStatusEnum.INIT.name(), e.getMessage());
@@ -107,8 +107,8 @@ public class RefundOrderBizImpl implements RefundOrderBiz {
         }
 
         // 5. 更新退款单状态为 PROCESSING，记录易宝退款流水号
-        refundOrderService.updateRefundProcessing(refundOrderNo, RefundStatusEnum.INIT.name(), yeepayRefundRes.getUniqueRefundNo());
-        return buildRefundApplyRes(refundOrderNo, order.getOrderNo(), req.getRefundAmount(), yeepayRefundRes);
+        refundOrderService.updateRefundProcessing(refundOrderNo, RefundStatusEnum.INIT.name(), paymentRefundRes.getUniqueRefundNo());
+        return buildRefundApplyRes(refundOrderNo, order.getOrderNo(), req.getRefundAmount(), paymentRefundRes);
     }
 
     /**
@@ -225,27 +225,27 @@ public class RefundOrderBizImpl implements RefundOrderBiz {
      * @param refundOrderNo 退款单号（作为易宝侧的退款请求标识）
      * @param req           退款请求（金额、原因）
      */
-    private YeepayRefundRes requestYeepayRefund(OrderEntity order, String refundOrderNo, RefundApplyReq req) {
-        YeepayRefundReq yeepayRefundReq = new YeepayRefundReq();
-        yeepayRefundReq.setOrderNo(order.getOrderNo());
-        yeepayRefundReq.setUniqueOrderNo(order.getUniqueOrderNo());
-        yeepayRefundReq.setRefundOrderNo(refundOrderNo);
-        yeepayRefundReq.setRefundAmount(req.getRefundAmount());
-        yeepayRefundReq.setReason(req.getReason());
-        return yeepayCashierService.refund(yeepayRefundReq);
+    private PaymentRefundRes requestRefund(OrderEntity order, String refundOrderNo, RefundApplyReq req) {
+        PaymentRefundReq paymentRefundReq = new PaymentRefundReq();
+        paymentRefundReq.setOrderNo(order.getOrderNo());
+        paymentRefundReq.setUniqueOrderNo(order.getUniqueOrderNo());
+        paymentRefundReq.setRefundOrderNo(refundOrderNo);
+        paymentRefundReq.setRefundAmount(req.getRefundAmount());
+        paymentRefundReq.setReason(req.getReason());
+        return paymentCashierService.refund(paymentRefundReq);
     }
 
     /**
      * 构建退款申请响应（新申请场景）。
      * 状态固定为 PROCESSING，因为已成功调用易宝退款接口。
      */
-    private RefundApplyRes buildRefundApplyRes(String refundOrderNo, String paymentOrderNo, BigDecimal refundAmount, YeepayRefundRes yeepayRefundRes) {
+    private RefundApplyRes buildRefundApplyRes(String refundOrderNo, String paymentOrderNo, BigDecimal refundAmount, PaymentRefundRes paymentRefundRes) {
         RefundApplyRes res = new RefundApplyRes();
         res.setRefundOrderNo(refundOrderNo);
         res.setPaymentOrderNo(paymentOrderNo);
         res.setRefundAmount(refundAmount);
         res.setStatus(RefundStatusEnum.PROCESSING.name());
-        res.setUniqueRefundNo(yeepayRefundRes.getUniqueRefundNo());
+        res.setUniqueRefundNo(paymentRefundRes.getUniqueRefundNo());
         return res;
     }
 

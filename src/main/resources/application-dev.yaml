@@ -20,6 +20,18 @@ logging:
   level:
     cn.yanque: INFO
 
+payment:
+  provider: ${YQ_PAYMENT_PROVIDER:alipay}
+
+alipay:
+  gateway-url: ${YQ_ALIPAY_GATEWAY_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+  app-id: ${YQ_ALIPAY_APP_ID:}
+  app-private-key: ${YQ_ALIPAY_APP_PRIVATE_KEY:}
+  alipay-public-key: ${YQ_ALIPAY_PUBLIC_KEY:}
+  notify-url: ${YQ_ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/alipay/notify}
+  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  cashier-url: ${YQ_ALIPAY_CASHIER_URL:/yq-admin/alipay/cashier}
+
 yeepay:
   mode: ${YQ_YEEPAY_MODE:mock}
   pay-success-notify-url: ${YQ_YEEPAY_PAY_SUCCESS_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/paySuccess}

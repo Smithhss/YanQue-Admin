@@ -6,9 +6,9 @@ import cn.hutool.core.util.RandomUtil;
 import cn.yanque.common.enums.OrderStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.config.ThreadPoolConfig;
-import cn.yanque.integration.yeepay.pojo.req.YeepayUnifiedOrderReq;
-import cn.yanque.integration.yeepay.pojo.res.YeepayUnifiedOrderRes;
-import cn.yanque.integration.yeepay.service.YeepayCashierService;
+import cn.yanque.integration.payment.pojo.req.PaymentUnifiedOrderReq;
+import cn.yanque.integration.payment.pojo.res.PaymentUnifiedOrderRes;
+import cn.yanque.integration.payment.service.PaymentCashierService;
 import cn.yanque.models.order.product.mapper.ProductMapper;
 import cn.yanque.models.order.product.pojo.entity.ProductEntity;
 import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
@@ -35,7 +35,7 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
     private OrderService orderService;
 
     @Autowired
-    private YeepayCashierService yeepayCashierService;
+    private PaymentCashierService paymentCashierService;
 
     @Autowired
     private ProductMapper productMapper;
@@ -60,13 +60,13 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
         orderService.saveOrder(orderEntity);
 
         // 调用易宝接口
-        YeepayUnifiedOrderReq yeepayUnifiedOrderReq = new YeepayUnifiedOrderReq();
-        yeepayUnifiedOrderReq.setOrderNo(orderEntity.getOrderNo());
-        yeepayUnifiedOrderReq.setOrderAmount(orderEntity.getOrderAmount());
-        YeepayUnifiedOrderRes res;
+        PaymentUnifiedOrderReq paymentUnifiedOrderReq = new PaymentUnifiedOrderReq();
+        paymentUnifiedOrderReq.setOrderNo(orderEntity.getOrderNo());
+        paymentUnifiedOrderReq.setOrderAmount(orderEntity.getOrderAmount());
+        PaymentUnifiedOrderRes res;
 
         try {
-            res = yeepayCashierService.unifiedOrder(yeepayUnifiedOrderReq);
+            res = paymentCashierService.unifiedOrder(paymentUnifiedOrderReq);
         } catch (Exception e) {
             // 更新订单状态信息为失败
             orderService.updateOrderStatus(new UpdateOrderStatusInfo(orderEntity.getOrderNo(), OrderStatusEnum.FAIL.name(), OrderStatusEnum.INIT.name(), null, null));

@@ -28,6 +28,22 @@ mybatis:
   mapper-locations: classpath*:/mapper/**/*.xml            # Mapper XML 文件路径（支持多模块）
 
 # ==================== 易宝支付配置 ====================
+payment:
+  provider: ${YQ_PAYMENT_PROVIDER:alipay}
+
+alipay:
+  gateway-url: ${YQ_ALIPAY_GATEWAY_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+  app-id: ${YQ_ALIPAY_APP_ID:}
+  app-private-key: ${YQ_ALIPAY_APP_PRIVATE_KEY:}
+  alipay-public-key: ${YQ_ALIPAY_PUBLIC_KEY:}
+  notify-url: ${YQ_ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/alipay/notify}
+  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  cashier-url: ${YQ_ALIPAY_CASHIER_URL:/yq-admin/alipay/cashier}
+  charset: ${YQ_ALIPAY_CHARSET:UTF-8}
+  sign-type: ${YQ_ALIPAY_SIGN_TYPE:RSA2}
+  format: ${YQ_ALIPAY_FORMAT:json}
+  product-code: ${YQ_ALIPAY_PRODUCT_CODE:FAST_INSTANT_TRADE_PAY}
+
 yeepay:
   mode: ${YQ_YEEPAY_MODE:mock}                                      # mock / sandbox / prod
   parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:}              # 父商户号

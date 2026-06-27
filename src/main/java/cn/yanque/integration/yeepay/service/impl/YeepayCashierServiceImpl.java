@@ -5,6 +5,11 @@ import cn.hutool.core.date.DateUtil;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.config.YeepayProperties;
+import cn.yanque.integration.payment.pojo.req.PaymentRefundReq;
+import cn.yanque.integration.payment.pojo.req.PaymentUnifiedOrderReq;
+import cn.yanque.integration.payment.pojo.res.PaymentRefundRes;
+import cn.yanque.integration.payment.pojo.res.PaymentUnifiedOrderRes;
+import cn.yanque.integration.payment.service.PaymentCashierService;
 import cn.yanque.integration.yeepay.pojo.req.YeepayRefundReq;
 import cn.yanque.integration.yeepay.pojo.req.YeepayUnifiedOrderReq;
 import cn.yanque.integration.yeepay.pojo.res.YeepayRefundRes;
@@ -15,6 +20,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.yeepay.yop.sdk.service.common.request.YopRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +28,8 @@ import java.util.Date;
 
 @Service
 @Slf4j
-public class YeepayCashierServiceImpl implements YeepayCashierService {
+@ConditionalOnProperty(prefix = "payment", name = "provider", havingValue = "yeepay")
+public class YeepayCashierServiceImpl implements YeepayCashierService, PaymentCashierService {
 
     @Autowired
     private YeepayGatewayService yeepayGatewayService;
@@ -33,6 +40,39 @@ public class YeepayCashierServiceImpl implements YeepayCashierService {
     @Autowired
     private SysConfigService sysConfigService;
 
+    @Override
+    public PaymentUnifiedOrderRes unifiedOrder(PaymentUnifiedOrderReq req) {
+        YeepayUnifiedOrderReq yeepayReq = new YeepayUnifiedOrderReq();
+        yeepayReq.setOrderNo(req.getOrderNo());
+        yeepayReq.setOrderAmount(req.getOrderAmount());
+        YeepayUnifiedOrderRes yeepayRes = unifiedOrder(yeepayReq);
+
+        PaymentUnifiedOrderRes res = new PaymentUnifiedOrderRes();
+        res.setUniqueOrderNo(yeepayRes.getUniqueOrderNo());
+        res.setCashierUrl(yeepayRes.getCashierUrl());
+        return res;
+    }
+
+    @Override
+    public PaymentRefundRes refund(PaymentRefundReq req) {
+        YeepayRefundReq yeepayReq = new YeepayRefundReq();
+        yeepayReq.setOrderNo(req.getOrderNo());
+        yeepayReq.setUniqueOrderNo(req.getUniqueOrderNo());
+        yeepayReq.setRefundOrderNo(req.getRefundOrderNo());
+        yeepayReq.setRefundAmount(req.getRefundAmount());
+        yeepayReq.setReason(req.getReason());
+        YeepayRefundRes yeepayRes = refund(yeepayReq);
+
+        PaymentRefundRes res = new PaymentRefundRes();
+        res.setCode(yeepayRes.getCode());
+        res.setMessage(yeepayRes.getMessage());
+        res.setUniqueRefundNo(yeepayRes.getUniqueRefundNo());
+        res.setRefundRequestId(yeepayRes.getRefundRequestId());
+        res.setStatus(yeepayRes.getStatus());
+        return res;
+    }
+
+    @Override
     public YeepayUnifiedOrderRes unifiedOrder(YeepayUnifiedOrderReq req) {
         if (isMockMode()) {
             YeepayUnifiedOrderRes res = new YeepayUnifiedOrderRes();
@@ -58,6 +98,7 @@ public class YeepayCashierServiceImpl implements YeepayCashierService {
         return JSONObject.parseObject(result.toJSONString(), YeepayUnifiedOrderRes.class);
     }
 
+    @Override
     public YeepayRefundRes refund(YeepayRefundReq req) {
         if (isMockMode()) {
             YeepayRefundRes res = new YeepayRefundRes();

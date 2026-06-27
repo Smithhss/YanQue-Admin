@@ -12,6 +12,7 @@ import com.yeepay.yop.sdk.service.common.callback.handler.YopCallbackHandlerFact
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
@@ -19,6 +20,7 @@ import java.util.Set;
 
 @Component
 @Slf4j
+@ConditionalOnProperty(prefix = "payment", name = "provider", havingValue = "yeepay")
 public class YeepayRefundHandle implements YopCallbackHandler {
 
 

@@ -4,9 +4,11 @@ import com.yeepay.yop.sdk.service.common.callback.YopCallback;
 import com.yeepay.yop.sdk.service.common.callback.handler.YopCallbackHandler;
 import com.yeepay.yop.sdk.service.common.callback.handler.YopCallbackHandlerFactory;
 import jakarta.annotation.PostConstruct;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(prefix = "payment", name = "provider", havingValue = "yeepay")
 public class YeepaySettleSuccessHandle implements YopCallbackHandler {
 
     @PostConstruct
