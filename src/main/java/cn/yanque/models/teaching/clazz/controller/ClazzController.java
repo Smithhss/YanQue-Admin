@@ -46,7 +46,7 @@ public class ClazzController {
      * @param req 班级修改请求
      * @return 被修改的班级ID
      */
-    @PutMapping("{id}")
+    @PutMapping("{id:\\d+}")
     @Operation(description = "修改班级")
     public ApiResponse<ClazzUpdateRes> updateClazz(@Parameter(description = "班级ID") @PathVariable Long id,
                                                    @Valid @RequestBody ClazzUpdateReq req) {
@@ -60,7 +60,7 @@ public class ClazzController {
      * @param id 班级ID
      * @return 被删除的班级ID
      */
-    @DeleteMapping("{id}")
+    @DeleteMapping("{id:\\d+}")
     @Operation(description = "删除班级")
     public ApiResponse<ClazzDeleteRes> deleteClazz(@Parameter(description = "班级ID") @PathVariable Long id) {
         return ApiResponse.success(clazzService.deleteClazz(id));
@@ -72,7 +72,7 @@ public class ClazzController {
      * @param id 班级ID
      * @return 班级详情，包含班主任、校区、课程名称
      */
-    @GetMapping("{id}")
+    @GetMapping("{id:\\d+}")
     @Operation(description = "根据ID查询班级")
     public ApiResponse<ClazzDetailRes> getClazzById(@Parameter(description = "班级ID") @PathVariable Long id) {
         return ApiResponse.success(clazzService.getClazzById(id));
