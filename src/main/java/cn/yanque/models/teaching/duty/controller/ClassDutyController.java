@@ -113,7 +113,7 @@ public class ClassDutyController {
      * @param dutyDate 值班日期
      * @return 当天排班数据
      */
-    @GetMapping("date")
+    @GetMapping("by-date")
     @Operation(description = "按日期查询值班")
     public ApiResponse<ClassDutyDateRes> getDateDuty(@RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") Date dutyDate) {
         return ApiResponse.success(classDutyService.getDateDuty(dutyDate));
@@ -125,7 +125,7 @@ public class ClassDutyController {
      * @param req 保存请求
      * @return 保存数量
      */
-    @PutMapping("date")
+    @PutMapping("by-date")
     @Operation(description = "按日期保存值班")
     public ApiResponse<ClassDutyDateSaveRes> saveDateDuty(@Valid @RequestBody ClassDutyDateSaveReq req) {
         return ApiResponse.success(classDutyService.saveDateDuty(req));

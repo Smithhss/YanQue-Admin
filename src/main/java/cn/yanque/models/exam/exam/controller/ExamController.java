@@ -6,14 +6,11 @@ import cn.yanque.models.exam.exam.biz.ExamBiz;
 import cn.yanque.models.exam.exam.pojo.vo.req.ExamAnswerVisibleReq;
 import cn.yanque.models.exam.exam.pojo.vo.req.ExamPageReq;
 import cn.yanque.models.exam.exam.pojo.vo.req.ExamSaveReq;
-import cn.yanque.models.exam.exam.pojo.vo.req.ExamSubmissionGradeReq;
 import cn.yanque.models.exam.exam.pojo.vo.req.ExamSubmissionPageReq;
 import cn.yanque.models.exam.exam.pojo.vo.res.ExamDeleteRes;
 import cn.yanque.models.exam.exam.pojo.vo.res.ExamDetailRes;
 import cn.yanque.models.exam.exam.pojo.vo.res.ExamPageRes;
 import cn.yanque.models.exam.exam.pojo.vo.res.ExamSaveRes;
-import cn.yanque.models.exam.exam.pojo.vo.res.ExamSubmissionDetailRes;
-import cn.yanque.models.exam.exam.pojo.vo.res.ExamSubmissionGradeRes;
 import cn.yanque.models.exam.exam.pojo.vo.res.ExamSubmissionPageRes;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -67,19 +64,6 @@ public class ExamController {
     public ApiResponse<PageResult<ExamSubmissionPageRes>> pageSubmissions(@Parameter(description = "考试ID") @PathVariable Long id,
                                                                           @Valid @ModelAttribute ExamSubmissionPageReq req) {
         return ApiResponse.success(examBiz.pageSubmissions(id, req));
-    }
-
-    @GetMapping("submissions/{recordId}")
-    @Operation(description = "查询考试答卷详情")
-    public ApiResponse<ExamSubmissionDetailRes> getSubmissionDetail(@Parameter(description = "考试记录ID") @PathVariable Long recordId) {
-        return ApiResponse.success(examBiz.getSubmissionDetail(recordId));
-    }
-
-    @PutMapping("submissions/{recordId}/grade")
-    @Operation(description = "批改考试答卷")
-    public ApiResponse<ExamSubmissionGradeRes> gradeSubmission(@Parameter(description = "考试记录ID") @PathVariable Long recordId,
-                                                               @Valid @RequestBody ExamSubmissionGradeReq req) {
-        return ApiResponse.success(examBiz.gradeSubmission(recordId, req));
     }
 
     @GetMapping

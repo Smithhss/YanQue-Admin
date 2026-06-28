@@ -42,7 +42,7 @@ public class StudentFollowupRecordController {
         return ApiResponse.success(studentFollowupRecordService.page(req));
     }
 
-    @GetMapping("stats")
+    @GetMapping("by-stats")
     @Operation(description = "查询学生回访统计")
     public ApiResponse<StudentFollowupRecordStatsRes> stats() {
         return ApiResponse.success(studentFollowupRecordService.stats());

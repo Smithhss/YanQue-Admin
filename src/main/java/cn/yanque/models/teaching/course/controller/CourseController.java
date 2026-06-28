@@ -4,15 +4,12 @@ import cn.yanque.common.api.ApiResponse;
 import cn.yanque.common.api.PageResult;
 import cn.yanque.models.teaching.course.pojo.vo.req.CourseCreateReq;
 import cn.yanque.models.teaching.course.pojo.vo.req.CourseDetailCreateReq;
-import cn.yanque.models.teaching.course.pojo.vo.req.CourseDetailUpdateReq;
 import cn.yanque.models.teaching.course.pojo.vo.req.CoursePageReq;
 import cn.yanque.models.teaching.course.pojo.vo.req.CourseUpdateReq;
 import cn.yanque.models.teaching.course.pojo.vo.res.CourseCreateRes;
-import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailCreateRes;
-import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailDeleteRes;
-import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailItemRes;
-import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailUpdateRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CourseDeleteRes;
+import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailCreateRes;
+import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailItemRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CourseDetailRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CoursePageRes;
 import cn.yanque.models.teaching.course.pojo.vo.res.CourseUpdateRes;
@@ -116,45 +113,6 @@ public class CourseController {
     public ApiResponse<CourseDetailCreateRes> addCourseDetail(@Parameter(description = "课程ID") @PathVariable Long courseId,
                                                               @Valid @RequestBody CourseDetailCreateReq req) {
         return ApiResponse.success(courseService.addCourseDetail(courseId, req));
-    }
-
-    /**
-     * 修改课程详情。
-     *
-     * @param id  课程详情ID
-     * @param req 课程详情修改请求
-     * @return 被修改的课程详情ID
-     */
-    @PutMapping("details/{id}")
-    @Operation(description = "修改课程详情")
-    public ApiResponse<CourseDetailUpdateRes> updateCourseDetail(@Parameter(description = "课程详情ID") @PathVariable Long id,
-                                                                 @Valid @RequestBody CourseDetailUpdateReq req) {
-        req.setId(id);
-        return ApiResponse.success(courseService.updateCourseDetail(req));
-    }
-
-    /**
-     * 删除课程详情。
-     *
-     * @param id 课程详情ID
-     * @return 被删除的课程详情ID
-     */
-    @DeleteMapping("details/{id}")
-    @Operation(description = "删除课程详情")
-    public ApiResponse<CourseDetailDeleteRes> deleteCourseDetail(@Parameter(description = "课程详情ID") @PathVariable Long id) {
-        return ApiResponse.success(courseService.deleteCourseDetail(id));
-    }
-
-    /**
-     * 根据ID查询课程详情。
-     *
-     * @param id 课程详情ID
-     * @return 课程详情
-     */
-    @GetMapping("details/{id}")
-    @Operation(description = "根据ID查询课程详情")
-    public ApiResponse<CourseDetailItemRes> getCourseDetailById(@Parameter(description = "课程详情ID") @PathVariable Long id) {
-        return ApiResponse.success(courseService.getCourseDetailById(id));
     }
 
     /**
