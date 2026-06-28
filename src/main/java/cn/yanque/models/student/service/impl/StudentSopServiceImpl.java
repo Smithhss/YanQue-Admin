@@ -84,7 +84,10 @@ public class StudentSopServiceImpl implements StudentSopService {
         studentSop.setSopTime(req.getSopTime());
         studentSop.setStatus(SOP_STATUS_COMPLETED);
         studentSop.setUpdatedAt(new Date());
-        studentSopMapper.completeSop(studentSop);
+        int rows = studentSopMapper.completeSop(studentSop);
+        if (rows == 0) {
+            throw BusinessException.DateError.newInstance("只有已分配的SOP可以完成");
+        }
 
         StudentSopCompleteRes res = new StudentSopCompleteRes();
         res.setId(id);

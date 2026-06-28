@@ -1,6 +1,7 @@
 package cn.yanque.models.dorm.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.EnableStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.dorm.mapper.DormBuildingMapper;
 import cn.yanque.models.dorm.mapper.DormRoomMapper;
@@ -38,7 +39,7 @@ public class DormBuildingServiceImpl implements DormBuildingService {
         building.setGenderType(req.getGenderType());
         building.setManagerName(req.getManagerName());
         building.setManagerPhone(req.getManagerPhone());
-        building.setStatus("ENABLED");
+        building.setStatus(EnableStatusEnum.ENABLED.name());
         building.setCreatedAt(new Date());
         building.setUpdatedAt(new Date());
         buildingMapper.insert(building);
@@ -55,7 +56,7 @@ public class DormBuildingServiceImpl implements DormBuildingService {
         building.setGenderType(req.getGenderType());
         building.setManagerName(req.getManagerName());
         building.setManagerPhone(req.getManagerPhone());
-        building.setStatus(req.getStatus() == null ? "ENABLED" : req.getStatus());
+        building.setStatus(req.getStatus() == null ? EnableStatusEnum.ENABLED.name() : req.getStatus());
         building.setUpdatedAt(new Date());
         int rows = buildingMapper.updateById(building);
         if (rows == 0) {

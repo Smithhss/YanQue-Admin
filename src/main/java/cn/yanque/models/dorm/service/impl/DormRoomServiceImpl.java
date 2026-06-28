@@ -1,6 +1,7 @@
 package cn.yanque.models.dorm.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.EnableStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.dorm.enums.DormBedStatusEnum;
 import cn.yanque.models.dorm.mapper.DormBedMapper;
@@ -49,7 +50,7 @@ public class DormRoomServiceImpl implements DormRoomService {
         room.setFloor(req.getFloor() == null ? 1 : req.getFloor());
         room.setCapacity(req.getCapacity());
         room.setRoomType(req.getRoomType());
-        room.setStatus("ENABLED");
+        room.setStatus(EnableStatusEnum.ENABLED.name());
         room.setCreatedAt(new Date());
         room.setUpdatedAt(new Date());
         roomMapper.insert(room);
@@ -80,7 +81,7 @@ public class DormRoomServiceImpl implements DormRoomService {
         room.setFloor(req.getFloor());
         room.setCapacity(req.getCapacity());
         room.setRoomType(req.getRoomType());
-        room.setStatus(req.getStatus() == null ? "ENABLED" : req.getStatus());
+        room.setStatus(req.getStatus() == null ? EnableStatusEnum.ENABLED.name() : req.getStatus());
         room.setUpdatedAt(new Date());
         int rows = roomMapper.updateById(room);
         if (rows == 0) {

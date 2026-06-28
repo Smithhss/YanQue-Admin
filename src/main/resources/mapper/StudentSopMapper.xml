@@ -108,5 +108,6 @@
             status = #{status},
             updated_at = #{updatedAt}
         where id = #{id}
+          and status = 'ASSIGNED'
     </update>
 </mapper>

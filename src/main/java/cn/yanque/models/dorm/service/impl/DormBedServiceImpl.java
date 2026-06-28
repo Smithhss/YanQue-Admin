@@ -61,7 +61,10 @@ public class DormBedServiceImpl implements DormBedService {
         existing.setStatus(req.getStatus() == null ? DormBedStatusEnum.FREE.name() : req.getStatus());
         existing.setCurrentStudentId(null);
         existing.setUpdatedAt(new Date());
-        bedMapper.updateById(existing);
+        int rows = bedMapper.updateById(existing);
+        if (rows == 0) {
+            throw BusinessException.DormBedNotExist;
+        }
         return req.getId();
     }
 
@@ -75,7 +78,10 @@ public class DormBedServiceImpl implements DormBedService {
         if (DormBedStatusEnum.OCCUPIED.name().equals(existing.getStatus())) {
             throw BusinessException.DormBedOccupied;
         }
-        bedMapper.deleteById(id);
+        int rows = bedMapper.deleteById(id);
+        if (rows == 0) {
+            throw BusinessException.DormBedNotExist;
+        }
         return id;
     }
 
