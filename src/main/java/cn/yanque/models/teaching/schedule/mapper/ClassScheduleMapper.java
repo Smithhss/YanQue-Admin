@@ -93,4 +93,24 @@ public interface ClassScheduleMapper {
      * @return 重复分组数量
      */
     int countDuplicateTeacherSchedule();
+
+    /**
+     * 查询指定日期已被其他班级占用的老师ID列表。
+     *
+     * @param scheduleDate   指定日期
+     * @param excludeClassId 排除的班级ID
+     * @return 已占用的老师ID列表
+     */
+    List<Long> selectOccupiedTeacherIdsByDate(@Param("scheduleDate") Date scheduleDate,
+                                               @Param("excludeClassId") Long excludeClassId);
+
+    /**
+     * 查询指定班级在指定日期的课表记录。
+     *
+     * @param classId      班级ID
+     * @param scheduleDate 指定日期
+     * @return 课表记录
+     */
+    List<ClassScheduleEntity> selectByClassIdAndScheduleDate(@Param("classId") Long classId,
+                                                             @Param("scheduleDate") Date scheduleDate);
 }

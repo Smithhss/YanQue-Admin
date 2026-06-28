@@ -102,4 +102,19 @@
             having cnt > 1
         ) t
     </select>
+
+    <select id="selectOccupiedTeacherIdsByDate" resultType="java.lang.Long">
+        select distinct teacher_id
+        from sys_class_schedule
+        where schedule_date = #{scheduleDate}
+        and class_id != #{excludeClassId}
+        and teacher_id is not null
+    </select>
+
+    <select id="selectByClassIdAndScheduleDate" resultMap="ClassScheduleMap">
+        select <include refid="BaseColumns"/>
+        from sys_class_schedule
+        where class_id = #{classId}
+        and schedule_date = #{scheduleDate}
+    </select>
 </mapper>

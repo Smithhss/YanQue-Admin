@@ -26,6 +26,7 @@ import cn.yanque.models.users.mapper.SysUserMapper;
 import cn.yanque.models.users.pojo.entity.SysUserEntity;
 import cn.yanque.models.users.pojo.vo.res.UserDetailRes;
 import cn.yanque.models.users.service.SysUserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class ClassScheduleServiceImpl implements ClassScheduleService {
 
@@ -261,6 +263,30 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
 
         Date scheduleDate = truncateDate(req.getScheduleDate());
 
+        // 事前冲突检测1: 校验该班级在目标日期是否已有课程
+        List<ClassScheduleEntity> existingOnDate = classScheduleMapper.selectByClassIdAndScheduleDate(classId, scheduleDate);
+        boolean hasClassOnDate = existingOnDate.stream()
+                .anyMatch(s -> ClassScheduleTypeEnum.CLASS.name().equals(s.getClassType()));
+        if (hasClassOnDate) {
+            throw BusinessException.DateError.newInstance("该班级在加课日期已有课程安排");
+        }
+
+        // 事前冲突检测2: 校验指定老师当天是否已被其他班级占用
+        if (req.getTeacherId() != null) {
+            List<Long> occupiedTeacherIds = classScheduleMapper.selectOccupiedTeacherIdsByDate(scheduleDate, classId);
+            if (occupiedTeacherIds.contains(req.getTeacherId())) {
+                throw BusinessException.DateError.newInstance("该老师在此日期已有其他班级的课程安排");
+            }
+        }
+
+        // 节假日提示(不拦截,仅提示)
+        HolidayInfo holidayInfo = holidayService.getHolidayInfo(scheduleDate);
+        if (holidayInfo != null && holidayInfo.getHoliday() != null && holidayInfo.getHoliday()) {
+            // 节假日可继续加课, 但记录日志提示
+            log.warn("加课日期{}是节假日: {}", DateUtil.formatDate(scheduleDate),
+                    holidayInfo.getName() != null ? holidayInfo.getName() : "未知节日");
+        }
+
        // 查询加课日期后面的课表信息
         List<ClassScheduleEntity> oldList = classScheduleMapper.selectByClassIdAndAfterScheduleDate(classId, scheduleDate);
         if (oldList.isEmpty()) {
@@ -280,15 +306,6 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
 
         // 新增新数据
         classScheduleMapper.batchInsert(newList);
-
-        // 判断是否有重复
-        // select teacher_id,schedule_date,count(*) cnt from sys_class_schedule where teacher_id IS NOT NULL group by teacher_id,schedule_date having  cnt > 1
-        int duplicateCount = classScheduleMapper.countDuplicateTeacherSchedule();
-
-        // 有重复抛异常
-        if (duplicateCount > 0) {
-            throw BusinessException.DateError.newInstance("老师同一天存在重复课表");
-        }
 
     }
 
