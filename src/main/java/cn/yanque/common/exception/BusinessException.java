@@ -45,6 +45,7 @@ public class BusinessException extends RuntimeException {
     public static final BusinessException DormAssignmentNotLiving = new BusinessException(19013, "入住记录非在住状态");
     public static final BusinessException DormStudentNotLiving = new BusinessException(19014, "该学生当前未入住,无法调宿");
     public static final BusinessException DormStudentNotOffline = new BusinessException(19015, "仅线下学生可分配宿舍");
+    public static final BusinessException InsufficientCourseHours = new BusinessException(20001, "剩余课时不足");
 
 
 

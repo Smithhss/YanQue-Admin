@@ -91,5 +91,6 @@
         update prepay_order
         set order_status = 'SUCCESS'
         where order_no = #{prepayOrderNo}
+          and order_status = 'PENDING_PAYMENT'
     </update>
 </mapper>

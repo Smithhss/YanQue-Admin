@@ -118,7 +118,10 @@ public class PrepayOrderServiceImpl implements PrepayOrderService {
 
     @Override
     public void updatePrepayOrderSuccess(String prepayOrderNo) {
-        prepayOrderMapper.updatePrepayOrderSuccess(prepayOrderNo);
+        int rows = prepayOrderMapper.updatePrepayOrderSuccess(prepayOrderNo);
+        if (rows == 0) {
+            throw BusinessException.PrepayOrderNotExist;
+        }
     }
 
     private PrepayOrderPageRes buildPrepayOrderPageRes(PrepayOrderEntity order) {

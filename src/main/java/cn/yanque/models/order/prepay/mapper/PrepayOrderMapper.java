@@ -75,5 +75,12 @@ public interface PrepayOrderMapper {
      */
     int deleteById(@Param("id") Long id);
 
-    void updatePrepayOrderSuccess(@Param("prepayOrderNo") String prepayOrderNo);
+    /**
+     * 将预支付订单状态更新为SUCCESS。
+     * WHERE条件包含order_status = 'PENDING_PAYMENT', 防止已支付/已退款订单被重复覆盖。
+     *
+     * @param prepayOrderNo 预支付订单号
+     * @return 影响行数(0表示订单不存在或状态非PENDING_PAYMENT)
+     */
+    int updatePrepayOrderSuccess(@Param("prepayOrderNo") String prepayOrderNo);
 }

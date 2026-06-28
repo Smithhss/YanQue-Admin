@@ -1,6 +1,7 @@
 package cn.yanque.models.student.coursehour.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.student.coursehour.enums.CourseHourChangeTypeEnum;
 import cn.yanque.models.student.coursehour.mapper.StudentCourseHourLogMapper;
 import cn.yanque.models.student.coursehour.mapper.StudentCourseHourMapper;
@@ -68,7 +69,10 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
         // total = used + remaining 守恒:充值进 total,扣减进 used。
         BigDecimal deltaTotal = change.signum() > 0 ? change : BigDecimal.ZERO;
         BigDecimal deltaUsed = change.signum() < 0 ? change.negate() : BigDecimal.ZERO;
-        courseHourMapper.addHours(studentId, deltaTotal, deltaUsed, change);
+        int rows = courseHourMapper.addHours(studentId, deltaTotal, deltaUsed, change);
+        if (rows == 0) {
+            throw BusinessException.InsufficientCourseHours;
+        }
 
         StudentCourseHourEntity after = courseHourMapper.selectByStudentId(studentId);
         writeLog(studentId, CourseHourChangeTypeEnum.ADJUST.name(), change,
@@ -87,7 +91,10 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
     public BigDecimal consume(Long studentId, BigDecimal hours, Long scheduleId, Long operatorId) {
         ensureAccount(studentId);
         // 消耗:used += hours,remaining -= hours。
-        courseHourMapper.addHours(studentId, BigDecimal.ZERO, hours, hours.negate());
+        int rows = courseHourMapper.addHours(studentId, BigDecimal.ZERO, hours, hours.negate());
+        if (rows == 0) {
+            throw BusinessException.InsufficientCourseHours;
+        }
         StudentCourseHourEntity after = courseHourMapper.selectByStudentId(studentId);
         writeLog(studentId, CourseHourChangeTypeEnum.CONSUME.name(), hours.negate(),
                 after.getRemainingHours(), scheduleId, null, operatorId);
@@ -99,7 +106,10 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
     public void revert(Long studentId, BigDecimal hours, Long scheduleId, Long operatorId) {
         ensureAccount(studentId);
         // 回退:used -= hours,remaining += hours。
-        courseHourMapper.addHours(studentId, BigDecimal.ZERO, hours.negate(), hours);
+        int rows = courseHourMapper.addHours(studentId, BigDecimal.ZERO, hours.negate(), hours);
+        if (rows == 0) {
+            throw BusinessException.InsufficientCourseHours;
+        }
         StudentCourseHourEntity after = courseHourMapper.selectByStudentId(studentId);
         writeLog(studentId, CourseHourChangeTypeEnum.REVERT.name(), hours,
                 after.getRemainingHours(), scheduleId, null, operatorId);

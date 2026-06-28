@@ -34,6 +34,7 @@
             remaining_hours = remaining_hours + #{deltaRemaining},
             updated_at = now()
         where student_id = #{studentId}
+          and remaining_hours + #{deltaRemaining} >= 0
     </update>
 
     <select id="selectPage" resultMap="CourseHourMap">
