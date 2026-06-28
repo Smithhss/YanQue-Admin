@@ -7,7 +7,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 入住记录响应对象（联表带出学生与楼栋/房间/床位信息）。
+ * 入住记录响应对象(联表带出学生与楼栋/房间/床位信息)。
  */
 @Data
 @Schema(description = "入住记录响应")
@@ -56,11 +56,11 @@ public class DormAssignmentRes {
 
     /** 退宿日期 */
     @JsonFormat(pattern = "yyyy-MM-dd")
-    @Schema(description = "退宿日期，在住时为null")
+    @Schema(description = "退宿日期,在住时为null")
     private Date checkOutDate;
 
-    /** 状态：LIVING在住/CHECKED_OUT已退宿 */
-    @Schema(description = "状态：LIVING在住/CHECKED_OUT已退宿")
+    /** 状态:LIVING在住/CHECKED_OUT已退宿 */
+    @Schema(description = "状态:LIVING在住/CHECKED_OUT已退宿")
     private String status;
 
     /** 分配操作人ID */

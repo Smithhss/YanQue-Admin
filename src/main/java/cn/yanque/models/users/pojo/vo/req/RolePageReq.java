@@ -11,7 +11,7 @@ import lombok.Data;
 @Schema(description = "角色分页查询请求")
 public class RolePageReq {
 
-    @Schema(description = "关键词，匹配角色编码、角色名称")
+    @Schema(description = "关键词,匹配角色编码,角色名称")
     private String keyword;
 
     @Schema(description = "状态", allowableValues = {"ACTIVE", "INACTIVE"})

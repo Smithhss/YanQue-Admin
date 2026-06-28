@@ -167,7 +167,7 @@ public class ExamQuestionServiceImpl implements ExamQuestionService {
         for (ExamQuestionCourseEntity relation : courseStages) {
             Set<String> validStages = validStageMap.get(relation.getCourseId());
             if (validStages == null || !validStages.contains(relation.getStageName())) {
-                throw BusinessException.DateError.newInstance("课程阶段不存在：" + relation.getStageName());
+                throw BusinessException.DateError.newInstance("课程阶段不存在:" + relation.getStageName());
             }
         }
     }
@@ -206,7 +206,7 @@ public class ExamQuestionServiceImpl implements ExamQuestionService {
                     .map(courseMap::get)
                     .filter(course -> course != null && usedCourseIds.contains(course.getId()))
                     .map(CourseEntity::getCourseName)
-                    .collect(Collectors.joining("、"));
+                    .collect(Collectors.joining(","));
             List<String> courseStageKeys = questionRelations.stream()
                     .map(relation -> relation.getCourseId() + "::" + relation.getStageName())
                     .toList();
@@ -216,7 +216,7 @@ public class ExamQuestionServiceImpl implements ExamQuestionService {
                         String courseName = course == null ? String.valueOf(relation.getCourseId()) : course.getCourseName();
                         return courseName + " / " + relation.getStageName();
                     })
-                    .collect(Collectors.joining("、"));
+                    .collect(Collectors.joining(","));
             record.setCourseIds(recordCourseIds);
             record.setCourseNames(courseNames);
             record.setCourseStageKeys(courseStageKeys);

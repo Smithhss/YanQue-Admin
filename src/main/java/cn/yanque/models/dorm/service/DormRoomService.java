@@ -11,13 +11,13 @@ import cn.yanque.models.dorm.pojo.vo.res.DormRoomRes;
  */
 public interface DormRoomService {
 
-    /** 新增房间（可按容量自动生成床位），返回新房间ID。 */
+    /** 新增房间(可按容量自动生成床位),返回新房间ID。 */
     Long addRoom(DormRoomCreateReq req);
 
-    /** 修改房间，返回房间ID。 */
+    /** 修改房间,返回房间ID。 */
     Long updateRoom(DormRoomUpdateReq req);
 
-    /** 删除房间（房间下存在床位时不允许删除），返回房间ID。 */
+    /** 删除房间(房间下存在床位时不允许删除),返回房间ID。 */
     Long deleteRoom(Long id);
 
     /** 查询房间详情。 */

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 班级管理接口。
  * <p>
- * 班级关联班主任、校区和课程，前端展示时使用后端返回的名称字段。
+ * 班级关联班主任,校区和课程,前端展示时使用后端返回的名称字段。
  */
 @RestController
 @RequestMapping("/api/classes")
@@ -70,7 +70,7 @@ public class ClazzController {
      * 根据ID查询班级。
      *
      * @param id 班级ID
-     * @return 班级详情，包含班主任、校区、课程名称
+     * @return 班级详情,包含班主任,校区,课程名称
      */
     @GetMapping("{id:\\d+}")
     @Operation(description = "根据ID查询班级")
@@ -82,7 +82,7 @@ public class ClazzController {
      * 分页查询班级。
      *
      * @param req 分页和筛选条件
-     * @return 班级分页结果，包含班主任、校区、课程名称
+     * @return 班级分页结果,包含班主任,校区,课程名称
      */
     @GetMapping
     @Operation(description = "分页查询班级")

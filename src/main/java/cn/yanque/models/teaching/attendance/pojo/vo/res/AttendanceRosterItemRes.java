@@ -11,7 +11,7 @@ public class AttendanceRosterItemRes {
 
     private String studentNo;
 
-    /** 已点名状态；未点名为 null */
+    /** 已点名状态;未点名为 null */
     private String status;
 
     private String leaveReason;

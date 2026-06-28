@@ -6,7 +6,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 课程详情实体，对应 sys_course_detail 表。
+ * 课程详情实体,对应 sys_course_detail 表。
  */
 @Data
 public class CourseDetailEntity {
@@ -17,7 +17,7 @@ public class CourseDetailEntity {
     /** 所属课程ID */
     private Long courseId;
 
-    /** 阶段名称，例如基础、进阶、项目 */
+    /** 阶段名称,例如基础,进阶,项目 */
     private String stageName;
 
     /** 第几天上课 */

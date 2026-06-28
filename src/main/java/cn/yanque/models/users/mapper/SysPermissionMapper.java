@@ -43,9 +43,9 @@ public interface SysPermissionMapper {
     SysPermissionEntity selectByPermissionCode(@Param("permissionCode") String permissionCode);
 
     /**
-     * 查询权限列表，分页由PageHelper在Service层控制。
+     * 查询权限列表,分页由PageHelper在Service层控制。
      *
-     * @param keyword        权限编码、权限名称或接口路径关键字
+     * @param keyword        权限编码,权限名称或接口路径关键字
      * @param parentId       父级权限ID
      * @param permissionType 权限类型
      * @param status         权限状态

@@ -13,7 +13,7 @@ import cn.yanque.models.users.pojo.vo.res.PermissionUpdateRes;
 /**
  * 权限管理业务接口。
  * <p>
- * 权限支持父子关系，类型包括 MENU、API、BUTTON，其中 API 权限用于接口拦截校验。
+ * 权限支持父子关系,类型包括 MENU,API,BUTTON,其中 API 权限用于接口拦截校验。
  */
 public interface SysPermissionService {
 
@@ -28,7 +28,7 @@ public interface SysPermissionService {
     /**
      * 修改权限。
      *
-     * @param req 权限修改请求，ID由Controller从路径参数写入
+     * @param req 权限修改请求,ID由Controller从路径参数写入
      * @return 被修改的权限ID
      */
     PermissionUpdateRes updatePermission(PermissionUpdateReq req);

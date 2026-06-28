@@ -51,7 +51,7 @@ public interface SysConfigMapper {
     SysConfigEntity selectByKey(@Param("key") String key);
 
     /**
-     * 查询配置列表，分页由PageHelper在Service层控制。
+     * 查询配置列表,分页由PageHelper在Service层控制。
      *
      * @param keyword 配置key或配置值关键字
      * @return 配置列表

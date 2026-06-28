@@ -22,6 +22,6 @@ public interface DormRoomMapper {
 
     int deleteById(@Param("id") Long id);
 
-    /** 统计某楼栋下的房间数（楼栋删除前置校验用）。 */
+    /** 统计某楼栋下的房间数(楼栋删除前置校验用)。 */
     int countByBuildingId(@Param("buildingId") Long buildingId);
 }

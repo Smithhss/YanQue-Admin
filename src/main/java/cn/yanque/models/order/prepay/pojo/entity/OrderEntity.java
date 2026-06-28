@@ -8,8 +8,8 @@ import java.util.Date;
 /**
  * 支付订单实体。
  *
- * <p>学生在支付页点击下单后生成正式支付订单，用于记录支付订单号、学生信息、
- * 产品信息、关联的预支付订单号以及支付状态。</p>
+ * <p>学生在支付页点击下单后生成正式支付订单,用于记录支付订单号,学生信息,
+ * 产品信息,关联的预支付订单号以及支付状态。</p>
  */
 @Data
 public class OrderEntity {
@@ -35,7 +35,7 @@ public class OrderEntity {
     /** 订单支付金额 */
     private BigDecimal orderAmount;
 
-    /** 已申请退款金额，包含退款处理中和退款成功金额 */
+    /** 已申请退款金额,包含退款处理中和退款成功金额 */
     private BigDecimal refundedAmount;
 
     /** 预支付订单号 */

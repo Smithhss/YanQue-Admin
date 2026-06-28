@@ -34,7 +34,7 @@ public class DormRoomController {
     private DormRoomService dormRoomService;
 
     @PostMapping
-    @Operation(description = "添加宿舍房间（可自动生成床位）")
+    @Operation(description = "添加宿舍房间(可自动生成床位)")
     public ApiResponse<Long> addRoom(@Valid @RequestBody DormRoomCreateReq req) {
         return ApiResponse.success(dormRoomService.addRoom(req));
     }

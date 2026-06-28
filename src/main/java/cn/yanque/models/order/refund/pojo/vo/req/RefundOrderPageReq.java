@@ -14,7 +14,7 @@ public class RefundOrderPageReq {
     @Schema(description = "原支付订单号")
     private String paymentOrderNo;
 
-    @Schema(description = "退款状态：INIT初始化，PROCESSING退款处理中，SUCCESS退款成功，FAIL退款失败，CLOSED已关闭")
+    @Schema(description = "退款状态:INIT初始化,PROCESSING退款处理中,SUCCESS退款成功,FAIL退款失败,CLOSED已关闭")
     private String status;
 
     @Min(value = 1, message = "页码不能小于1")

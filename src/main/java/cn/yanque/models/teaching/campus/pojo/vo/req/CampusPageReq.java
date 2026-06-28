@@ -11,8 +11,8 @@ import lombok.Data;
 @Schema(description = "校区分页查询请求")
 public class CampusPageReq {
 
-    /** 搜索关键字，匹配校区地点、负责人、负责人电话 */
-    @Schema(description = "关键词，匹配校区地点、负责人、负责人电话")
+    /** 搜索关键字,匹配校区地点,负责人,负责人电话 */
+    @Schema(description = "关键词,匹配校区地点,负责人,负责人电话")
     private String keyword;
 
     /** 当前页码 */

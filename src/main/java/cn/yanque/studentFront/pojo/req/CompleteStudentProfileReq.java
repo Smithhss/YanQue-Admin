@@ -29,7 +29,7 @@ public class CompleteStudentProfileReq {
     private String education;
 
     @NotBlank(message = "性别不能为空")
-    @Schema(description = "性别：MALE男/FEMALE女")
+    @Schema(description = "性别:MALE男/FEMALE女")
     private String gender;
 
     @NotNull(message = "届数不能为空")

@@ -11,8 +11,8 @@ import lombok.Data;
 @Schema(description = "宿舍楼栋分页查询请求")
 public class DormBuildingPageReq {
 
-    /** 搜索关键字，匹配楼栋名称、宿管姓名、宿管电话 */
-    @Schema(description = "关键词，匹配楼栋名称/宿管姓名/宿管电话")
+    /** 搜索关键字,匹配楼栋名称,宿管姓名,宿管电话 */
+    @Schema(description = "关键词,匹配楼栋名称/宿管姓名/宿管电话")
     private String keyword;
 
     /** 按校区过滤 */

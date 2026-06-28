@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 调宿请求对象：把学生当前在住床位调换到新床位。
+ * 调宿请求对象:把学生当前在住床位调换到新床位。
  */
 @Data
 @Schema(description = "调宿请求")

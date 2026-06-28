@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 班级课表实体，对应 sys_class_schedule 表。
+ * 班级课表实体,对应 sys_class_schedule 表。
  */
 @Data
 public class ClassScheduleEntity {
@@ -16,19 +16,19 @@ public class ClassScheduleEntity {
     /** 班级ID */
     private Long classId;
 
-    /** 老师用户ID，生成课表后再分配 */
+    /** 老师用户ID,生成课表后再分配 */
     private Long teacherId;
 
     /** 上课日期 */
     private Date scheduleDate;
 
-    /** 课程详情ID，自习和放假可为空 */
+    /** 课程详情ID,自习和放假可为空 */
     private Long courseDetailId;
 
     /** 课程内容快照 */
     private String courseContent;
 
-    /** 上课类型：CLASS、SELF_STUDY、HOLIDAY */
+    /** 上课类型:CLASS,SELF_STUDY,HOLIDAY */
     private String classType;
 
     /** 创建时间 */

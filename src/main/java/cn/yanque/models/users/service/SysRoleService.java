@@ -15,7 +15,7 @@ import cn.yanque.models.users.pojo.vo.res.RoleUpdateRes;
 /**
  * 角色管理业务接口。
  * <p>
- * 角色用于承载一组权限，用户通过绑定角色获得接口权限。
+ * 角色用于承载一组权限,用户通过绑定角色获得接口权限。
  */
 public interface SysRoleService {
 
@@ -30,7 +30,7 @@ public interface SysRoleService {
     /**
      * 修改角色。
      *
-     * @param req 角色修改请求，ID由Controller从路径参数写入
+     * @param req 角色修改请求,ID由Controller从路径参数写入
      * @return 被修改的角色ID
      */
     RoleUpdateRes updateRole(RoleUpdateReq req);
@@ -47,7 +47,7 @@ public interface SysRoleService {
      * 根据ID查询角色详情。
      *
      * @param id 角色ID
-     * @return 角色详情，包含该角色拥有的权限ID
+     * @return 角色详情,包含该角色拥有的权限ID
      */
     RoleDetailRes getRoleById(Long id);
 
@@ -62,7 +62,7 @@ public interface SysRoleService {
     /**
      * 给角色分配权限。
      * <p>
-     * 当前实现是覆盖式分配：先删除角色原有权限关系，再插入本次提交的权限ID。
+     * 当前实现是覆盖式分配:先删除角色原有权限关系,再插入本次提交的权限ID。
      *
      * @param roleId 角色ID
      * @param req    权限ID列表

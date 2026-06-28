@@ -8,6 +8,6 @@ import lombok.Data;
 public class CreatePaymentOrderRes {
 
     /** 收银台地址 */
-    @Schema(description = "收银台地址，前端跳转到该地址完成支付", example = "https://cashier.example.com/pay?token=xxx")
+    @Schema(description = "收银台地址,前端跳转到该地址完成支付", example = "https://cashier.example.com/pay?token=xxx")
     private String cashierUrl;
 }

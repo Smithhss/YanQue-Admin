@@ -18,7 +18,7 @@ public class StudentLearningPlanEntity {
 
     private Long sopId;
 
-    /** 开始学习日期，每天连续生成学习日历，不跳过周六日。 */
+    /** 开始学习日期,每天连续生成学习日历,不跳过周六日。 */
     private Date startDate;
 
     private String status;

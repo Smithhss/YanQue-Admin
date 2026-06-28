@@ -11,8 +11,8 @@ import lombok.Data;
 @Schema(description = "产品分页查询请求")
 public class ProductPageReq {
 
-    /** 搜索关键字，匹配课程内容 */
-    @Schema(description = "关键词，匹配课程内容")
+    /** 搜索关键字,匹配课程内容 */
+    @Schema(description = "关键词,匹配课程内容")
     private String keyword;
 
     /** 当前页码 */

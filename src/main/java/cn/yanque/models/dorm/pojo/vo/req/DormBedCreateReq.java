@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 新增床位请求对象（用于手动补床）。
+ * 新增床位请求对象(用于手动补床)。
  */
 @Data
 @Schema(description = "创建床位请求")

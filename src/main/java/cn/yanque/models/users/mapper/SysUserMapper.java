@@ -42,7 +42,7 @@ public interface SysUserMapper {
     List<SysUserEntity> selectByIds(@Param("ids") List<Long> ids);
 
     /**
-     * 按用户名查询用户，登录时使用。
+     * 按用户名查询用户,登录时使用。
      *
      * @param username 用户名
      * @return 用户实体
@@ -50,11 +50,11 @@ public interface SysUserMapper {
     SysUserEntity selectByUsername(@Param("username") String username);
 
     /**
-     * 查询用户列表，分页由PageHelper在Service层控制。
+     * 查询用户列表,分页由PageHelper在Service层控制。
      *
-     * @param keyword  用户名、昵称、真实姓名关键字
+     * @param keyword  用户名,昵称,真实姓名关键字
      * @param status   用户状态
-     * @param roleCode 角色编码，用于筛选某个角色下的用户
+     * @param roleCode 角色编码,用于筛选某个角色下的用户
      * @return 用户列表
      */
     List<SysUserEntity> selectPage(@Param("keyword") String keyword,

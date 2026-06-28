@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 学生回访记录实体，对应 student_followup_record 表。
+ * 学生回访记录实体,对应 student_followup_record 表。
  */
 @Data
 public class StudentFollowupRecordEntity {

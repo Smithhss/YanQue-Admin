@@ -13,8 +13,8 @@ import java.util.List;
 @Schema(description = "用户分配角色请求")
 public class UserRoleAssignReq {
 
-    /** 角色ID列表，提交后会覆盖用户原有角色 */
+    /** 角色ID列表,提交后会覆盖用户原有角色 */
     @NotNull(message = "角色ID列表不能为空")
-    @Schema(description = "角色ID列表，传空数组表示清空用户角色")
+    @Schema(description = "角色ID列表,传空数组表示清空用户角色")
     private List<Long> roleIds;
 }

@@ -15,8 +15,8 @@ public class DormRoomPageReq {
     @Schema(description = "楼栋ID过滤")
     private Long buildingId;
 
-    /** 搜索关键字，匹配房间号 */
-    @Schema(description = "关键词，匹配房间号")
+    /** 搜索关键字,匹配房间号 */
+    @Schema(description = "关键词,匹配房间号")
     private String keyword;
 
     /** 当前页码 */

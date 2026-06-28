@@ -42,7 +42,7 @@ public interface ClazzMapper {
     List<ClazzEntity> selectByIds(@Param("ids") List<Long> ids);
 
     /**
-     * 查询班级列表，分页由PageHelper在Service层控制。
+     * 查询班级列表,分页由PageHelper在Service层控制。
      *
      * @param keyword       班级期数关键字
      * @param headTeacherId 班主任ID

@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * 用户管理业务接口。
  * <p>
- * 包含用户增删改查、登录、用户分配角色，以及拦截器中使用的用户信息聚合查询。
+ * 包含用户增删改查,登录,用户分配角色,以及拦截器中使用的用户信息聚合查询。
  */
 public interface SysUserService {
 
@@ -26,7 +26,7 @@ public interface SysUserService {
     /**
      * 修改用户基础信息。
      *
-     * @param req 用户修改请求，ID由Controller从路径参数写入
+     * @param req 用户修改请求,ID由Controller从路径参数写入
      * @return 被修改的用户ID
      */
     UserUpdateRes updateUser(UserUpdateReq req);
@@ -58,7 +58,7 @@ public interface SysUserService {
     /**
      * 给用户分配角色。
      * <p>
-     * 当前实现是覆盖式分配：先删除用户原有角色关系，再插入本次提交的角色ID。
+     * 当前实现是覆盖式分配:先删除用户原有角色关系,再插入本次提交的角色ID。
      *
      * @param userId 用户ID
      * @param req    角色ID列表
@@ -70,14 +70,14 @@ public interface SysUserService {
      * 用户登录。
      *
      * @param req 登录请求
-     * @return token、签名密钥、用户信息、角色和权限
+     * @return token,签名密钥,用户信息,角色和权限
      */
     LoginRes login(LoginReq req);
 
     /**
      * 查询当前用户的聚合信息。
      * <p>
-     * 权限拦截器会使用这个方法获取用户、角色、权限列表。
+     * 权限拦截器会使用这个方法获取用户,角色,权限列表。
      *
      * @param id 用户ID
      * @return 用户聚合信息

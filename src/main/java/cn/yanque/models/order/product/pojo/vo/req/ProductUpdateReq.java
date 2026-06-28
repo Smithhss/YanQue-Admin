@@ -26,7 +26,7 @@ public class ProductUpdateReq {
 
     /** 上课方式 */
     @NotBlank(message = "上课方式不能为空")
-    @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
+    @Schema(description = "上课方式:ONLINE线上,OFFLINE线下")
     private String teachingMode;
 
     /** 产品价格 */

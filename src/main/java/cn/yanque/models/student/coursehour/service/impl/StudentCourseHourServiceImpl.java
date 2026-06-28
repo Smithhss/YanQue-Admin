@@ -45,7 +45,7 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
         StudentCourseHourRes res = new StudentCourseHourRes();
         res.setStudentId(studentId);
         if (entity == null) {
-            // 账户尚未建立的学生视为零余额，便于前端统一展示。
+            // 账户尚未建立的学生视为零余额,便于前端统一展示。
             res.setTotalHours(BigDecimal.ZERO);
             res.setUsedHours(BigDecimal.ZERO);
             res.setRemainingHours(BigDecimal.ZERO);
@@ -65,7 +65,7 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
 
         ensureAccount(studentId);
 
-        // total = used + remaining 守恒：充值进 total，扣减进 used。
+        // total = used + remaining 守恒:充值进 total,扣减进 used。
         BigDecimal deltaTotal = change.signum() > 0 ? change : BigDecimal.ZERO;
         BigDecimal deltaUsed = change.signum() < 0 ? change.negate() : BigDecimal.ZERO;
         courseHourMapper.addHours(studentId, deltaTotal, deltaUsed, change);
@@ -86,7 +86,7 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
     @Transactional(rollbackFor = Exception.class)
     public BigDecimal consume(Long studentId, BigDecimal hours, Long scheduleId, Long operatorId) {
         ensureAccount(studentId);
-        // 消耗：used += hours，remaining -= hours。
+        // 消耗:used += hours,remaining -= hours。
         courseHourMapper.addHours(studentId, BigDecimal.ZERO, hours, hours.negate());
         StudentCourseHourEntity after = courseHourMapper.selectByStudentId(studentId);
         writeLog(studentId, CourseHourChangeTypeEnum.CONSUME.name(), hours.negate(),
@@ -98,7 +98,7 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
     @Transactional(rollbackFor = Exception.class)
     public void revert(Long studentId, BigDecimal hours, Long scheduleId, Long operatorId) {
         ensureAccount(studentId);
-        // 回退：used -= hours，remaining += hours。
+        // 回退:used -= hours,remaining += hours。
         courseHourMapper.addHours(studentId, BigDecimal.ZERO, hours.negate(), hours);
         StudentCourseHourEntity after = courseHourMapper.selectByStudentId(studentId);
         writeLog(studentId, CourseHourChangeTypeEnum.REVERT.name(), hours,
@@ -114,7 +114,7 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
         List<StudentCourseHourEntity> list = courseHourMapper.selectPage(req.getStudentId());
         PageInfo<StudentCourseHourEntity> pageInfo = new PageInfo<>(list);
 
-        // 单表查出账户后，按 studentId 批量取学生姓名/编号组装，不做跨表 join。
+        // 单表查出账户后,按 studentId 批量取学生姓名/编号组装,不做跨表 join。
         Map<Long, StudentEntity> studentMap = Collections.emptyMap();
         if (!list.isEmpty()) {
             List<Long> studentIds = list.stream().map(StudentCourseHourEntity::getStudentId).toList();
@@ -144,7 +144,7 @@ public class StudentCourseHourServiceImpl implements StudentCourseHourService {
     }
 
     /**
-     * 确保学生课时账户存在，不存在则按零余额初始化。
+     * 确保学生课时账户存在,不存在则按零余额初始化。
      */
     private void ensureAccount(Long studentId) {
         if (courseHourMapper.selectByStudentId(studentId) == null) {

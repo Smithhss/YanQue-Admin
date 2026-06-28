@@ -25,10 +25,10 @@ public class DormAssignReq {
     @Schema(description = "床位ID")
     private Long bedId;
 
-    /** 入住日期，不填默认今天 */
+    /** 入住日期,不填默认今天 */
     @JsonFormat(pattern = "yyyy-MM-dd")
     @DateTimeFormat(pattern = "yyyy-MM-dd")
-    @Schema(description = "入住日期（yyyy-MM-dd），不填默认今天")
+    @Schema(description = "入住日期(yyyy-MM-dd),不填默认今天")
     private Date checkInDate;
 
     /** 备注 */

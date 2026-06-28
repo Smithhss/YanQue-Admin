@@ -95,7 +95,7 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CourseDeleteRes deleteCourse(Long id) {
-        // 课程是主表，课程详情和作业标准都是从表；删除课程时先清理从表，避免留下无效数据。
+        // 课程是主表,课程详情和作业标准都是从表;删除课程时先清理从表,避免留下无效数据。
         courseHomeworkTemplateMapper.deleteByCourseId(id);
         courseDetailMapper.deleteByCourseId(id);
         int rows = courseMapper.deleteById(id);
@@ -119,7 +119,7 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     public PageResult<CoursePageRes> pageCourse(CoursePageReq req) {
-        // PageHelper 会拦截紧跟在 startPage 后面的第一条查询 SQL，并自动追加分页。
+        // PageHelper 会拦截紧跟在 startPage 后面的第一条查询 SQL,并自动追加分页。
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
         PageHelper.startPage(pageNum, pageSize);
@@ -132,7 +132,7 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CourseDetailCreateRes addCourseDetail(Long courseId, CourseDetailCreateReq req) {
-        // 详情必须挂在一个已存在的课程下面，先检查课程是否存在。
+        // 详情必须挂在一个已存在的课程下面,先检查课程是否存在。
         CourseEntity course = courseMapper.selectById(courseId);
         if (course == null) {
             throw BusinessException.CourseNotExist;
@@ -199,7 +199,7 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     public List<CourseDetailItemRes> listCourseDetails(Long courseId) {
-        // 先校验课程，再返回该课程下的阶段/天数/上课内容列表。
+        // 先校验课程,再返回该课程下的阶段/天数/上课内容列表。
         CourseEntity course = courseMapper.selectById(courseId);
         if (course == null) {
             throw BusinessException.CourseNotExist;
@@ -289,7 +289,7 @@ public class CourseServiceImpl implements CourseService {
         }
         detail.setStageName(stageName.trim());
 
-        // 线上课程详情只维护阶段；天数和每日内容属于线下课程维度。
+        // 线上课程详情只维护阶段;天数和每日内容属于线下课程维度。
         if (TEACHING_MODE_ONLINE.equals(course.getTeachingMode())) {
             detail.setDayNumber(null);
             detail.setClassContent(null);

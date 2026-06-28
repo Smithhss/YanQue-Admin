@@ -15,8 +15,8 @@ public class DormBedPageReq {
     @Schema(description = "房间ID过滤")
     private Long roomId;
 
-    /** 按状态过滤：FREE/OCCUPIED/LOCKED */
-    @Schema(description = "状态过滤：FREE空闲/OCCUPIED占用/LOCKED锁定")
+    /** 按状态过滤:FREE/OCCUPIED/LOCKED */
+    @Schema(description = "状态过滤:FREE空闲/OCCUPIED占用/LOCKED锁定")
     private String status;
 
     /** 当前页码 */

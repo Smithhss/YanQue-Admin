@@ -44,9 +44,9 @@ public interface CampusMapper {
     List<CampusEntity> selectByIds(@Param("ids") List<Long> ids);
 
     /**
-     * 查询校区列表，分页由PageHelper在Service层控制。
+     * 查询校区列表,分页由PageHelper在Service层控制。
      *
-     * @param keyword 校区地点、负责人或电话关键字
+     * @param keyword 校区地点,负责人或电话关键字
      * @return 校区列表
      */
     List<CampusEntity> selectPage(@Param("keyword") String keyword);

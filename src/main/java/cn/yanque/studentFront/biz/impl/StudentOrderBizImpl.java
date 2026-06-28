@@ -50,7 +50,7 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
     @Override
     public CreatePaymentOrderRes createPaymentOrder(CreatePaymentOrderReq req) {
 
-        // 组装参数，入库
+        // 组装参数,入库
         OrderEntity orderEntity = new OrderEntity();
         BeanUtils.copyProperties(req, orderEntity);
         orderEntity.setStatus(OrderStatusEnum.INIT.name());

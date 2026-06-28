@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class SysConfigService {
 
-    // 系统配置读取频率较高，使用短时间本地缓存减少数据库查询。
+    // 系统配置读取频率较高,使用短时间本地缓存减少数据库查询。
     private final Cache<String, Object> cache = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.SECONDS)
             .maximumSize(10000).build();
@@ -48,7 +48,7 @@ public class SysConfigService {
             throw BusinessException.ConfigExist;
         }
 
-        // 配置变更后清理缓存，避免短时间内读到旧值。
+        // 配置变更后清理缓存,避免短时间内读到旧值。
         cache.invalidate(req.getK());
         SysConfigCreateRes res = new SysConfigCreateRes();
         res.setId(sysConfigEntity.getId());
@@ -77,7 +77,7 @@ public class SysConfigService {
             throw BusinessException.ConfigNotExist;
         }
 
-        // key 可能被修改，所以旧 key 和新 key 的缓存都要清理。
+        // key 可能被修改,所以旧 key 和新 key 的缓存都要清理。
         cache.invalidate(oldConfig.getK());
         cache.invalidate(req.getK());
         SysConfigUpdateRes res = new SysConfigUpdateRes();
@@ -122,7 +122,7 @@ public class SysConfigService {
     }
 
     public <T> T get(SystemConfigItem<T> item) {
-        // 先查本地缓存，缓存没有再查数据库，数据库也没有则使用默认值。
+        // 先查本地缓存,缓存没有再查数据库,数据库也没有则使用默认值。
         Object value = cache.getIfPresent(item.getKey());
         if (value != null) {
             return Convert.convert(item.getClazz(), value);

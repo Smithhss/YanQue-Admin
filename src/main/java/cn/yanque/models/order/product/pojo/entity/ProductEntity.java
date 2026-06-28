@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 订单产品实体，对应 order_product 表。
+ * 订单产品实体,对应 order_product 表。
  */
 @Data
 public class ProductEntity {
@@ -17,7 +17,7 @@ public class ProductEntity {
     /** 课程内容 */
     private String courseContent;
 
-    /** 上课方式：ONLINE线上，OFFLINE线下 */
+    /** 上课方式:ONLINE线上,OFFLINE线下 */
     private String teachingMode;
 
     /** 产品价格 */

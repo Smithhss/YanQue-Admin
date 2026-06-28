@@ -38,10 +38,10 @@ import java.util.Set;
  *
  * <p>核心功能:
  * <ul>
- *   <li>题目的创建、更新、删除、查询
+ *   <li>题目的创建,更新,删除,查询
  *   <li>题目类型校验(单选/多选/判断/填空/简答/编程)
  *   <li>选项校验(选择题必须有选项, 非选择题不能有选项)
- *   <li>答案标准化处理(去空格、转大写、去重、排序)
+ *   <li>答案标准化处理(去空格,转大写,去重,排序)
  *   <li>课程阶段关联管理
  * </ul>
  *
@@ -72,7 +72,7 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
 
     /**
      * 创建题目。
-     * 构建题目实体、课程关联、选项, 调用Service层完成事务性创建。
+     * 构建题目实体,课程关联,选项, 调用Service层完成事务性创建。
      */
     @Override
     public ExamQuestionCreateRes addQuestion(ExamQuestionCreateReq req) {
@@ -87,7 +87,7 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
 
     /**
      * 更新题目。
-     * 构建题目实体、课程关联、选项, 调用Service层完成事务性更新。
+     * 构建题目实体,课程关联,选项, 调用Service层完成事务性更新。
      */
     @Override
     public ExamQuestionUpdateRes updateQuestion(ExamQuestionUpdateReq req) {
@@ -145,14 +145,14 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
 
     /**
      * 构建题目实体。
-     * 校验题目类型、难度、状态, 标准化答案。
+     * 校验题目类型,难度,状态, 标准化答案。
      */
     private ExamQuestionEntity buildQuestion(ExamQuestionCreateReq req) {
         String questionType = normalize(req.getQuestionType());
         String difficulty = normalize(req.getDifficulty());
         String status = normalize(req.getStatus());
         validateIn(questionType, QUESTION_TYPES, "题目类型错误");
-        validateIn(difficulty, DIFFICULTIES, "难度只能是VERY_EASY、EASY、NORMAL、HARD或VERY_HARD");
+        validateIn(difficulty, DIFFICULTIES, "难度只能是VERY_EASY,EASY,NORMAL,HARD或VERY_HARD");
         validateIn(status, STATUSES, "题目状态只能是ENABLED或DISABLED");
 
         String answerContent = normalizeAnswer(questionType, req.getAnswerContent());
@@ -239,7 +239,7 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
 
     /**
      * 标准化答案内容。
-     * 选择题: 去空格、转大写、去重、排序
+     * 选择题: 去空格,转大写,去重,排序
      * 判断题: 只能是TRUE或FALSE
      * 其他题型: 只去首尾空格
      */
@@ -273,7 +273,7 @@ public class ExamQuestionBizImpl implements ExamQuestionBiz {
     }
 
     /**
-     * 标准化字符串: 去首尾空格、转大写。
+     * 标准化字符串: 去首尾空格,转大写。
      */
     private String normalize(String value) {
         return value == null ? null : value.trim().toUpperCase(Locale.ROOT);

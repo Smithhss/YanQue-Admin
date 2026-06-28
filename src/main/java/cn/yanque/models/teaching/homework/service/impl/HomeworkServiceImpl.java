@@ -100,11 +100,11 @@ public class HomeworkServiceImpl implements HomeworkService {
     @Override
     public HomeworkPrepareRes prepareHomework(HomeworkPrepareReq req) {
         ClazzEntity clazz = validateClass(req.getClassId());
-        // 作业按“日期”维度发布，先归一到当天零点，避免时间部分影响查重和课表匹配。
+        // 作业按"日期"维度发布,先归一到当天零点,避免时间部分影响查重和课表匹配。
         Date homeworkDate = DateUtil.beginOfDay(req.getHomeworkDate());
-        // 同一班级同一天只允许发布一份作业，预填阶段提前拦截，减少老师无效上传。
+        // 同一班级同一天只允许发布一份作业,预填阶段提前拦截,减少老师无效上传。
         validateHomeworkNotExists(req.getClassId(), homeworkDate);
-        // 课程内容以当天课表快照为准，前端只负责展示和确认，不让老师手动维护这份关联数据。
+        // 课程内容以当天课表快照为准,前端只负责展示和确认,不让老师手动维护这份关联数据。
         ClassScheduleEntity schedule = getSchedule(req.getClassId(), homeworkDate);
 
         HomeworkPrepareRes res = new HomeworkPrepareRes();
@@ -148,7 +148,7 @@ public class HomeworkServiceImpl implements HomeworkService {
         PageHelper.startPage(pageNum, pageSize);
         List<HomeworkSubmissionEntity> submissions = homeworkSubmissionMapper.selectByHomeworkId(homeworkId);
         PageInfo<HomeworkSubmissionEntity> pageInfo = new PageInfo<>(submissions);
-        // 提交记录分页后再批量补学生信息，保持主分页查询简单，避免PageHelper分页被关联数据影响。
+        // 提交记录分页后再批量补学生信息,保持主分页查询简单,避免PageHelper分页被关联数据影响。
         Map<Long, StudentEntity> studentMap = buildStudentMap(submissions);
         List<HomeworkSubmissionPageRes> records = submissions.stream()
                 .map(item -> buildSubmissionPageRes(item, studentMap.get(item.getStudentId())))
@@ -169,7 +169,7 @@ public class HomeworkServiceImpl implements HomeworkService {
         submission.setScore(req.getScore());
         submission.setTeacherRemark(req.getTeacherRemark());
         submission.setUpdatedAt(new Date());
-        // 批改只更新分数和评语，提交文件、提交时间等学生原始记录不能被批改流程改写。
+        // 批改只更新分数和评语,提交文件,提交时间等学生原始记录不能被批改流程改写。
         if (homeworkSubmissionMapper.updateGrade(submission) == 0) {
             throw BusinessException.DateError.newInstance("提交记录不存在");
         }
@@ -204,7 +204,7 @@ public class HomeworkServiceImpl implements HomeworkService {
                 DateUtil.endOfDay(homeworkDate)
         );
         if (schedules.isEmpty()) {
-            throw BusinessException.DateError.newInstance("该班级当天没有课表，无法发布作业");
+            throw BusinessException.DateError.newInstance("该班级当天没有课表,无法发布作业");
         }
         return schedules.get(0);
     }

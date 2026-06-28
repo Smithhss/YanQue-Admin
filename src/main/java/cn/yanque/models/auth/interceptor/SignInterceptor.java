@@ -34,7 +34,7 @@ public class SignInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
 
-        // JwtAuthInterceptor 已经把登录用户ID放到 request 中，这里按用户维度取签名密钥。
+        // JwtAuthInterceptor 已经把登录用户ID放到 request 中,这里按用户维度取签名密钥。
         Long userId = (Long) request.getAttribute("userId");
         String timestamp = request.getHeader(HEADER_TIMESTAMP);
         String nonce = request.getHeader(HEADER_NONCE);
@@ -58,20 +58,20 @@ public class SignInterceptor implements HandlerInterceptor {
         }
 
         long now = System.currentTimeMillis();
-        // 时间戳只允许在一个较短窗口内有效，避免旧请求被长期保存后再次发送。
+        // 时间戳只允许在一个较短窗口内有效,避免旧请求被长期保存后再次发送。
         if (Math.abs(now - requestTimestamp) > ALLOWED_SKEW_MILLIS) {
             writeUnauthorized(response, "请求超时");
             return false;
         }
 
-        // 登录时下发并写入 Redis 的用户签名密钥，退出或过期后密钥失效。
+        // 登录时下发并写入 Redis 的用户签名密钥,退出或过期后密钥失效。
         String secret = redisUtil.get(SIGN_SECRET_KEY_PREFIX + userId);
         if (isBlank(secret)) {
-            writeUnauthorized(response, "签名密钥已失效，请重新登录");
+            writeUnauthorized(response, "签名密钥已失效,请重新登录");
             return false;
         }
 
-        // nonce 只允许使用一次，setIfAbsent 成功说明这是第一次请求，失败说明可能是重复提交或重放攻击。
+        // nonce 只允许使用一次,setIfAbsent 成功说明这是第一次请求,失败说明可能是重复提交或重放攻击。
         String nonceKey = SIGN_NONCE_KEY_PREFIX + userId + ":" + nonce;
         Boolean nonceSaved = redisUtil.setIfAbsent(nonceKey, "1", NONCE_EXPIRE);
         if (!Boolean.TRUE.equals(nonceSaved)) {
@@ -79,7 +79,7 @@ public class SignInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // 前后端必须使用完全一致的签名原文，否则 HMAC 结果会不同。
+        // 前后端必须使用完全一致的签名原文,否则 HMAC 结果会不同。
         String source = buildSignSource(request, timestamp, nonce);
         String serverSign = hmacSha256Hex(source, secret);
         if (!equalsIgnoreCaseSecure(serverSign, sign)) {
@@ -92,7 +92,7 @@ public class SignInterceptor implements HandlerInterceptor {
 
     private String buildSignSource(HttpServletRequest request, String timestamp, String nonce) {
         String queryString = request.getQueryString() == null ? "" : request.getQueryString();
-        // 签名原文由请求方法、URI、查询参数、时间戳、nonce 组成，每段用换行隔开。
+        // 签名原文由请求方法,URI,查询参数,时间戳,nonce 组成,每段用换行隔开。
         return request.getMethod().toUpperCase()
                 + "\n" + request.getRequestURI()
                 + "\n" + queryString

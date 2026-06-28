@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 试卷实体，对应 exam_paper 表。
+ * 试卷实体,对应 exam_paper 表。
  */
 @Data
 public class ExamPaperEntity {
@@ -20,7 +20,7 @@ public class ExamPaperEntity {
     /** 课程ID */
     private Long courseId;
 
-    /** 阶段名称，为空表示整门课程考试 */
+    /** 阶段名称,为空表示整门课程考试 */
     private String stageName;
 
     /** 总分数 */

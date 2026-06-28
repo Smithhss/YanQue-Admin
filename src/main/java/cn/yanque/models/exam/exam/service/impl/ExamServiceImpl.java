@@ -191,7 +191,7 @@ public class ExamServiceImpl implements ExamService {
         // 根据学生考试记录查询记录信息
         StudentExamRecordEntity record = getRequiredRecord(recordId);
         if (!STATUS_SUBMITTED.equals(record.getStatus())) {
-            throw BusinessException.DateError.newInstance("考试尚未提交，不能查看答卷");
+            throw BusinessException.DateError.newInstance("考试尚未提交,不能查看答卷");
         }
 
         // 查看考试信息
@@ -234,7 +234,7 @@ public class ExamServiceImpl implements ExamService {
     public ExamSubmissionGradeRes gradeSubmission(Long recordId, ExamSubmissionGradeReq req) {
         StudentExamRecordEntity record = getRequiredRecord(recordId);
         if (!STATUS_SUBMITTED.equals(record.getStatus())) {
-            throw BusinessException.DateError.newInstance("考试尚未提交，不能批改");
+            throw BusinessException.DateError.newInstance("考试尚未提交,不能批改");
         }
         List<StudentExamAnswerEntity> answers = studentExamAnswerMapper.selectByRecordId(recordId);
         Map<Long, StudentExamAnswerEntity> answerMap = answers.stream()
@@ -243,10 +243,10 @@ public class ExamServiceImpl implements ExamService {
         for (ExamSubmissionGradeAnswerReq answerReq : req.getAnswers()) {
             StudentExamAnswerEntity answer = answerMap.get(answerReq.getAnswerId());
             if (answer == null) {
-                throw BusinessException.DateError.newInstance("答案记录不存在：" + answerReq.getAnswerId());
+                throw BusinessException.DateError.newInstance("答案记录不存在:" + answerReq.getAnswerId());
             }
             if (OBJECTIVE_QUESTION_TYPES.contains(answer.getQuestionType())) {
-                throw BusinessException.DateError.newInstance("客观题由系统自动判分，不能手动批改");
+                throw BusinessException.DateError.newInstance("客观题由系统自动判分,不能手动批改");
             }
             if (answerReq.getScore().compareTo(answer.getQuestionScore()) > 0) {
                 throw BusinessException.DateError.newInstance("题目得分不能超过题目分值");

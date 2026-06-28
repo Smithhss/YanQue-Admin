@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 学生课时账户实体，对应 student_course_hour 表。
+ * 学生课时账户实体,对应 student_course_hour 表。
  */
 @Data
 public class StudentCourseHourEntity {
@@ -23,7 +23,7 @@ public class StudentCourseHourEntity {
     /** 已消耗课时 */
     private BigDecimal usedHours;
 
-    /** 剩余课时（可为负，表示欠课时） */
+    /** 剩余课时(可为负,表示欠课时) */
     private BigDecimal remainingHours;
 
     /** 创建时间 */

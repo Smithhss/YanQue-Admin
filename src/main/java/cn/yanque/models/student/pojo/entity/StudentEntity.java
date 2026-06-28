@@ -22,7 +22,7 @@ public class StudentEntity {
     /** 手机号 */
     private String studentPhone;
 
-    /** 性别：MALE男/FEMALE女（F014宿舍分配用，历史数据可能为null） */
+    /** 性别:MALE男/FEMALE女(F014宿舍分配用,历史数据可能为null) */
     private String gender;
 
     /** 登录密码 */
@@ -40,10 +40,10 @@ public class StudentEntity {
     /** 专业 */
     private String major;
 
-    /** 上课方式：ONLINE线上，OFFLINE线下 */
+    /** 上课方式:ONLINE线上,OFFLINE线下 */
     private String teachingMode;
 
-    /** 班级ID，线下班必填 */
+    /** 班级ID,线下班必填 */
     private Long classId;
 
     /** 学生标签 */

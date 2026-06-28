@@ -8,18 +8,18 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 班级课表生成规则，对应 sys_config 中的 teaching.schedule.rule。
+ * 班级课表生成规则,对应 sys_config 中的 teaching.schedule.rule。
  */
 @Data
 public class ScheduleRuleConfig {
 
-    /** 上课日，1-7 表示周一到周日 */
+    /** 上课日,1-7 表示周一到周日 */
     private List<Integer> classDays;
 
-    /** 自习日，1-7 表示周一到周日 */
+    /** 自习日,1-7 表示周一到周日 */
     private List<Integer> selfStudyDays;
 
-    /** 固定休息日，1-7 表示周一到周日 */
+    /** 固定休息日,1-7 表示周一到周日 */
     private List<Integer> restDays;
 
     /** 法定节假日是否休息 */
@@ -60,7 +60,7 @@ public class ScheduleRuleConfig {
         }
         for (Integer day : days) {
             if (!all.add(day)) {
-                throw BusinessException.DateError.newInstance("课表规则存在重复星期：" + name + day);
+                throw BusinessException.DateError.newInstance("课表规则存在重复星期:" + name + day);
             }
         }
     }

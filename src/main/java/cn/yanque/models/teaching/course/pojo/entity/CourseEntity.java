@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 课程实体，对应 sys_course 表。
+ * 课程实体,对应 sys_course 表。
  */
 @Data
 public class CourseEntity {
@@ -19,7 +19,7 @@ public class CourseEntity {
     /** 课程天数 */
     private Integer courseDays;
 
-    /** 上课方式：ONLINE线上，OFFLINE线下 */
+    /** 上课方式:ONLINE线上,OFFLINE线下 */
     private String teachingMode;
 
     /** 课程资料路径 */

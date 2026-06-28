@@ -28,7 +28,7 @@ public class CourseCreateReq {
 
     /** 上课方式 */
     @NotBlank(message = "上课方式不能为空")
-    @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
+    @Schema(description = "上课方式:ONLINE线上,OFFLINE线下")
     @EnumValue(enumClass = TeachingModeEnum.class)
     private String teachingMode;
 

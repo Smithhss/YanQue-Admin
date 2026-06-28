@@ -3,7 +3,7 @@ package cn.yanque.common.dataConfig.entity;
 import lombok.Data;
 
 /**
- * 系统配置实体，对应 sys_config 表。
+ * 系统配置实体,对应 sys_config 表。
  */
 @Data
 public class SysConfigEntity {

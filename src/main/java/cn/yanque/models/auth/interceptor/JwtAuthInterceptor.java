@@ -31,7 +31,7 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
 
         String token = authorization.substring(BEARER_PREFIX.length()).trim();
         try {
-            // JWT 密钥从系统配置读取，方便后续通过配置页面调整。
+            // JWT 密钥从系统配置读取,方便后续通过配置页面调整。
             JWT jwt = JWT.of(token).setKey(sysConfigService.get(SysConfig.jwtSecret).getBytes());
             if (!jwt.verify()) {
                 throw new BusinessException(401, "Token无效或已过期");

@@ -27,7 +27,7 @@ public class StudentProductServiceImpl implements StudentProductService {
         try {
             studentProductMapper.insert(studentProduct);
         } catch (DuplicateKeyException e) {
-            throw BusinessException.DateExist.newInstance("学生产品关系已存在，请勿重复提交");
+            throw BusinessException.DateExist.newInstance("学生产品关系已存在,请勿重复提交");
         }
         return studentProduct;
     }

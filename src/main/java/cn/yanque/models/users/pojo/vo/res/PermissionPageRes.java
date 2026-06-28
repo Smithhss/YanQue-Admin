@@ -15,7 +15,7 @@ public class PermissionPageRes {
     @Schema(description = "权限ID")
     private Long id;
 
-    @Schema(description = "父权限ID，根节点为0")
+    @Schema(description = "父权限ID,根节点为0")
     private Long parentId;
 
     @Schema(description = "权限编码")
@@ -24,13 +24,13 @@ public class PermissionPageRes {
     @Schema(description = "权限名称")
     private String permissionName;
 
-    @Schema(description = "权限类型，例如API、MENU、BUTTON")
+    @Schema(description = "权限类型,例如API,MENU,BUTTON")
     private String permissionType;
 
-    @Schema(description = "API路径匹配规则，仅API权限使用")
+    @Schema(description = "API路径匹配规则,仅API权限使用")
     private String apiPath;
 
-    @Schema(description = "排序值，越小越靠前")
+    @Schema(description = "排序值,越小越靠前")
     private Integer sortNum;
 
     @Schema(description = "状态", allowableValues = {"ACTIVE", "INACTIVE"})

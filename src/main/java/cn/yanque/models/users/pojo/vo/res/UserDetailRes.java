@@ -34,7 +34,7 @@ public class UserDetailRes {
     @Schema(description = "飞书 union_id")
     private String unionId;
 
-    @Schema(description = "状态，ACTIVE启用，INACTIVE禁用")
+    @Schema(description = "状态,ACTIVE启用,INACTIVE禁用")
     private String status;
 
     /** 状态中文描述 */

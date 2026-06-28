@@ -22,19 +22,19 @@ public class StudentLoginRes {
     @Schema(description = "已支付但未完善资料时返回的支付订单号")
     private String paymentOrderNo;
 
-    /** JWT token，需要支付时为空 */
+    /** JWT token,需要支付时为空 */
     @Schema(description = "JWT token")
     private String token;
 
-    /** 签名密钥，正式登录后用于学生端接口签名 */
+    /** 签名密钥,正式登录后用于学生端接口签名 */
     @Schema(description = "签名密钥")
     private String signSecret;
 
-    /** 待支付临时token，仅needPay为true时返回 */
+    /** 待支付临时token,仅needPay为true时返回 */
     @Schema(description = "待支付临时token")
     private String pendingPayToken;
 
-    /** 待支付临时签名密钥，仅needPay为true时返回 */
+    /** 待支付临时签名密钥,仅needPay为true时返回 */
     @Schema(description = "待支付临时签名密钥")
     private String pendingPaySignSecret;
 

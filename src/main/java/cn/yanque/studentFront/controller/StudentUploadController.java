@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 学生端上传预签名接口，复用通用upload模块的TOS签名能力。
+ * 学生端上传预签名接口,复用通用upload模块的TOS签名能力。
  */
 @RestController
 @RequestMapping("/student/upload")
@@ -27,7 +27,7 @@ public class StudentUploadController {
     @PostMapping("presign-upload")
     @Operation(description = "获取学生端上传预签名")
     public ApiResponse<UploadPresignRes> createUploadPresign(@Valid @RequestBody UploadPresignReq req) {
-        // 学生端走/student前缀是为了复用学生JWT和签名校验；TOS签名能力仍由通用upload模块提供。
+        // 学生端走/student前缀是为了复用学生JWT和签名校验;TOS签名能力仍由通用upload模块提供。
         return ApiResponse.success(uploadService.createUploadPresign(req));
     }
 }

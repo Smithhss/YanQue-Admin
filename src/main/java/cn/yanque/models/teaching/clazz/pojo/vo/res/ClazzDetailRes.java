@@ -24,7 +24,7 @@ public class ClazzDetailRes {
     @Schema(description = "班主任ID")
     private Long headTeacherId;
 
-    /** 班主任名称，由后端根据用户ID回填 */
+    /** 班主任名称,由后端根据用户ID回填 */
     @Schema(description = "班主任名称")
     private String headTeacherName;
 
@@ -32,7 +32,7 @@ public class ClazzDetailRes {
     @Schema(description = "校区ID")
     private Long campusId;
 
-    /** 校区名称，由后端根据校区ID回填 */
+    /** 校区名称,由后端根据校区ID回填 */
     @Schema(description = "校区名称")
     private String campusName;
 
@@ -40,7 +40,7 @@ public class ClazzDetailRes {
     @Schema(description = "课程ID")
     private Long courseId;
 
-    /** 课程名称，由后端根据课程ID回填 */
+    /** 课程名称,由后端根据课程ID回填 */
     @Schema(description = "课程名称")
     private String courseName;
 

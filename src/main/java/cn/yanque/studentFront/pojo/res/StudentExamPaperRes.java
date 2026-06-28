@@ -33,7 +33,7 @@ public class StudentExamPaperRes {
     /** 课程ID */
     private Long courseId;
 
-    /** 阶段名称，为空表示整门课程考试 */
+    /** 阶段名称,为空表示整门课程考试 */
     private String stageName;
 
     /** 试卷总分 */
@@ -48,7 +48,7 @@ public class StudentExamPaperRes {
     /** 记录状态 */
     private String recordStatus;
 
-    /** 批改状态：PENDING / GRADING / COMPLETED */
+    /** 批改状态:PENDING / GRADING / COMPLETED */
     private String gradingStatus;
 
     /** 题目列表 */

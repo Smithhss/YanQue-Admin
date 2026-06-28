@@ -27,19 +27,19 @@ public class StudentExamSubmissionRes {
     /** 班级期数 */
     private String classPeriod;
 
-    /** 阶段名称，为空表示整门课程考试 */
+    /** 阶段名称,为空表示整门课程考试 */
     private String stageName;
 
     /** 试卷总分 */
     private BigDecimal totalScore;
 
-    /** 当前得分，主观题未批改时只包含已评分题目 */
+    /** 当前得分,主观题未批改时只包含已评分题目 */
     private BigDecimal score;
 
     /** 记录状态 */
     private String recordStatus;
 
-    /** 批改状态：PENDING / GRADING / COMPLETED */
+    /** 批改状态:PENDING / GRADING / COMPLETED */
     private String gradingStatus;
 
     /** 是否已向学生公布答卷判定结果 */

@@ -25,7 +25,7 @@ public class CoursePageRes {
     private Integer courseDays;
 
     /** 上课方式 */
-    @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
+    @Schema(description = "上课方式:ONLINE线上,OFFLINE线下")
     private String teachingMode;
 
     /** 课程资料路径 */

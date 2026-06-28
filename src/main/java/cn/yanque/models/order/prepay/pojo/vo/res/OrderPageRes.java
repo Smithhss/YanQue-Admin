@@ -42,7 +42,7 @@ public class OrderPageRes {
     private BigDecimal orderAmount;
 
     /** 已申请退款金额 */
-    @Schema(description = "已申请退款金额，包含退款处理中和退款成功金额")
+    @Schema(description = "已申请退款金额,包含退款处理中和退款成功金额")
     private BigDecimal refundedAmount;
 
     /** 预支付订单号 */
@@ -50,7 +50,7 @@ public class OrderPageRes {
     private String prepayOrderNo;
 
     /** 支付订单状态 */
-    @Schema(description = "订单状态：INIT初始化，FAIL失败，PROCESSING支付中，SUCCESS支付成功，TIMEOUT超时")
+    @Schema(description = "订单状态:INIT初始化,FAIL失败,PROCESSING支付中,SUCCESS支付成功,TIMEOUT超时")
     private String status;
 
     /** 支付渠道唯一订单号 */

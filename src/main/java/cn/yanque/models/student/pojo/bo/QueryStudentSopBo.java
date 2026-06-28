@@ -17,6 +17,6 @@ public class QueryStudentSopBo {
     /** 导师ID */
     private Long mentorId;
 
-    /** 状态：ASSIGNED已分配，CANCELED已取消 */
+    /** 状态:ASSIGNED已分配,CANCELED已取消 */
     private String status;
 }

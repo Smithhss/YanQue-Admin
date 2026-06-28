@@ -16,7 +16,7 @@ public class StudentLoginReq {
     @Schema(description = "手机号")
     private String phone;
 
-    /** 密码，当前阶段前端保留，后端先按手机号和订单支付状态登录 */
+    /** 密码,当前阶段前端保留,后端先按手机号和订单支付状态登录 */
     @Schema(description = "密码")
     private String password;
 }

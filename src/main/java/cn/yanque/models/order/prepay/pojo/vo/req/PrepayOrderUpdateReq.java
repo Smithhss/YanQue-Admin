@@ -48,6 +48,6 @@ public class PrepayOrderUpdateReq {
 
     /** 订单状态 */
     @NotBlank(message = "订单状态不能为空")
-    @Schema(description = "订单状态：PENDING_PAYMENT待支付，PAID已支付，CANCELED已取消")
+    @Schema(description = "订单状态:PENDING_PAYMENT待支付,PAID已支付,CANCELED已取消")
     private String orderStatus;
 }

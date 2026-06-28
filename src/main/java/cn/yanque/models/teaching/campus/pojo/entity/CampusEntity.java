@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 校区实体，对应 sys_campus 表。
+ * 校区实体,对应 sys_campus 表。
  */
 @Data
 public class CampusEntity {

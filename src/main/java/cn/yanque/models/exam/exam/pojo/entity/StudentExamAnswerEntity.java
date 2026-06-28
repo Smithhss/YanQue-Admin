@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 学生考试答案实体，对应 student_exam_answer 表。
+ * 学生考试答案实体,对应 student_exam_answer 表。
  */
 @Data
 public class StudentExamAnswerEntity {
@@ -35,7 +35,7 @@ public class StudentExamAnswerEntity {
     /** 学生答案内容 */
     private String answerContent;
 
-    /** 是否正确，主观题和编程题为空 */
+    /** 是否正确,主观题和编程题为空 */
     private Boolean correct;
 
     /** 本题得分 */

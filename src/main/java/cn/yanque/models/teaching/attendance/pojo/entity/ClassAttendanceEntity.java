@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 班级考勤记录实体，对应 class_attendance 表。
+ * 班级考勤记录实体,对应 class_attendance 表。
  */
 @Data
 public class ClassAttendanceEntity {
@@ -26,13 +26,13 @@ public class ClassAttendanceEntity {
     /** 上课日期 */
     private Date scheduleDate;
 
-    /** 考勤状态：PRESENT/LATE/LEAVE/ABSENT */
+    /** 考勤状态:PRESENT/LATE/LEAVE/ABSENT */
     private String status;
 
     /** 请假/备注原因 */
     private String leaveReason;
 
-    /** 本次扣减课时（快照） */
+    /** 本次扣减课时(快照) */
     private BigDecimal hourDeducted;
 
     /** 点名操作人 */

@@ -11,7 +11,7 @@ import lombok.Data;
 @Schema(description = "用户分页查询请求")
 public class UserPageReq {
 
-    @Schema(description = "关键词，匹配用户名、昵称、真实姓名")
+    @Schema(description = "关键词,匹配用户名,昵称,真实姓名")
     private String keyword;
 
     @Schema(description = "状态", allowableValues = {"ACTIVE", "INACTIVE"})

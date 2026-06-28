@@ -9,6 +9,6 @@ public class StudentCourseHourPageReq {
 
     private Integer pageSize;
 
-    /** 可选：按学生ID精确筛选 */
+    /** 可选:按学生ID精确筛选 */
     private Long studentId;
 }

@@ -36,7 +36,7 @@ public class StudentPageRes {
     @Schema(description = "专业")
     private String major;
 
-    @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
+    @Schema(description = "上课方式:ONLINE线上,OFFLINE线下")
     private String teachingMode;
 
     @Schema(description = "班级ID")

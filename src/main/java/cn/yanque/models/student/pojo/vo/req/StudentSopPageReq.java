@@ -20,7 +20,7 @@ public class StudentSopPageReq {
     @Schema(description = "导师ID")
     private Long mentorId;
 
-    @Schema(description = "状态：ASSIGNED已分配，CANCELED已取消")
+    @Schema(description = "状态:ASSIGNED已分配,CANCELED已取消")
     private String status;
 
     @Min(value = 1, message = "页码不能小于1")

@@ -27,37 +27,37 @@ import static com.yeepay.yop.sdk.YopConstants.YOP_HTTP_CONTENT_TYPE_JSON;
 /**
  * 易宝支付回调入口 Servlet。
  *
- * 设计模式：Servlet（适配器） → YopCallbackEngine（路由器） → Handler（业务处理）
+ * 设计模式:Servlet(适配器) → YopCallbackEngine(路由器) → Handler(业务处理)
  *
  * 为什么用 Servlet 而非 Controller？
  * - 易宝 SDK 的 YopCallbackEngine.handle() 需要原始 HTTP 请求信息
- * - Controller 的 @RequestBody 会提前消费 InputStream，SDK 拿不到原始数据
+ * - Controller 的 @RequestBody 会提前消费 InputStream,SDK 拿不到原始数据
  *
- * 回调类型（按 URI 路由）：
- * - /yq-admin/yop-callback/paySuccess  → YeepayPaySuccessHandle（支付成功）
- * - /yq-admin/yop-callback/refund      → YeepayRefundHandle（退款结果）
+ * 回调类型(按 URI 路由):
+ * - /yq-admin/yop-callback/paySuccess  → YeepayPaySuccessHandle(支付成功)
+ * - /yq-admin/yop-callback/refund      → YeepayRefundHandle(退款结果)
  */
 @Slf4j
 public class YeepayCallbackServlet extends HttpServlet {
 
-    // 回调路径前缀，YeepayCallbackConfig 注册 Servlet 时使用
+    // 回调路径前缀,YeepayCallbackConfig 注册 Servlet 时使用
     public static final String CALLBACK_PREFIX = "/yop-callback";
 
-    // 防御性编程：统一走 doPost，防止易宝用 GET 发回调
+    // 防御性编程:统一走 doPost,防止易宝用 GET 发回调
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         doPost(req, resp);
     }
 
     /**
-     * 回调主流程：解析请求 → 路由到 Handler → 返回响应。
+     * 回调主流程:解析请求 → 路由到 Handler → 返回响应。
      */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try {
             // 1. 把 HttpServletRequest 转为 SDK 能理解的 YopCallbackRequest
             YopCallbackRequest callbackRequest = resolve(req);
-            // 2. SDK 根据 URI 路由到对应的 Handler（如 YeepayPaySuccessHandle）
+            // 2. SDK 根据 URI 路由到对应的 Handler(如 YeepayPaySuccessHandle)
             YopCallbackResponse callbackResponse = YopCallbackEngine.handle(callbackRequest);
             // 3. 把 SDK 的响应写回给易宝
             writeResponse(resp, callbackResponse);
@@ -70,15 +70,15 @@ public class YeepayCallbackServlet extends HttpServlet {
     /**
      * 把 SDK 的响应写回给易宝服务器。
      * - 返回 200 OK → 易宝不再重发回调
-     * - 返回 500 → 易宝会重试（通常最多 3 次）
+     * - 返回 500 → 易宝会重试(通常最多 3 次)
      */
     private void writeResponse(HttpServletResponse resp, YopCallbackResponse callbackResponse) throws IOException {
         if (callbackResponse == null) {
-            // 某些回调不需要返回内容，直接返回 200 避免易宝重发
+            // 某些回调不需要返回内容,直接返回 200 避免易宝重发
             resp.setStatus(HttpServletResponse.SC_OK);
             return;
         }
-        // 写回 SDK 生成的响应头（如签名等）
+        // 写回 SDK 生成的响应头(如签名等)
         if (MapUtils.isNotEmpty(callbackResponse.getHeaders())) {
             callbackResponse.getHeaders().forEach(resp::addHeader);
         }
@@ -93,18 +93,18 @@ public class YeepayCallbackServlet extends HttpServlet {
     /**
      * 把 HttpServletRequest 解析为 YopCallbackRequest。
      *
-     * 解析内容：
-     * - callbackType: URI 路径，用于路由到对应 Handler
-     * - headers: 请求头，用于 SDK 验签
+     * 解析内容:
+     * - callbackType: URI 路径,用于路由到对应 Handler
+     * - headers: 请求头,用于 SDK 验签
      * - params: 请求参数
-     * - content: 请求体（JSON 或 Form 表单）
+     * - content: 请求体(JSON 或 Form 表单)
      */
     private YopCallbackRequest resolve(HttpServletRequest req) throws IOException {
         final String contentTypeStr = req.getContentType();
         Object content = null;
         YopContentType contentType;
 
-        // 判断 Content-Type：JSON 需手动读 InputStream，Form 由容器自动解析
+        // 判断 Content-Type:JSON 需手动读 InputStream,Form 由容器自动解析
         if (StringUtils.startsWith(contentTypeStr, YOP_HTTP_CONTENT_TYPE_JSON)) {
             contentType = YopContentType.JSON;
             content = IOUtils.toString(req.getInputStream(), YopConstants.DEFAULT_ENCODING);
@@ -121,8 +121,8 @@ public class YeepayCallbackServlet extends HttpServlet {
     }
 
     /**
-     * 获取回调类型（URI 路径），作为路由依据。
-     * 例如：/yq-admin/yop-callback/paySuccess
+     * 获取回调类型(URI 路径),作为路由依据。
+     * 例如:/yq-admin/yop-callback/paySuccess
      * YopCallbackEngine 根据此 URI 查找已注册的 Handler。
      */
     private String getCallbackType(HttpServletRequest req) {
@@ -130,7 +130,7 @@ public class YeepayCallbackServlet extends HttpServlet {
     }
 
     /**
-     * 提取所有请求头，转为 Map<String, String>。
+     * 提取所有请求头,转为 Map<String, String>。
      * SDK 需要用这些头信息进行签名验证。
      */
     private Map<String, String> getHeaders(HttpServletRequest request) {
@@ -145,8 +145,8 @@ public class YeepayCallbackServlet extends HttpServlet {
     }
 
     /**
-     * 提取所有请求参数，转为 Map<String, List<String>>。
-     * Servlet 的 getParameterMap() 返回 String[]，SDK 需要 List<String>。
+     * 提取所有请求参数,转为 Map<String, List<String>>。
+     * Servlet 的 getParameterMap() 返回 String[],SDK 需要 List<String>。
      */
     private Map<String, List<String>> getParams(HttpServletRequest request) {
         Map<String, List<String>> result = Maps.newHashMap();

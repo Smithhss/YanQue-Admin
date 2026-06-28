@@ -20,12 +20,12 @@ public class StudentExamSubmitRes {
     /** 状态 */
     private String status;
 
-    /** 批改状态：PENDING / GRADING / COMPLETED */
+    /** 批改状态:PENDING / GRADING / COMPLETED */
     private String gradingStatus;
 
     /** 提交时间 */
     private Date submitTime;
 
-    /** 当前已计算得分，主观题未批改时只包含客观题得分 */
+    /** 当前已计算得分,主观题未批改时只包含客观题得分 */
     private BigDecimal score;
 }

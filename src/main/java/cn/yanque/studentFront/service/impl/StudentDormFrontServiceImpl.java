@@ -15,7 +15,7 @@ public class StudentDormFrontServiceImpl implements StudentDormFrontService {
 
     @Override
     public DormAssignmentRes myDorm() {
-        // 仅查询当前登录学生本人的在住宿舍，studentId 取自登录态。
+        // 仅查询当前登录学生本人的在住宿舍,studentId 取自登录态。
         Long studentId = StudentThreadLocal.get().getId();
         return dormAssignmentService.getLivingByStudentId(studentId);
     }

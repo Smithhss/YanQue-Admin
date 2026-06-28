@@ -23,7 +23,7 @@ import java.util.List;
 /**
  * 课程管理业务接口。
  * <p>
- * 课程是主数据，课程详情是课程下面的明细数据，用来维护阶段、第几天和上课内容。
+ * 课程是主数据,课程详情是课程下面的明细数据,用来维护阶段,第几天和上课内容。
  */
 public interface CourseService {
 
@@ -38,7 +38,7 @@ public interface CourseService {
     /**
      * 修改课程基础信息。
      *
-     * @param req 课程修改请求，ID由Controller从路径参数写入
+     * @param req 课程修改请求,ID由Controller从路径参数写入
      * @return 被修改的课程ID
      */
     CourseUpdateRes updateCourse(CourseUpdateReq req);
@@ -81,7 +81,7 @@ public interface CourseService {
     /**
      * 修改课程详情。
      *
-     * @param req 课程详情修改请求，ID由Controller从路径参数写入
+     * @param req 课程详情修改请求,ID由Controller从路径参数写入
      * @return 被修改的课程详情ID
      */
     CourseDetailUpdateRes updateCourseDetail(CourseDetailUpdateReq req);

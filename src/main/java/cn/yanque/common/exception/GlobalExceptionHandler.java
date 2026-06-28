@@ -50,7 +50,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ApiResponse<Void> handleException(Exception ex) {
         log.error("系统异常", ex);
-        return ApiResponse.fail(500, "系统开小差了，请稍后重试");
+        return ApiResponse.fail(500, "系统开小差了,请稍后重试");
     }
 
 

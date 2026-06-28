@@ -11,13 +11,13 @@ import lombok.Data;
 @Schema(description = "权限分页查询请求")
 public class PermissionPageReq {
 
-    @Schema(description = "关键词，匹配权限编码、权限名称、API路径")
+    @Schema(description = "关键词,匹配权限编码,权限名称,API路径")
     private String keyword;
 
     @Schema(description = "父权限ID")
     private Long parentId;
 
-    @Schema(description = "权限类型，例如API、MENU、BUTTON")
+    @Schema(description = "权限类型,例如API,MENU,BUTTON")
     private String permissionType;
 
     @Schema(description = "状态", allowableValues = {"ACTIVE", "INACTIVE"})

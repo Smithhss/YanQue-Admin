@@ -15,12 +15,12 @@ public class DormAssignmentPageReq {
     @Schema(description = "楼栋ID过滤")
     private Long buildingId;
 
-    /** 按状态过滤：LIVING在住/CHECKED_OUT已退宿 */
-    @Schema(description = "状态过滤：LIVING在住/CHECKED_OUT已退宿")
+    /** 按状态过滤:LIVING在住/CHECKED_OUT已退宿 */
+    @Schema(description = "状态过滤:LIVING在住/CHECKED_OUT已退宿")
     private String status;
 
-    /** 搜索关键字，匹配学生姓名/手机号 */
-    @Schema(description = "关键词，匹配学生姓名/手机号")
+    /** 搜索关键字,匹配学生姓名/手机号 */
+    @Schema(description = "关键词,匹配学生姓名/手机号")
     private String keyword;
 
     /** 当前页码 */

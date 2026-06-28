@@ -31,19 +31,19 @@ public class BusinessException extends RuntimeException {
 
     // F014 宿舍管理
     public static final BusinessException DormBuildingNotExist = new BusinessException(19001, "宿舍楼栋不存在");
-    public static final BusinessException DormBuildingHasRoom = new BusinessException(19002, "楼栋下存在房间，不可删除");
+    public static final BusinessException DormBuildingHasRoom = new BusinessException(19002, "楼栋下存在房间,不可删除");
     public static final BusinessException DormRoomNotExist = new BusinessException(19003, "宿舍房间不存在");
-    public static final BusinessException DormRoomHasBed = new BusinessException(19004, "房间下存在床位，不可删除");
+    public static final BusinessException DormRoomHasBed = new BusinessException(19004, "房间下存在床位,不可删除");
     public static final BusinessException DormBedNotExist = new BusinessException(19005, "床位不存在");
-    public static final BusinessException DormBedOccupied = new BusinessException(19006, "床位已被占用，请先退宿");
-    public static final BusinessException DormBedNotFree = new BusinessException(19007, "床位非空闲，不可分配");
+    public static final BusinessException DormBedOccupied = new BusinessException(19006, "床位已被占用,请先退宿");
+    public static final BusinessException DormBedNotFree = new BusinessException(19007, "床位非空闲,不可分配");
     public static final BusinessException DormStudentNotExist = new BusinessException(19008, "学生不存在");
-    public static final BusinessException DormStudentGenderUnknown = new BusinessException(19009, "学生性别未知，请先完善资料");
+    public static final BusinessException DormStudentGenderUnknown = new BusinessException(19009, "学生性别未知,请先完善资料");
     public static final BusinessException DormGenderMismatch = new BusinessException(19010, "学生性别与楼栋性别不一致");
-    public static final BusinessException DormStudentAlreadyAssigned = new BusinessException(19011, "该学生已在住，不可重复分配");
+    public static final BusinessException DormStudentAlreadyAssigned = new BusinessException(19011, "该学生已在住,不可重复分配");
     public static final BusinessException DormAssignmentNotExist = new BusinessException(19012, "入住记录不存在");
     public static final BusinessException DormAssignmentNotLiving = new BusinessException(19013, "入住记录非在住状态");
-    public static final BusinessException DormStudentNotLiving = new BusinessException(19014, "该学生当前未入住，无法调宿");
+    public static final BusinessException DormStudentNotLiving = new BusinessException(19014, "该学生当前未入住,无法调宿");
     public static final BusinessException DormStudentNotOffline = new BusinessException(19015, "仅线下学生可分配宿舍");
 
 

@@ -29,12 +29,12 @@ public class StudentExamSubmissionQuestionRes {
     /** 学生答案内容 */
     private String answerContent;
 
-    /** 是否正确，主观题和编程题为空 */
+    /** 是否正确,主观题和编程题为空 */
     private Boolean correct;
 
-    /** 本题得分，主观题未批改时为空 */
+    /** 本题得分,主观题未批改时为空 */
     private BigDecimal score;
 
-    /** 选项列表，非选择题为空 */
+    /** 选项列表,非选择题为空 */
     private List<StudentExamPaperOptionRes> options;
 }

@@ -31,7 +31,7 @@ import java.util.List;
 /**
  * 课程管理接口。
  * <p>
- * 包含课程主表的增删改查，以及课程详情的维护接口。
+ * 包含课程主表的增删改查,以及课程详情的维护接口。
  */
 @RestController
 @RequestMapping("/api/course")
@@ -173,7 +173,7 @@ public class CourseController {
     /**
      * 上传Excel导入课程详情。
      * <p>
-     * 导入时会先删除该课程原有详情，再写入本次Excel中的阶段、天数和上课内容。
+     * 导入时会先删除该课程原有详情,再写入本次Excel中的阶段,天数和上课内容。
      *
      * @param courseId 课程ID
      * @param file     课程详情Excel文件

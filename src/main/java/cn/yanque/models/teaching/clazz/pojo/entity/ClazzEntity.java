@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 班级实体，对应 sys_class 表。
+ * 班级实体,对应 sys_class 表。
  */
 @Data
 public class ClazzEntity {

@@ -43,7 +43,7 @@ public interface SysRoleMapper {
     SysRoleEntity selectByRoleCode(@Param("roleCode") String roleCode);
 
     /**
-     * 查询角色列表，分页由PageHelper在Service层控制。
+     * 查询角色列表,分页由PageHelper在Service层控制。
      *
      * @param keyword 角色编码或角色名称关键字
      * @param status  角色状态

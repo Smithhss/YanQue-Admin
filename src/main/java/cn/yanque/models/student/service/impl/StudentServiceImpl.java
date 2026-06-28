@@ -88,7 +88,7 @@ public class StudentServiceImpl implements StudentService {
         try {
             studentMapper.insert(student);
         } catch (DuplicateKeyException e) {
-            throw BusinessException.DateExist.newInstance("学生资料已存在，请勿重复提交");
+            throw BusinessException.DateExist.newInstance("学生资料已存在,请勿重复提交");
         }
 
         return student;
@@ -223,14 +223,14 @@ public class StudentServiceImpl implements StudentService {
                 .distinct()
                 .toList();
 
-        //Map<String, String> productMap key 产品id， value 产品内容
+        //Map<String, String> productMap key 产品id, value 产品内容
         Map<String, String> productMap = productIds.isEmpty() ? Map.of() : productMapper.selectByIds(productIds).stream()
                 .collect(Collectors.toMap(product -> String.valueOf(product.getId()), ProductEntity::getCourseContent));
         return studentProducts.stream()
                 .collect(Collectors.groupingBy(
                         StudentProductEntity::getStudentId,
                         Collectors.mapping(item -> productMap.get(item.getProductId()),
-                                Collectors.filtering(Objects::nonNull, Collectors.joining("、")))));
+                                Collectors.filtering(Objects::nonNull, Collectors.joining(",")))));
     }
 
     private Map<Long, String> buildClassPeriodMap(List<StudentEntity> students) {
@@ -317,8 +317,8 @@ public class StudentServiceImpl implements StudentService {
             return List.of();
         }
 
-        // 支持逗号、顿号、分号、换行分隔，便于在系统配置里维护。
-        Set<String> options = Arrays.stream(value.split("[,，、;；\\n\\r]+"))
+        // 支持逗号,顿号,分号,换行分隔,便于在系统配置里维护。
+        Set<String> options = Arrays.stream(value.split("[,,,;;\\n\\r]+"))
                 .map(String::trim)
                 .filter(item -> !item.isBlank())
                 .collect(Collectors.toCollection(LinkedHashSet::new));

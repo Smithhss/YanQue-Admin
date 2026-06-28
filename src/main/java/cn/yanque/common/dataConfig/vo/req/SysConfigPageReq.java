@@ -11,8 +11,8 @@ import lombok.Data;
 @Schema(description = "系统配置分页查询请求")
 public class SysConfigPageReq {
 
-    /** 搜索关键字，匹配配置key或配置值 */
-    @Schema(description = "关键词，匹配配置键或配置值")
+    /** 搜索关键字,匹配配置key或配置值 */
+    @Schema(description = "关键词,匹配配置键或配置值")
     private String keyword;
 
     /** 当前页码 */

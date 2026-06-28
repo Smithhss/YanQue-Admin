@@ -46,7 +46,7 @@ public class DormAssignmentController {
     }
 
     @PostMapping("transfer")
-    @Operation(description = "调宿（退旧床+入新床）")
+    @Operation(description = "调宿(退旧床+入新床)")
     public ApiResponse<Long> transfer(@Valid @RequestBody DormTransferReq req, HttpServletRequest request) {
         Long operatorId = (Long) request.getAttribute("userId");
         return ApiResponse.success(dormAssignmentService.transfer(req, operatorId));

@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 题目选项实体，对应 exam_question_option 表。
+ * 题目选项实体,对应 exam_question_option 表。
  */
 @Data
 public class ExamQuestionOptionEntity {
@@ -16,7 +16,7 @@ public class ExamQuestionOptionEntity {
     /** 题目ID */
     private Long questionId;
 
-    /** 选项标识：A/B/C/D */
+    /** 选项标识:A/B/C/D */
     private String optionKey;
 
     /** 选项内容 */

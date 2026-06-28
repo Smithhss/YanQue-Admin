@@ -12,7 +12,7 @@ import lombok.Data;
 @Schema(description = "更新用户请求")
 public class UserUpdateReq {
 
-    @Schema(description = "用户ID，由路径参数传入")
+    @Schema(description = "用户ID,由路径参数传入")
     private Long id;
 
     @NotBlank(message = "昵称不能为空")

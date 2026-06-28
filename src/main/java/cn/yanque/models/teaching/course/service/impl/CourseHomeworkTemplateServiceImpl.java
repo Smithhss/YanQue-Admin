@@ -134,7 +134,7 @@ public class CourseHomeworkTemplateServiceImpl implements CourseHomeworkTemplate
         template.setStatus(validateStatus(status));
         template.setRemark(remark);
 
-        // 线上按阶段配置训练集，线下按天配置训练集，两个维度不能混用。
+        // 线上按阶段配置训练集,线下按天配置训练集,两个维度不能混用。
         if (TEACHING_MODE_ONLINE.equals(course.getTeachingMode())) {
             template.setStageName(validateStageName(course.getId(), stageName));
             template.setDayNumber(null);
@@ -153,7 +153,7 @@ public class CourseHomeworkTemplateServiceImpl implements CourseHomeworkTemplate
             throw BusinessException.DateError.newInstance("线上课程必须选择阶段");
         }
         String normalizedStageName = stageName.trim();
-        // 阶段来源以课程详情为准，避免作业标准配置到课程不存在的阶段上。
+        // 阶段来源以课程详情为准,避免作业标准配置到课程不存在的阶段上。
         boolean exists = courseDetailMapper.selectByCourseId(courseId).stream()
                 .map(CourseDetailEntity::getStageName)
                 .anyMatch(normalizedStageName::equals);
@@ -170,7 +170,7 @@ public class CourseHomeworkTemplateServiceImpl implements CourseHomeworkTemplate
         if (dayNumber <= 0 || (courseDays != null && dayNumber > courseDays)) {
             throw BusinessException.DateError.newInstance("第几天必须在课程天数范围内");
         }
-        // 线下课程按天配置，也必须落在课程详情已经维护过的天数上。
+        // 线下课程按天配置,也必须落在课程详情已经维护过的天数上。
         boolean exists = courseDetailMapper.selectByCourseId(courseId).stream()
                 .map(CourseDetailEntity::getDayNumber)
                 .anyMatch(dayNumber::equals);
@@ -195,7 +195,7 @@ public class CourseHomeworkTemplateServiceImpl implements CourseHomeworkTemplate
             throw BusinessException.DateError.newInstance("作业标准文件不能为空");
         }
         String normalizedObjectKey = contentObjectKey.trim();
-        // 课程作业标准只允许保存本业务目录下的 md 文档，防止误关联其他业务文件。
+        // 课程作业标准只允许保存本业务目录下的 md 文档,防止误关联其他业务文件。
         if (!normalizedObjectKey.startsWith(COURSE_HOMEWORK_TEMPLATE_PREFIX) || !normalizedObjectKey.toLowerCase().endsWith(".md")) {
             throw BusinessException.DateError.newInstance("作业标准文件路径不合法");
         }

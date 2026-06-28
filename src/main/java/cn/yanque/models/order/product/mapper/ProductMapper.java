@@ -42,7 +42,7 @@ public interface ProductMapper {
     List<ProductEntity> selectByIds(@Param("ids") List<String> ids);
 
     /**
-     * 查询产品列表，分页由PageHelper在Service层控制。
+     * 查询产品列表,分页由PageHelper在Service层控制。
      *
      * @param keyword 课程内容关键字
      * @return 产品列表

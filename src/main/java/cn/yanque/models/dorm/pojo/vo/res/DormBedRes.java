@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 床位响应对象（详情与分页列表共用）。
+ * 床位响应对象(详情与分页列表共用)。
  */
 @Data
 @Schema(description = "床位响应")
@@ -25,11 +25,11 @@ public class DormBedRes {
     private String bedNo;
 
     /** 状态 */
-    @Schema(description = "状态：FREE空闲/OCCUPIED占用/LOCKED锁定")
+    @Schema(description = "状态:FREE空闲/OCCUPIED占用/LOCKED锁定")
     private String status;
 
     /** 当前入住学生ID */
-    @Schema(description = "当前入住学生ID，空闲时为null")
+    @Schema(description = "当前入住学生ID,空闲时为null")
     private Long currentStudentId;
 
     /** 创建时间 */

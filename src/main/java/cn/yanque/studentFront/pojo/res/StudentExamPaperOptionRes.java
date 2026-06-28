@@ -14,7 +14,7 @@ public class StudentExamPaperOptionRes {
     /** 题目ID */
     private Long questionId;
 
-    /** 选项标识：A/B/C/D */
+    /** 选项标识:A/B/C/D */
     private String optionKey;
 
     /** 选项内容 */

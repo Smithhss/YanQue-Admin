@@ -18,7 +18,7 @@ public class RefundCreateRes {
     @Schema(description = "支付金额")
     private BigDecimal paymentAmount;
 
-    @Schema(description = "已申请退款金额，包含处理中和成功金额")
+    @Schema(description = "已申请退款金额,包含处理中和成功金额")
     private BigDecimal refundedAmount;
 
     @Schema(description = "可退金额")

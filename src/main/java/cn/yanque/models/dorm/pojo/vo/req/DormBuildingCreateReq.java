@@ -22,9 +22,9 @@ public class DormBuildingCreateReq {
     @Schema(description = "楼栋名称")
     private String buildingName;
 
-    /** 性别类型：MALE/FEMALE */
+    /** 性别类型:MALE/FEMALE */
     @NotBlank(message = "性别类型不能为空")
-    @Schema(description = "性别类型：MALE男寝/FEMALE女寝")
+    @Schema(description = "性别类型:MALE男寝/FEMALE女寝")
     private String genderType;
 
     /** 宿管姓名 */

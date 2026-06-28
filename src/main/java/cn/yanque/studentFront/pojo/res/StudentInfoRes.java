@@ -22,7 +22,7 @@ public class StudentInfoRes {
     @Schema(description = "手机号")
     private String phone;
 
-    /** 性别：MALE男/FEMALE女 */
-    @Schema(description = "性别：MALE男/FEMALE女")
+    /** 性别:MALE男/FEMALE女 */
+    @Schema(description = "性别:MALE男/FEMALE女")
     private String gender;
 }

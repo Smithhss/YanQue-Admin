@@ -13,7 +13,7 @@ import lombok.Data;
 @Schema(description = "修改宿舍房间请求")
 public class DormRoomUpdateReq {
 
-    /** 房间ID，由Controller从路径参数写入 */
+    /** 房间ID,由Controller从路径参数写入 */
     @Schema(description = "房间ID", hidden = true)
     private Long id;
 
@@ -41,7 +41,7 @@ public class DormRoomUpdateReq {
     @Schema(description = "房型")
     private String roomType;
 
-    /** 状态：ENABLED/DISABLED/MAINTENANCE */
-    @Schema(description = "状态：ENABLED启用/DISABLED停用/MAINTENANCE维修")
+    /** 状态:ENABLED/DISABLED/MAINTENANCE */
+    @Schema(description = "状态:ENABLED启用/DISABLED停用/MAINTENANCE维修")
     private String status;
 }

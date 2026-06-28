@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 宿舍楼栋响应对象（详情与分页列表共用）。
+ * 宿舍楼栋响应对象(详情与分页列表共用)。
  */
 @Data
 @Schema(description = "宿舍楼栋响应")
@@ -24,8 +24,8 @@ public class DormBuildingRes {
     @Schema(description = "楼栋名称")
     private String buildingName;
 
-    /** 性别类型：MALE/FEMALE */
-    @Schema(description = "性别类型：MALE男寝/FEMALE女寝")
+    /** 性别类型:MALE/FEMALE */
+    @Schema(description = "性别类型:MALE男寝/FEMALE女寝")
     private String genderType;
 
     /** 宿管姓名 */
@@ -37,7 +37,7 @@ public class DormBuildingRes {
     private String managerPhone;
 
     /** 状态 */
-    @Schema(description = "状态：ENABLED启用/DISABLED停用")
+    @Schema(description = "状态:ENABLED启用/DISABLED停用")
     private String status;
 
     /** 创建时间 */

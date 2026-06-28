@@ -44,7 +44,7 @@ public interface CourseMapper {
     List<CourseEntity> selectByIds(@Param("ids") List<Long> ids);
 
     /**
-     * 查询课程列表，分页由PageHelper在Service层控制。
+     * 查询课程列表,分页由PageHelper在Service层控制。
      *
      * @param keyword 课程名称或资料路径关键字
      * @return 课程列表

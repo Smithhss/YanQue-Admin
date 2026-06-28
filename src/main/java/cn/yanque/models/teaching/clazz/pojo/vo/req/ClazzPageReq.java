@@ -11,8 +11,8 @@ import lombok.Data;
 @Schema(description = "班级分页查询请求")
 public class ClazzPageReq {
 
-    /** 搜索关键字，匹配班级期数 */
-    @Schema(description = "关键词，匹配班级期数")
+    /** 搜索关键字,匹配班级期数 */
+    @Schema(description = "关键词,匹配班级期数")
     private String keyword;
 
     /** 班主任用户ID */

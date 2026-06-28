@@ -42,7 +42,7 @@ public interface PrepayOrderMapper {
     PrepayOrderEntity selectByOrderNo(@Param("orderNo") String orderNo);
 
     /**
-     * 查询预支付订单列表，分页由PageHelper在Service层控制。
+     * 查询预支付订单列表,分页由PageHelper在Service层控制。
      *
      * @param keyword     学生姓名或手机号关键字
      * @param orderStatus 订单状态

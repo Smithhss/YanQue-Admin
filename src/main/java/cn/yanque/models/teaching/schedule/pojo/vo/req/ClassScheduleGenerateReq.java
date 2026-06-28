@@ -18,7 +18,7 @@ public class ClassScheduleGenerateReq {
 
     /** 第一天上课日期 */
     @NotNull(message = "第一天上课时间不能为空")
-    @Schema(description = "第一天上课时间，格式：yyyy-MM-dd")
+    @Schema(description = "第一天上课时间,格式:yyyy-MM-dd")
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date firstClassDate;
 }

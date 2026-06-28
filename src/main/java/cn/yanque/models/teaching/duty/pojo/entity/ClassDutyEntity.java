@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 值班实体，对应 sys_class_duty 表。
+ * 值班实体,对应 sys_class_duty 表。
  */
 @Data
 public class ClassDutyEntity {
@@ -13,7 +13,7 @@ public class ClassDutyEntity {
     /** 值班ID */
     private Long id;
 
-    /** 班级ID，校区统一值班时可为空 */
+    /** 班级ID,校区统一值班时可为空 */
     private Long classId;
 
     /** 校区ID */

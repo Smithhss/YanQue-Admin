@@ -99,13 +99,13 @@ public class StudentFollowupRecordServiceImpl implements StudentFollowupRecordSe
     @Transactional(rollbackFor = Exception.class)
     public StudentFollowupRecordGenerateRes generateDueRecords(Date generateDate) {
         /*
-         * 回访记录生成口径：
-         * 1. 回访不依赖学习计划，直接以学生表为主数据；线上、启用、有标签的学生才进入自动生成范围。
-         * 2. 如果学生上一条回访记录仍是 NEED_FOLLOWUP，说明已经有待处理任务，本次不再新增。
-         * 3. 如果有历史回访记录，按上一条实际回访时间 followup_time 计算下一次回访；如果没有回访记录，则用学生创建时间作为入学时间。
-         * 4. 判断规则是：基准时间 + 当前标签配置的间隔天数 <= 今天，就生成一条 NEED_FOLLOWUP 记录。
-         * 5. 回访记录保存 studentTag、followupTagId、followupIntervalDays 快照，历史记录不跟随后续标签或规则修改变化。
-         * 6. student_followup_record 上有 (student_id, due_date) 唯一键，insertIgnore 可以保证重复触发任务时不会重复生成。
+         * 回访记录生成口径:
+         * 1. 回访不依赖学习计划,直接以学生表为主数据;线上,启用,有标签的学生才进入自动生成范围。
+         * 2. 如果学生上一条回访记录仍是 NEED_FOLLOWUP,说明已经有待处理任务,本次不再新增。
+         * 3. 如果有历史回访记录,按上一条实际回访时间 followup_time 计算下一次回访;如果没有回访记录,则用学生创建时间作为入学时间。
+         * 4. 判断规则是:基准时间 + 当前标签配置的间隔天数 <= 今天,就生成一条 NEED_FOLLOWUP 记录。
+         * 5. 回访记录保存 studentTag,followupTagId,followupIntervalDays 快照,历史记录不跟随后续标签或规则修改变化。
+         * 6. student_followup_record 上有 (student_id, due_date) 唯一键,insertIgnore 可以保证重复触发任务时不会重复生成。
          */
         Date today = DateUtil.beginOfDay(generateDate == null ? new Date() : generateDate);
 
@@ -114,11 +114,11 @@ public class StudentFollowupRecordServiceImpl implements StudentFollowupRecordSe
             return buildGenerateRes(0);
         }
 
-        // 只取启用的回访标签配置；学生当前标签不在这里，说明暂时不参与自动回访。
+        // 只取启用的回访标签配置;学生当前标签不在这里,说明暂时不参与自动回访。
         Map<String, StudentFollowupTagEntity> followupTagMap = studentFollowupTagMapper.selectActiveList().stream()
                 .collect(Collectors.toMap(StudentFollowupTagEntity::getStudentTag, Function.identity(), (a, b) -> a));
 
-        // 每个学生只看最新一条记录：待回访则跳过，已回访则按 followup_time 继续计算下一次。
+        // 每个学生只看最新一条记录:待回访则跳过,已回访则按 followup_time 继续计算下一次。
         Map<Long, StudentFollowupRecordEntity> latestRecordMap = buildLatestRecordMap(students.stream()
                 .map(StudentEntity::getId)
                 .toList());
@@ -126,7 +126,7 @@ public class StudentFollowupRecordServiceImpl implements StudentFollowupRecordSe
         int generatedCount = 0;
         Date now = new Date();
         for (StudentEntity student : students) {
-            // 只生成线上、启用、有标签的学生；线下学生和未打标签学生不进入回访池。
+            // 只生成线上,启用,有标签的学生;线下学生和未打标签学生不进入回访池。
             if (!canGenerate(student)) {
                 continue;
             }
@@ -136,7 +136,7 @@ public class StudentFollowupRecordServiceImpl implements StudentFollowupRecordSe
                 continue;
             }
 
-            // 回访周期以学生“当前标签”对应的启用规则为准；历史记录里的标签快照不影响后续生成。
+            // 回访周期以学生"当前标签"对应的启用规则为准;历史记录里的标签快照不影响后续生成。
             StudentFollowupTagEntity rule = followupTagMap.get(student.getStudentTag());
             if (rule == null || rule.getFollowupIntervalDays() == null || rule.getFollowupIntervalDays() <= 0) {
                 continue;

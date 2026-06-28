@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * 当前用户聚合信息。
  * <p>
- * 权限校验时会同时使用用户、角色、权限三部分数据。
+ * 权限校验时会同时使用用户,角色,权限三部分数据。
  */
 @Data
 public class UserInfo {

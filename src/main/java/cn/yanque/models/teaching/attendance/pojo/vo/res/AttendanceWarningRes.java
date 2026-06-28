@@ -11,6 +11,6 @@ public class AttendanceWarningRes {
 
     private String studentName;
 
-    /** 扣减后剩余课时（负数表示欠课时） */
+    /** 扣减后剩余课时(负数表示欠课时) */
     private BigDecimal remainingHours;
 }

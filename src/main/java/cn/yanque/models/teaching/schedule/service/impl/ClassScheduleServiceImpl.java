@@ -219,7 +219,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
             // 查询该阶段课程信息
             List<CourseDetailEntity> stageDetails = courseDetailGroup.get(item.getStageName());
             if (stageDetails == null || stageDetails.isEmpty()) {
-                throw BusinessException.CourseDetailNotExist.newInstance("阶段不存在：" + item.getStageName());
+                throw BusinessException.CourseDetailNotExist.newInstance("阶段不存在:" + item.getStageName());
             }
 
             List<Long> courseDetailIds = stageDetails.stream().map(CourseDetailEntity::getId).toList();
@@ -227,14 +227,14 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
             // 此阶段课表的数据
             List<ClassScheduleEntity> schedules = classScheduleMapper.selectByCourseIds(courseDetailIds, classId);
             if (schedules.isEmpty()) {
-                throw BusinessException.DateError.newInstance("该阶段还没有生成课表：" + item.getStageName());
+                throw BusinessException.DateError.newInstance("该阶段还没有生成课表:" + item.getStageName());
             }
 
             Date stageStartDate = schedules.get(0).getScheduleDate();
             Date stageEndDate = schedules.get(schedules.size() - 1).getScheduleDate();
             List<Long> occupiedTeacherIds = classScheduleMapper.selectTeacheringUserId(stageStartDate, stageEndDate, classId);
             if (occupiedTeacherIds.contains(item.getTeacherId())) {
-                throw BusinessException.DateError.newInstance("老师在该阶段时间内已有课程：" + item.getStageName());
+                throw BusinessException.DateError.newInstance("老师在该阶段时间内已有课程:" + item.getStageName());
             }
 
             updateCount += classScheduleMapper.updateTeacherByCourseDetailIds(classId, courseDetailIds, item.getTeacherId());

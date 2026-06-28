@@ -13,7 +13,7 @@ import java.util.List;
 @Schema(description = "更新角色请求")
 public class RoleUpdateReq {
 
-    @Schema(description = "角色ID，由路径参数传入")
+    @Schema(description = "角色ID,由路径参数传入")
     private Long id;
 
     @NotBlank(message = "角色编码不能为空")

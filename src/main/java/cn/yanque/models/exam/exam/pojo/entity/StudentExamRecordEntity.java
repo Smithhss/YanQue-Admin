@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 学生考试记录实体，对应 student_exam_record 表。
+ * 学生考试记录实体,对应 student_exam_record 表。
  */
 @Data
 public class StudentExamRecordEntity {
@@ -29,10 +29,10 @@ public class StudentExamRecordEntity {
     /** 提交时间 */
     private Date submitTime;
 
-    /** 状态：IN_PROGRESS / SUBMITTED / TIMEOUT */
+    /** 状态:IN_PROGRESS / SUBMITTED / TIMEOUT */
     private String status;
 
-    /** 批改状态：PENDING / GRADING / COMPLETED */
+    /** 批改状态:PENDING / GRADING / COMPLETED */
     private String gradingStatus;
 
     /** 得分 */

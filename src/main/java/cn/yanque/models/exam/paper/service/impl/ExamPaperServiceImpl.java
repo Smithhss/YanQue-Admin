@@ -121,7 +121,7 @@ public class ExamPaperServiceImpl implements ExamPaperService {
                     .map(CourseDetailEntity::getStageName)
                     .anyMatch(stageName -> stageName.equals(paper.getStageName()));
             if (!stageExist) {
-                throw BusinessException.DateError.newInstance("课程阶段不存在：" + paper.getStageName());
+                throw BusinessException.DateError.newInstance("课程阶段不存在:" + paper.getStageName());
             }
         }
 
@@ -139,18 +139,18 @@ public class ExamPaperServiceImpl implements ExamPaperService {
         for (Long questionId : questionIds) {
             ExamQuestionEntity question = questionMap.get(questionId);
             if (!"ENABLED".equals(question.getStatus())) {
-                throw BusinessException.DateError.newInstance("试卷包含未启用题目：" + questionId);
+                throw BusinessException.DateError.newInstance("试卷包含未启用题目:" + questionId);
             }
             List<ExamQuestionCourseEntity> questionRelations = relationMap.getOrDefault(questionId, List.of());
             boolean courseMatched = questionRelations.stream().anyMatch(relation -> paper.getCourseId().equals(relation.getCourseId()));
             if (!courseMatched) {
-                throw BusinessException.DateError.newInstance("题目不属于当前课程：" + questionId);
+                throw BusinessException.DateError.newInstance("题目不属于当前课程:" + questionId);
             }
             if (StringUtils.hasText(paper.getStageName())) {
                 boolean stageMatched = questionRelations.stream().anyMatch(relation ->
                         paper.getCourseId().equals(relation.getCourseId()) && paper.getStageName().equals(relation.getStageName()));
                 if (!stageMatched) {
-                    throw BusinessException.DateError.newInstance("题目不属于当前课程阶段：" + questionId);
+                    throw BusinessException.DateError.newInstance("题目不属于当前课程阶段:" + questionId);
                 }
             }
         }

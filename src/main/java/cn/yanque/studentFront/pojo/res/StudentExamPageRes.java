@@ -30,7 +30,7 @@ public class StudentExamPageRes {
     /** 课程ID */
     private Long courseId;
 
-    /** 阶段名称，为空表示整门课程考试 */
+    /** 阶段名称,为空表示整门课程考试 */
     private String stageName;
 
     /** 可进入考试开始时间 */
@@ -41,7 +41,7 @@ public class StudentExamPageRes {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
     private Date endTime;
 
-    /** 学生个人答题时长，单位分钟 */
+    /** 学生个人答题时长,单位分钟 */
     private Integer durationMinutes;
 
     /** 监考老师用户ID */
@@ -53,13 +53,13 @@ public class StudentExamPageRes {
     /** 试卷总分 */
     private BigDecimal totalScore;
 
-    /** 学生考试记录ID，未开始时为空 */
+    /** 学生考试记录ID,未开始时为空 */
     private Long recordId;
 
-    /** 学生考试记录状态：IN_PROGRESS / SUBMITTED / TIMEOUT */
+    /** 学生考试记录状态:IN_PROGRESS / SUBMITTED / TIMEOUT */
     private String recordStatus;
 
-    /** 批改状态：PENDING / GRADING / COMPLETED */
+    /** 批改状态:PENDING / GRADING / COMPLETED */
     private String gradingStatus;
 
     /** 学生实际开始答题时间 */
@@ -74,10 +74,10 @@ public class StudentExamPageRes {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
     private Date submitTime;
 
-    /** 当前已计算得分，主观题未批改时只包含客观题得分 */
+    /** 当前已计算得分,主观题未批改时只包含客观题得分 */
     private BigDecimal score;
 
-    /** 页面展示状态：NOT_STARTED / AVAILABLE / IN_PROGRESS / SUBMITTED / TIMEOUT / ENDED */
+    /** 页面展示状态:NOT_STARTED / AVAILABLE / IN_PROGRESS / SUBMITTED / TIMEOUT / ENDED */
     private String examStatus;
 
     /** 页面展示状态文案 */

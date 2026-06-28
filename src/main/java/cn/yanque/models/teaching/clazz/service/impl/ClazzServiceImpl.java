@@ -108,7 +108,7 @@ public class ClazzServiceImpl implements ClazzService {
 
     @Override
     public PageResult<ClazzPageRes> pageClazz(ClazzPageReq req) {
-        // 班级列表只在班级表里做分页查询，关联名称在后面分批补齐，避免写连表 SQL。
+        // 班级列表只在班级表里做分页查询,关联名称在后面分批补齐,避免写连表 SQL。
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
         PageHelper.startPage(pageNum, pageSize);
@@ -124,12 +124,12 @@ public class ClazzServiceImpl implements ClazzService {
             return;
         }
 
-        // 从本页班级数据中提取需要查询的ID，分别去用户、校区、课程表批量查询。
+        // 从本页班级数据中提取需要查询的ID,分别去用户,校区,课程表批量查询。
         List<Long> headTeacherIds = records.stream().map(ClazzPageRes::getHeadTeacherId).distinct().toList();
         List<Long> campusIds = records.stream().map(ClazzPageRes::getCampusId).distinct().toList();
         List<Long> courseIds = records.stream().map(ClazzPageRes::getCourseId).distinct().toList();
 
-        // 转成 Map 后按ID回填名称，前端就不需要自己维护 ID -> 名称 的映射。
+        // 转成 Map 后按ID回填名称,前端就不需要自己维护 ID -> 名称 的映射。
         Map<Long, SysUserEntity> userMap = sysUserMapper.selectByIds(headTeacherIds).stream()
                 .collect(Collectors.toMap(SysUserEntity::getId, Function.identity()));
         Map<Long, CampusEntity> campusMap = campusMapper.selectByIds(campusIds).stream()
@@ -154,7 +154,7 @@ public class ClazzServiceImpl implements ClazzService {
     }
 
     private void fillClazzDetailName(ClazzDetailRes res) {
-        // 详情页也是单表取班级，再分别查询名称，保持“不连表”的实现方式一致。
+        // 详情页也是单表取班级,再分别查询名称,保持"不连表"的实现方式一致。
         SysUserEntity user = sysUserMapper.selectByIds(Collections.singletonList(res.getHeadTeacherId())).stream().findFirst().orElse(null);
         if (user != null) {
             res.setHeadTeacherName(user.getNickname() != null ? user.getNickname() : user.getUsername());

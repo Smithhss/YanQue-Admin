@@ -28,7 +28,7 @@ public class StudentSopEntity {
     /** SOP时间 */
     private Date sopTime;
 
-    /** 状态：ASSIGNED已分配，CANCELED已取消 */
+    /** 状态:ASSIGNED已分配,CANCELED已取消 */
     private String status;
 
     /** 备注 */

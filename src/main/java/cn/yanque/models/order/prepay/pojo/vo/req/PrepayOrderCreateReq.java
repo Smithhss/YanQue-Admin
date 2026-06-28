@@ -43,6 +43,6 @@ public class PrepayOrderCreateReq {
     private BigDecimal discountAmount;
 
     /** 订单状态 */
-    @Schema(description = "订单状态：PENDING_PAYMENT待支付，PAID已支付，CANCELED已取消")
+    @Schema(description = "订单状态:PENDING_PAYMENT待支付,PAID已支付,CANCELED已取消")
     private String orderStatus;
 }

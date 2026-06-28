@@ -10,7 +10,7 @@ import java.util.List;
 @Mapper
 public interface AttendanceMapper {
 
-    /** 只读查询课次（schedule 域无 selectById，此处自建以避免改动其文件）。 */
+    /** 只读查询课次(schedule 域无 selectById,此处自建以避免改动其文件)。 */
     ClassScheduleEntity selectScheduleById(@Param("scheduleId") Long scheduleId);
 
     List<ClassAttendanceEntity> selectByScheduleId(@Param("scheduleId") Long scheduleId);

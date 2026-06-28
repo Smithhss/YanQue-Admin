@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @Service
 public class AttendanceServiceImpl implements AttendanceService {
 
-    /** 一次上课消耗的课时；出勤/迟到/旷课扣减，请假不扣。 */
+    /** 一次上课消耗的课时;出勤/迟到/旷课扣减,请假不扣。 */
     private static final BigDecimal HOUR_PER_CLASS = new BigDecimal("1.0");
 
     private static final String ACTIVE = "ACTIVE";
@@ -106,7 +106,7 @@ public class AttendanceServiceImpl implements AttendanceService {
             ClassAttendanceEntity old = existing.get(item.getStudentId());
 
             if (old != null) {
-                // 改点名：先按旧快照退回课时，再更新记录与扣减，避免重复扣。
+                // 改点名:先按旧快照退回课时,再更新记录与扣减,避免重复扣。
                 if (old.getHourDeducted() != null && old.getHourDeducted().signum() > 0) {
                     studentCourseHourService.revert(item.getStudentId(), old.getHourDeducted(), schedule.getId(), operatorId);
                 }
@@ -171,7 +171,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     }
 
     private BigDecimal deductByStatus(String status) {
-        // 请假不扣课时；出勤/迟到/旷课均按一次课消耗。
+        // 请假不扣课时;出勤/迟到/旷课均按一次课消耗。
         if (AttendanceStatusEnum.LEAVE.name().equals(status)) {
             return BigDecimal.ZERO;
         }

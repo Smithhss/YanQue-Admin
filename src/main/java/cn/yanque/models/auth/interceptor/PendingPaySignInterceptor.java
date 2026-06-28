@@ -65,12 +65,12 @@ public class PendingPaySignInterceptor implements HandlerInterceptor {
 
         String pendingPayInfo = redisUtil.get(PENDING_PAY_KEY_PREFIX + token);
         if (isBlank(pendingPayInfo)) {
-            writeUnauthorized(response, "待支付登录状态已失效，请重新登录");
+            writeUnauthorized(response, "待支付登录状态已失效,请重新登录");
             return false;
         }
         String[] parts = pendingPayInfo.split("\\|", 3);
         if (parts.length != 3 || isBlank(parts[0]) || isBlank(parts[1]) || isBlank(parts[2])) {
-            writeUnauthorized(response, "待支付登录状态异常，请重新登录");
+            writeUnauthorized(response, "待支付登录状态异常,请重新登录");
             return false;
         }
         String studentPhone = parts[0];

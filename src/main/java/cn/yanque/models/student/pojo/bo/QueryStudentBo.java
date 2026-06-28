@@ -20,7 +20,7 @@ public class QueryStudentBo {
     /** 学校 */
     private String school;
 
-    /** 上课方式：ONLINE线上，OFFLINE线下 */
+    /** 上课方式:ONLINE线上,OFFLINE线下 */
     private String teachingMode;
 
     /** 学生标签 */

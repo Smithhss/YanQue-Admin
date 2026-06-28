@@ -9,7 +9,7 @@ import cn.yanque.studentFront.pojo.res.StudentLoginRes;
 public interface StudentFrontService {
 
     /**
-     * 学生登录，未支付时返回待支付订单信息。
+     * 学生登录,未支付时返回待支付订单信息。
      *
      * @param req 登录请求
      * @return 登录结果

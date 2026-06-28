@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 预支付订单实体，对应 prepay_order 表。
+ * 预支付订单实体,对应 prepay_order 表。
  */
 @Data
 public class PrepayOrderEntity {
@@ -32,7 +32,7 @@ public class PrepayOrderEntity {
     /** 优惠金额 */
     private BigDecimal discountAmount;
 
-    /** 订单状态：PENDING_PAYMENT待支付，PAID已支付，CANCELED已取消 */
+    /** 订单状态:PENDING_PAYMENT待支付,PAID已支付,CANCELED已取消 */
     private String orderStatus;
 
     /** 创建时间 */

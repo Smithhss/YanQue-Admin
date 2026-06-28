@@ -22,7 +22,7 @@ public class ProductPageRes {
     private String courseContent;
 
     /** 上课方式 */
-    @Schema(description = "上课方式：ONLINE线上，OFFLINE线下")
+    @Schema(description = "上课方式:ONLINE线上,OFFLINE线下")
     private String teachingMode;
 
     /** 产品价格 */

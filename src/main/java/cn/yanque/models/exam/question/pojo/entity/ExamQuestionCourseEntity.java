@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 题目关联课程实体，对应 exam_question_course 表。
+ * 题目关联课程实体,对应 exam_question_course 表。
  */
 @Data
 public class ExamQuestionCourseEntity {

@@ -64,7 +64,7 @@ public class StudentSignInterceptor implements HandlerInterceptor {
 
         String secret = redisUtil.get(SIGN_SECRET_KEY_PREFIX + studentId);
         if (isBlank(secret)) {
-            writeUnauthorized(response, "签名密钥已失效，请重新登录");
+            writeUnauthorized(response, "签名密钥已失效,请重新登录");
             return false;
         }
 

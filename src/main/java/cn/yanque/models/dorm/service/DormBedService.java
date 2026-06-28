@@ -11,13 +11,13 @@ import cn.yanque.models.dorm.pojo.vo.res.DormBedRes;
  */
 public interface DormBedService {
 
-    /** 手动补充床位，返回新床位ID。 */
+    /** 手动补充床位,返回新床位ID。 */
     Long addBed(DormBedCreateReq req);
 
-    /** 修改床位（占用中的床位不可修改），返回床位ID。 */
+    /** 修改床位(占用中的床位不可修改),返回床位ID。 */
     Long updateBed(DormBedUpdateReq req);
 
-    /** 删除床位（占用中的床位不可删除），返回床位ID。 */
+    /** 删除床位(占用中的床位不可删除),返回床位ID。 */
     Long deleteBed(Long id);
 
     /** 查询床位详情。 */

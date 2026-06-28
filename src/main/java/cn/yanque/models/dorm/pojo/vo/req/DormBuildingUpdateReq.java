@@ -12,7 +12,7 @@ import lombok.Data;
 @Schema(description = "修改宿舍楼栋请求")
 public class DormBuildingUpdateReq {
 
-    /** 楼栋ID，由Controller从路径参数写入 */
+    /** 楼栋ID,由Controller从路径参数写入 */
     @Schema(description = "楼栋ID", hidden = true)
     private Long id;
 
@@ -26,9 +26,9 @@ public class DormBuildingUpdateReq {
     @Schema(description = "楼栋名称")
     private String buildingName;
 
-    /** 性别类型：MALE/FEMALE */
+    /** 性别类型:MALE/FEMALE */
     @NotBlank(message = "性别类型不能为空")
-    @Schema(description = "性别类型：MALE男寝/FEMALE女寝")
+    @Schema(description = "性别类型:MALE男寝/FEMALE女寝")
     private String genderType;
 
     /** 宿管姓名 */
@@ -39,7 +39,7 @@ public class DormBuildingUpdateReq {
     @Schema(description = "宿管电话")
     private String managerPhone;
 
-    /** 状态：ENABLED/DISABLED */
-    @Schema(description = "状态：ENABLED启用/DISABLED停用")
+    /** 状态:ENABLED/DISABLED */
+    @Schema(description = "状态:ENABLED启用/DISABLED停用")
     private String status;
 }

@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 系统用户实体，对应 sys_user 表。
+ * 系统用户实体,对应 sys_user 表。
  */
 @Data
 public class SysUserEntity {
@@ -14,7 +14,7 @@ public class SysUserEntity {
     private Long id;
     /** 登录用户名 */
     private String username;
-    /** 登录密码，当前为测试阶段明文存储 */
+    /** 登录密码,当前为测试阶段明文存储 */
     private String password;
     /** 展示昵称 */
     private String nickname;
@@ -26,7 +26,7 @@ public class SysUserEntity {
     private String email;
     /** 飞书 union_id */
     private String unionId;
-    /** 状态，ACTIVE启用，INACTIVE禁用 */
+    /** 状态,ACTIVE启用,INACTIVE禁用 */
     private String status;
     /** 创建时间 */
     private Date createdAt;

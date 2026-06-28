@@ -14,7 +14,7 @@ public class CreatePaymentOrderReq {
 
     /** 支付订单号 */
     @NotBlank(message = "支付订单号不能为空")
-    @Schema(description = "支付订单号，由生成订单号接口返回", example = "1010202606131416420101123456")
+    @Schema(description = "支付订单号,由生成订单号接口返回", example = "1010202606131416420101123456")
     private String orderNo;
 
     /** 学生手机号 */
@@ -35,11 +35,11 @@ public class CreatePaymentOrderReq {
     /** 支付订单金额 */
     @NotNull(message = "支付订单金额不能为空")
     @DecimalMin(value = "0.01", message = "支付订单金额必须大于0")
-    @Schema(description = "支付订单金额，通常为产品金额减优惠金额后的应付金额", example = "1999.00")
+    @Schema(description = "支付订单金额,通常为产品金额减优惠金额后的应付金额", example = "1999.00")
     private BigDecimal orderAmount;
 
     /** 预支付订单号 */
     @NotBlank(message = "预支付订单号不能为空")
-    @Schema(description = "预支付订单号，来自预支付订单管理生成的订单号", example = "YQ20260613141642123456")
+    @Schema(description = "预支付订单号,来自预支付订单管理生成的订单号", example = "YQ20260613141642123456")
     private String prepayOrderNo;
 }

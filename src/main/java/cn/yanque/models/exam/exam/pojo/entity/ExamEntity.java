@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 考试安排实体，对应 exam 表。
+ * 考试安排实体,对应 exam 表。
  */
 @Data
 public class ExamEntity {
@@ -25,7 +25,7 @@ public class ExamEntity {
     /** 可进入考试截止时间 */
     private Date endTime;
 
-    /** 学生个人答题时长，单位分钟 */
+    /** 学生个人答题时长,单位分钟 */
     private Integer durationMinutes;
 
     /** 监考老师用户ID */

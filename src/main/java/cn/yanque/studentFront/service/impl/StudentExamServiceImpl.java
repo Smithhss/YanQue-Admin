@@ -216,7 +216,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
         Date now = new Date();
         if (record.getDeadlineTime() != null && record.getDeadlineTime().before(now)) {
-            throw BusinessException.DateError.newInstance("考试已超时，不能交卷");
+            throw BusinessException.DateError.newInstance("考试已超时,不能交卷");
         }
 
         // 查询考试信息
@@ -263,7 +263,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         record.setUpdatedAt(now);
         int rows = studentExamRecordMapper.updateSubmit(record);
         if (rows == 0) {
-            throw BusinessException.DateError.newInstance("考试状态已变化，请刷新后重试");
+            throw BusinessException.DateError.newInstance("考试状态已变化,请刷新后重试");
         }
 
         StudentExamSubmitRes res = new StudentExamSubmitRes();
@@ -508,7 +508,7 @@ public class StudentExamServiceImpl implements StudentExamService {
                 .filter(questionId -> !paperQuestionMap.containsKey(questionId))
                 .toList();
         if (!invalidQuestionIds.isEmpty()) {
-            throw BusinessException.DateError.newInstance("提交了不属于当前试卷的题目：" + invalidQuestionIds.get(0));
+            throw BusinessException.DateError.newInstance("提交了不属于当前试卷的题目:" + invalidQuestionIds.get(0));
         }
     }
 
@@ -519,7 +519,7 @@ public class StudentExamServiceImpl implements StudentExamService {
                                                     String answerContent,
                                                     Date now) {
         if (question == null) {
-            throw BusinessException.DateError.newInstance("题目不存在：" + paperQuestion.getQuestionId());
+            throw BusinessException.DateError.newInstance("题目不存在:" + paperQuestion.getQuestionId());
         }
         StudentExamAnswerEntity answer = new StudentExamAnswerEntity();
         answer.setRecordId(record.getId());
@@ -550,7 +550,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (!StringUtils.hasText(value)) {
             return "";
         }
-        return Arrays.stream(value.split("[,，]"))
+        return Arrays.stream(value.split("[,,]"))
                 .map(String::trim)
                 .filter(StringUtils::hasText)
                 .map(String::toUpperCase)

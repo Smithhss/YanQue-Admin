@@ -147,7 +147,7 @@ public class StudentFollowupTagServiceImpl implements StudentFollowupTagService 
         if (value == null || value.isBlank()) {
             return List.of();
         }
-        Set<String> options = Arrays.stream(value.split("[,，、;；\\n\\r]+"))
+        Set<String> options = Arrays.stream(value.split("[,,,;;\\n\\r]+"))
                 .map(String::trim)
                 .filter(item -> !item.isBlank())
                 .collect(Collectors.toCollection(LinkedHashSet::new));

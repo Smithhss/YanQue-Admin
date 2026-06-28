@@ -11,13 +11,13 @@ import cn.yanque.models.dorm.pojo.vo.res.DormBuildingRes;
  */
 public interface DormBuildingService {
 
-    /** 新增楼栋，返回新楼栋ID。 */
+    /** 新增楼栋,返回新楼栋ID。 */
     Long addBuilding(DormBuildingCreateReq req);
 
-    /** 修改楼栋，返回楼栋ID。 */
+    /** 修改楼栋,返回楼栋ID。 */
     Long updateBuilding(DormBuildingUpdateReq req);
 
-    /** 删除楼栋（楼栋下存在房间时不允许删除），返回楼栋ID。 */
+    /** 删除楼栋(楼栋下存在房间时不允许删除),返回楼栋ID。 */
     Long deleteBuilding(Long id);
 
     /** 查询楼栋详情。 */

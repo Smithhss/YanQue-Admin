@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 宿舍房间响应对象（详情与分页列表共用）。
+ * 宿舍房间响应对象(详情与分页列表共用)。
  */
 @Data
 @Schema(description = "宿舍房间响应")
@@ -37,7 +37,7 @@ public class DormRoomRes {
     private String roomType;
 
     /** 状态 */
-    @Schema(description = "状态：ENABLED启用/DISABLED停用/MAINTENANCE维修")
+    @Schema(description = "状态:ENABLED启用/DISABLED停用/MAINTENANCE维修")
     private String status;
 
     /** 创建时间 */

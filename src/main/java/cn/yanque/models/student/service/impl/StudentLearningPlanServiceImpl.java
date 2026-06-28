@@ -174,7 +174,7 @@ public class StudentLearningPlanServiceImpl implements StudentLearningPlanServic
                 throw BusinessException.DateError.newInstance("阶段不能为空");
             }
             if (!courseStages.contains(stageName)) {
-                throw BusinessException.DateError.newInstance("阶段不属于所选课程：" + stageName);
+                throw BusinessException.DateError.newInstance("阶段不属于所选课程:" + stageName);
             }
             if (item.getStageDays() == null || item.getStageDays() <= 0) {
                 throw BusinessException.DateError.newInstance("阶段学习天数必须大于0");
@@ -185,12 +185,12 @@ public class StudentLearningPlanServiceImpl implements StudentLearningPlanServic
             stageMap.put(stageName, normalized);
         }
 
-        // 阶段顺序以课程详情为准，防止前端传参顺序和课程阶段顺序不一致。
+        // 阶段顺序以课程详情为准,防止前端传参顺序和课程阶段顺序不一致。
         List<StudentLearningPlanStageReq> normalizedStages = new ArrayList<>();
         for (String courseStage : courseStages) {
             StudentLearningPlanStageReq stage = stageMap.get(courseStage);
             if (stage == null) {
-                throw BusinessException.DateError.newInstance("请填写阶段学习天数：" + courseStage);
+                throw BusinessException.DateError.newInstance("请填写阶段学习天数:" + courseStage);
             }
             normalizedStages.add(stage);
         }

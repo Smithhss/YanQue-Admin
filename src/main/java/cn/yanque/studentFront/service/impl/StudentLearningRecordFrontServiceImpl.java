@@ -28,7 +28,7 @@ public class StudentLearningRecordFrontServiceImpl implements StudentLearningRec
 
     @Override
     public PageResult<AttendancePageRes> myAttendance(Integer pageNum, Integer pageSize) {
-        // 仅查询当前登录学生本人的考勤，studentId 取自登录态。
+        // 仅查询当前登录学生本人的考勤,studentId 取自登录态。
         Long studentId = StudentThreadLocal.get().getId();
         AttendancePageReq req = new AttendancePageReq();
         req.setStudentId(studentId);

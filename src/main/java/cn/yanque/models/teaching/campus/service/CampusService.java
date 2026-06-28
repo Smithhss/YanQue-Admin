@@ -13,7 +13,7 @@ import cn.yanque.models.teaching.campus.pojo.vo.res.CampusUpdateRes;
 /**
  * 校区管理业务接口。
  * <p>
- * 负责校区地点、负责人、负责人电话的增删改查。
+ * 负责校区地点,负责人,负责人电话的增删改查。
  */
 public interface CampusService {
 
@@ -28,7 +28,7 @@ public interface CampusService {
     /**
      * 修改校区。
      *
-     * @param req 校区修改请求，ID由Controller从路径参数写入
+     * @param req 校区修改请求,ID由Controller从路径参数写入
      * @return 被修改的校区ID
      */
     CampusUpdateRes updateCampus(CampusUpdateReq req);

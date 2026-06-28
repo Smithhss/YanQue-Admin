@@ -9,22 +9,22 @@ import cn.yanque.models.dorm.pojo.vo.res.DormAssignmentRes;
 /**
  * 宿舍入住业务接口。
  * <p>
- * 约束：性别隔离（学生性别须与楼栋一致）、一人一床（同时仅一条在住）、床位唯一占用。
+ * 约束:性别隔离(学生性别须与楼栋一致),一人一床(同时仅一条在住),床位唯一占用。
  */
 public interface DormAssignmentService {
 
-    /** 入住分配，返回入住记录ID。 */
+    /** 入住分配,返回入住记录ID。 */
     Long assign(DormAssignReq req, Long operatorId);
 
-    /** 退宿，返回入住记录ID。 */
+    /** 退宿,返回入住记录ID。 */
     Long checkout(Long assignmentId);
 
-    /** 调宿（退旧床+入新床），返回新入住记录ID。 */
+    /** 调宿(退旧床+入新床),返回新入住记录ID。 */
     Long transfer(DormTransferReq req, Long operatorId);
 
     /** 分页查询入住记录。 */
     PageResult<DormAssignmentRes> pageAssignment(DormAssignmentPageReq req);
 
-    /** 查询某学生当前在住的入住记录（带楼栋/房间/床位名称，供学生端"我的宿舍"展示），无则返回null。 */
+    /** 查询某学生当前在住的入住记录(带楼栋/房间/床位名称,供学生端"我的宿舍"展示),无则返回null。 */
     DormAssignmentRes getLivingByStudentId(Long studentId);
 }

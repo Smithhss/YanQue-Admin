@@ -11,8 +11,8 @@ import lombok.Data;
 @Schema(description = "预支付订单分页查询请求")
 public class PrepayOrderPageReq {
 
-    /** 搜索关键字，匹配学生姓名或手机号 */
-    @Schema(description = "关键词，匹配学生姓名或手机号")
+    /** 搜索关键字,匹配学生姓名或手机号 */
+    @Schema(description = "关键词,匹配学生姓名或手机号")
     private String keyword;
 
     /** 订单状态 */

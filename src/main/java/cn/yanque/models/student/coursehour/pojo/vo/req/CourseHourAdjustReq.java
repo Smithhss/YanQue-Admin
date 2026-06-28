@@ -11,7 +11,7 @@ public class CourseHourAdjustReq {
     @NotNull(message = "学生ID不能为空")
     private Long studentId;
 
-    /** 变动课时：正为充值，负为扣减 */
+    /** 变动课时:正为充值,负为扣减 */
     @NotNull(message = "调整课时不能为空")
     private BigDecimal changeHours;
 

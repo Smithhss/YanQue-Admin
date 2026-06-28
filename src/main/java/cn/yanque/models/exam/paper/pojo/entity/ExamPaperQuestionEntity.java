@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 试卷题目关联实体，对应 exam_paper_question 表。
+ * 试卷题目关联实体,对应 exam_paper_question 表。
  */
 @Data
 public class ExamPaperQuestionEntity {

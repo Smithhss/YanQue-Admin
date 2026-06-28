@@ -54,7 +54,7 @@ public class ClassScheduleController {
     @GetMapping("{classId}/date-detail")
     @Operation(description = "查询班级当天课程详情")
     public ApiResponse<ClassScheduleDateDetailRes> getDateDetail(@Parameter(description = "班级ID") @PathVariable Long classId,
-                                                                 @Parameter(description = "上课日期，格式：yyyy-MM-dd")
+                                                                 @Parameter(description = "上课日期,格式:yyyy-MM-dd")
                                                                  @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") Date scheduleDate) {
         return ApiResponse.success(classScheduleService.getDateDetail(classId, scheduleDate));
     }

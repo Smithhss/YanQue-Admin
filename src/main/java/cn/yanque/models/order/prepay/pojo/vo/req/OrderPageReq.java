@@ -28,7 +28,7 @@ public class OrderPageReq {
     private String prepayOrderNo;
 
     /** 支付订单状态 */
-    @Schema(description = "订单状态：INIT初始化，FAIL失败，PROCESSING支付中，SUCCESS支付成功，TIMEOUT超时")
+    @Schema(description = "订单状态:INIT初始化,FAIL失败,PROCESSING支付中,SUCCESS支付成功,TIMEOUT超时")
     private String status;
 
     /** 当前页码 */

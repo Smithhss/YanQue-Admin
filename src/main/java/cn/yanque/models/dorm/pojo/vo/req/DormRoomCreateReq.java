@@ -34,10 +34,10 @@ public class DormRoomCreateReq {
     private Integer capacity;
 
     /** 房型 */
-    @Schema(description = "房型：FOUR四人间/SIX六人间等")
+    @Schema(description = "房型:FOUR四人间/SIX六人间等")
     private String roomType;
 
-    /** 是否按容量自动生成床位（默认是） */
+    /** 是否按容量自动生成床位(默认是) */
     @Schema(description = "是否按容量自动生成床位", defaultValue = "true")
     private Boolean autoGenerateBeds = true;
 }
