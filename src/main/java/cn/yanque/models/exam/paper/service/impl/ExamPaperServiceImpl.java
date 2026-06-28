@@ -1,6 +1,7 @@
 package cn.yanque.models.exam.paper.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.EnableStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.exam.paper.mapper.ExamPaperMapper;
 import cn.yanque.models.exam.paper.mapper.ExamPaperQuestionMapper;
@@ -138,7 +139,7 @@ public class ExamPaperServiceImpl implements ExamPaperService {
                 .collect(Collectors.groupingBy(ExamQuestionCourseEntity::getQuestionId));
         for (Long questionId : questionIds) {
             ExamQuestionEntity question = questionMap.get(questionId);
-            if (!"ENABLED".equals(question.getStatus())) {
+            if (!EnableStatusEnum.ENABLED.name().equals(question.getStatus())) {
                 throw BusinessException.DateError.newInstance("试卷包含未启用题目:" + questionId);
             }
             List<ExamQuestionCourseEntity> questionRelations = relationMap.getOrDefault(questionId, List.of());

@@ -7,6 +7,7 @@ import cn.yanque.common.enums.OrderStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.config.ThreadPoolConfig;
 import cn.yanque.integration.payment.pojo.req.PaymentUnifiedOrderReq;
+import cn.yanque.integration.payment.pojo.res.PaymentTradeQueryRes;
 import cn.yanque.integration.payment.pojo.res.PaymentUnifiedOrderRes;
 import cn.yanque.integration.payment.service.PaymentCashierService;
 import cn.yanque.models.order.product.mapper.ProductMapper;
@@ -108,7 +109,28 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
                 if (latestOrder == null || !OrderStatusEnum.PROCESSING.name().equals(latestOrder.getStatus())) {
                     return;
                 }
+
+                // 主动查询支付宝交易状态, 防止误杀已支付订单
+                try {
+                    PaymentTradeQueryRes queryRes = paymentCashierService.queryTrade(orderNo);
+                    if ("TRADE_SUCCESS".equals(queryRes.getTradeStatus()) || "TRADE_FINISHED".equals(queryRes.getTradeStatus())) {
+                        orderService.updateOrderStatus(new UpdateOrderStatusInfo(
+                                orderNo, OrderStatusEnum.SUCCESS.name(), OrderStatusEnum.PROCESSING.name(),
+                                queryRes.getTradeNo(), new Date()));
+                        return;
+                    }
+                } catch (Exception e) {
+                    log.warn("超时检查-交易查询失败, 将标记超时, orderNo={}", orderNo, e);
+                }
+
                 orderService.updateOrderStatus(new UpdateOrderStatusInfo(orderNo, OrderStatusEnum.TIMEOUT.name(), OrderStatusEnum.PROCESSING.name(), null, null));
+
+                // 关闭支付宝端交易, 防止用户继续支付已超时订单
+                try {
+                    paymentCashierService.closeTrade(orderNo);
+                } catch (Exception e) {
+                    log.warn("超时检查-交易关闭失败, orderNo={}", orderNo, e);
+                }
             } catch (Exception e) {
                 log.error("支付订单超时检查失败, orderNo={}", orderNo, e);
             }

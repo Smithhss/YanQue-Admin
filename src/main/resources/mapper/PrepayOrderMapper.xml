@@ -87,6 +87,7 @@
         limit 1
     </select>
 
+    <!-- 对应 PrepayOrderStatusEnum: PENDING_PAYMENT -> SUCCESS -->
     <update id="updatePrepayOrderSuccess">
         update prepay_order
         set order_status = 'SUCCESS'

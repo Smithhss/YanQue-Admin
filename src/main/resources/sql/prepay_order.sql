@@ -6,7 +6,7 @@ create table if not exists prepay_order (
     product_id bigint not null comment '产品ID',
     product_amount decimal(10, 2) not null comment '产品金额',
     discount_amount decimal(10, 2) not null default 0.00 comment '优惠金额',
-    order_status varchar(30) not null default 'PENDING_PAYMENT' comment '订单状态：PENDING_PAYMENT待支付，PAID已支付，CANCELED已取消',
+    order_status varchar(30) not null default 'PENDING_PAYMENT' comment '订单状态：PENDING_PAYMENT待支付，SUCCESS已支付，CANCELED已取消',
     created_at datetime not null default current_timestamp comment '创建时间',
     updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
     unique key uk_order_no (order_no),

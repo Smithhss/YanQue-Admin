@@ -7,6 +7,7 @@ import cn.yanque.config.AlipayProperties;
 import cn.yanque.integration.payment.pojo.req.PaymentRefundReq;
 import cn.yanque.integration.payment.pojo.req.PaymentUnifiedOrderReq;
 import cn.yanque.integration.payment.pojo.res.PaymentRefundRes;
+import cn.yanque.integration.payment.pojo.res.PaymentTradeQueryRes;
 import cn.yanque.integration.payment.pojo.res.PaymentUnifiedOrderRes;
 import cn.yanque.integration.payment.service.PaymentCashierService;
 import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
@@ -48,6 +49,8 @@ public class AlipayCashierServiceImpl implements PaymentCashierService {
 
     private static final String PAGE_PAY_METHOD = "alipay.trade.page.pay";
     private static final String REFUND_METHOD = "alipay.trade.refund";
+    private static final String QUERY_METHOD = "alipay.trade.query";
+    private static final String CLOSE_METHOD = "alipay.trade.close";
     private static final String VERSION = "1.0";
     private static final DateTimeFormatter ALIPAY_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -114,7 +117,13 @@ public class AlipayCashierServiceImpl implements PaymentCashierService {
         assertConfigured();
         Map<String, String> params = buildCommonParams(PAGE_PAY_METHOD);
         params.put("notify_url", alipayProperties.getNotifyUrl());
-        params.put("return_url", appendOrderNo(alipayProperties.getReturnUrl(), order.getOrderNo()));
+        // return_url 指向后端验签端点, returnUrl 参数供验签后重定向前端
+        String backendReturnUrl = alipayProperties.getReturnUrl();
+        if (StringUtils.hasText(backendReturnUrl) && !backendReturnUrl.startsWith("http://127.0.0.1")) {
+            params.put("return_url", appendOrderNo(backendReturnUrl, order.getOrderNo()));
+        } else {
+            params.put("return_url", appendOrderNo(backendReturnUrl, order.getOrderNo()));
+        }
 
         JSONObject bizContent = new JSONObject();
         bizContent.put("out_trade_no", order.getOrderNo());
@@ -152,6 +161,67 @@ public class AlipayCashierServiceImpl implements PaymentCashierService {
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             log.warn("alipay notify signature verify failed", e);
             return false;
+        }
+    }
+
+    @Override
+    public PaymentTradeQueryRes queryTrade(String orderNo) {
+        assertConfigured();
+        Map<String, String> params = buildCommonParams(QUERY_METHOD);
+        JSONObject bizContent = new JSONObject();
+        bizContent.put("out_trade_no", orderNo);
+        params.put("biz_content", bizContent.toJSONString());
+        sign(params);
+
+        try {
+            String body = HttpClient.newHttpClient()
+                    .send(HttpRequest.newBuilder(URI.create(alipayProperties.getGatewayUrl()))
+                            .header("Content-Type", "application/x-www-form-urlencoded;charset=" + alipayProperties.getCharset())
+                            .POST(HttpRequest.BodyPublishers.ofString(toFormBody(params), charset()))
+                            .build(), HttpResponse.BodyHandlers.ofString(charset()))
+                    .body();
+            JSONObject response = JSONObject.parseObject(body).getJSONObject("alipay_trade_query_response");
+            PaymentTradeQueryRes res = new PaymentTradeQueryRes();
+            if (response != null && "10000".equals(response.getString("code"))) {
+                res.setTradeStatus(response.getString("trade_status"));
+                res.setTradeNo(response.getString("trade_no"));
+                res.setOutTradeNo(response.getString("out_trade_no"));
+            } else {
+                res.setTradeStatus("NOT_FOUND");
+            }
+            return res;
+        } catch (IOException | InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("alipay trade query failed, orderNo={}", orderNo, e);
+            PaymentTradeQueryRes res = new PaymentTradeQueryRes();
+            res.setTradeStatus("QUERY_FAILED");
+            return res;
+        }
+    }
+
+    @Override
+    public void closeTrade(String orderNo) {
+        assertConfigured();
+        Map<String, String> params = buildCommonParams(CLOSE_METHOD);
+        JSONObject bizContent = new JSONObject();
+        bizContent.put("out_trade_no", orderNo);
+        params.put("biz_content", bizContent.toJSONString());
+        sign(params);
+
+        try {
+            String body = HttpClient.newHttpClient()
+                    .send(HttpRequest.newBuilder(URI.create(alipayProperties.getGatewayUrl()))
+                            .header("Content-Type", "application/x-www-form-urlencoded;charset=" + alipayProperties.getCharset())
+                            .POST(HttpRequest.BodyPublishers.ofString(toFormBody(params), charset()))
+                            .build(), HttpResponse.BodyHandlers.ofString(charset()))
+                    .body();
+            JSONObject response = JSONObject.parseObject(body).getJSONObject("alipay_trade_close_response");
+            if (response == null || !"10000".equals(response.getString("code"))) {
+                log.warn("alipay trade close failed or already closed, orderNo={}, response={}", orderNo, body);
+            }
+        } catch (IOException | InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("alipay trade close exception, orderNo={}", orderNo, e);
         }
     }
 

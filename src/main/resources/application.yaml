@@ -37,7 +37,7 @@ alipay:
   app-private-key: ${YQ_ALIPAY_APP_PRIVATE_KEY:}
   alipay-public-key: ${YQ_ALIPAY_PUBLIC_KEY:}
   notify-url: ${YQ_ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/alipay/notify}
-  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:8080/yq-admin/alipay/return}
   cashier-url: ${YQ_ALIPAY_CASHIER_URL:/yq-admin/alipay/cashier}
   charset: ${YQ_ALIPAY_CHARSET:UTF-8}
   sign-type: ${YQ_ALIPAY_SIGN_TYPE:RSA2}
@@ -53,9 +53,6 @@ yeepay:
   refund-notify-url: ${YQ_YEEPAY_REFUND_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/refund}
   mock-cashier-url: ${YQ_YEEPAY_MOCK_CASHIER_URL:http://127.0.0.1:5174/payment-return}
   sdk-config-file: ${YQ_YEEPAY_SDK_CONFIG_FILE:}
-  # 老师环境历史值仅保留为注释，不作为默认配置：
-  # pay-success-notify-url: http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/paySuccess
-  # refund-notify-url: http://10ro09314qm96.vicp.fun:8878/yq-admin/yop-callback/refund
 
 # ==================== TOS 对象存储配置 ====================
 # TOS 是火山引擎的对象存储服务（类似阿里云 OSS）

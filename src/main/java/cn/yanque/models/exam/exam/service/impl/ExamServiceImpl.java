@@ -1,6 +1,8 @@
 package cn.yanque.models.exam.exam.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.ExamStatusEnum;
+import cn.yanque.common.enums.GradingStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.exam.exam.mapper.ExamMapper;
 import cn.yanque.models.exam.exam.mapper.StudentExamAnswerMapper;
@@ -51,14 +53,6 @@ import java.util.stream.Collectors;
 
 @Service
 public class ExamServiceImpl implements ExamService {
-
-    private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
-
-    private static final String STATUS_SUBMITTED = "SUBMITTED";
-
-    private static final String GRADING_STATUS_PENDING = "PENDING";
-
-    private static final String GRADING_STATUS_COMPLETED = "COMPLETED";
 
     private static final List<String> OBJECTIVE_QUESTION_TYPES = List.of("SINGLE", "MULTIPLE", "JUDGE");
 
@@ -190,7 +184,7 @@ public class ExamServiceImpl implements ExamService {
 
         // 根据学生考试记录查询记录信息
         StudentExamRecordEntity record = getRequiredRecord(recordId);
-        if (!STATUS_SUBMITTED.equals(record.getStatus())) {
+        if (!ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
             throw BusinessException.DateError.newInstance("考试尚未提交,不能查看答卷");
         }
 
@@ -233,7 +227,7 @@ public class ExamServiceImpl implements ExamService {
     @Transactional(rollbackFor = Exception.class)
     public ExamSubmissionGradeRes gradeSubmission(Long recordId, ExamSubmissionGradeReq req) {
         StudentExamRecordEntity record = getRequiredRecord(recordId);
-        if (!STATUS_SUBMITTED.equals(record.getStatus())) {
+        if (!ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
             throw BusinessException.DateError.newInstance("考试尚未提交,不能批改");
         }
         List<StudentExamAnswerEntity> answers = studentExamAnswerMapper.selectByRecordId(recordId);
@@ -262,8 +256,8 @@ public class ExamServiceImpl implements ExamService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         String gradingStatus = latestAnswers.stream().allMatch(answer -> answer.getScore() != null)
-                ? GRADING_STATUS_COMPLETED
-                : GRADING_STATUS_PENDING;
+                ? GradingStatusEnum.COMPLETED.name()
+                : GradingStatusEnum.PENDING.name();
 
         record.setScore(totalScore);
         record.setGradingStatus(gradingStatus);
@@ -287,7 +281,7 @@ public class ExamServiceImpl implements ExamService {
         res.setStudentName(student.getStudentName());
         res.setStudentPhone(student.getStudentPhone());
         if (record == null) {
-            res.setRecordStatus("NOT_STARTED");
+            res.setRecordStatus(ExamStatusEnum.NOT_STARTED.name());
             res.setRecordStatusText(exam.getEndTime().before(now) ? "未参加" : "未进入");
             return res;
         }
@@ -303,13 +297,13 @@ public class ExamServiceImpl implements ExamService {
     }
 
     private String buildRecordStatusText(StudentExamRecordEntity record, Date now) {
-        if (STATUS_SUBMITTED.equals(record.getStatus())) {
-            return GRADING_STATUS_COMPLETED.equals(record.getGradingStatus()) ? "已批改" : "待批改";
+        if (ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
+            return GradingStatusEnum.COMPLETED.name().equals(record.getGradingStatus()) ? "已批改" : "待批改";
         }
-        if (STATUS_IN_PROGRESS.equals(record.getStatus()) && record.getDeadlineTime() != null && record.getDeadlineTime().before(now)) {
+        if (ExamStatusEnum.IN_PROGRESS.name().equals(record.getStatus()) && record.getDeadlineTime() != null && record.getDeadlineTime().before(now)) {
             return "已超时";
         }
-        if (STATUS_IN_PROGRESS.equals(record.getStatus())) {
+        if (ExamStatusEnum.IN_PROGRESS.name().equals(record.getStatus())) {
             return "进行中";
         }
         return record.getStatus();

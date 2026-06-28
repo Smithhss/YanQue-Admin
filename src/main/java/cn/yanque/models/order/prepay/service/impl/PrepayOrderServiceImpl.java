@@ -1,6 +1,7 @@
 package cn.yanque.models.order.prepay.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.PrepayOrderStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.prepay.mapper.PrepayOrderMapper;
 import cn.yanque.models.order.prepay.pojo.entity.PrepayOrderEntity;
@@ -28,7 +29,7 @@ import java.util.List;
 @Service
 public class PrepayOrderServiceImpl implements PrepayOrderService {
 
-    private static final String DEFAULT_ORDER_STATUS = "PENDING_PAYMENT";
+    private static final String DEFAULT_ORDER_STATUS = PrepayOrderStatusEnum.PENDING_PAYMENT.name();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Autowired

@@ -1,3 +1,5 @@
+# 沙箱支付需要公网回调: 本地开发请用 ngrok/frp 隧道映射后设置 YQ_ALIPAY_NOTIFY_URL 和 YQ_ALIPAY_RETURN_URL
+
 spring:
   data:
     redis:
@@ -10,11 +12,6 @@ spring:
     url: jdbc:mysql://${YQ_DB_HOST:127.0.0.1}:${YQ_DB_PORT:3306}/${YQ_DB_NAME:yanque}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: ${YQ_DB_USERNAME:root}
     password: ${YQ_DB_PASSWORD:}
-
-# 老师数据库/Redis 历史值仅保留为注释，避免本地开发默认误连老师环境：
-# spring.data.redis.host: redis-shzl6tz4l7lst4rga.redis.volces.com
-# spring.data.redis.database: 3
-# spring.datasource.url: jdbc:mysql://mysql-02a756b9c0e4-public.rds.volces.com:3306/yanque-shiyi
 
 logging:
   level:
@@ -29,7 +26,7 @@ alipay:
   app-private-key: ${YQ_ALIPAY_APP_PRIVATE_KEY:}
   alipay-public-key: ${YQ_ALIPAY_PUBLIC_KEY:}
   notify-url: ${YQ_ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/alipay/notify}
-  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:8080/yq-admin/alipay/return}
   cashier-url: ${YQ_ALIPAY_CASHIER_URL:/yq-admin/alipay/cashier}
 
 yeepay:

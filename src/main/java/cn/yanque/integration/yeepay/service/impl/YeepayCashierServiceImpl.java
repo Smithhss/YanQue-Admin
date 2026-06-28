@@ -8,6 +8,7 @@ import cn.yanque.config.YeepayProperties;
 import cn.yanque.integration.payment.pojo.req.PaymentRefundReq;
 import cn.yanque.integration.payment.pojo.req.PaymentUnifiedOrderReq;
 import cn.yanque.integration.payment.pojo.res.PaymentRefundRes;
+import cn.yanque.integration.payment.pojo.res.PaymentTradeQueryRes;
 import cn.yanque.integration.payment.pojo.res.PaymentUnifiedOrderRes;
 import cn.yanque.integration.payment.service.PaymentCashierService;
 import cn.yanque.integration.yeepay.pojo.req.YeepayRefundReq;
@@ -127,5 +128,22 @@ public class YeepayCashierServiceImpl implements YeepayCashierService, PaymentCa
     private boolean isMockMode() {
         return !StringUtils.hasText(yeepayProperties.getMode())
                 || "mock".equalsIgnoreCase(yeepayProperties.getMode());
+    }
+
+    @Override
+    public PaymentTradeQueryRes queryTrade(String orderNo) {
+        PaymentTradeQueryRes res = new PaymentTradeQueryRes();
+        res.setOutTradeNo(orderNo);
+        if (isMockMode()) {
+            res.setTradeStatus("NOT_FOUND");
+            return res;
+        }
+        res.setTradeStatus("NOT_FOUND");
+        return res;
+    }
+
+    @Override
+    public void closeTrade(String orderNo) {
+        // yeepay: no-op, mock mode or not implemented
     }
 }

@@ -33,7 +33,7 @@ alipay:
   app-private-key: ${YQ_ALIPAY_APP_PRIVATE_KEY:}
   alipay-public-key: ${YQ_ALIPAY_PUBLIC_KEY:}
   notify-url: ${YQ_ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/alipay/notify}
-  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:5174/payment-return}
+  return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:8080/yq-admin/alipay/return}
   cashier-url: ${YQ_ALIPAY_CASHIER_URL:/yq-admin/alipay/cashier}
 
 yeepay:

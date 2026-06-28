@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.view.RedirectView;
+import org.springframework.util.StringUtils;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -88,6 +90,26 @@ public class AlipayController {
                 new Date()));
         prepayOrderService.updatePrepayOrderSuccess(order.getPrepayOrderNo());
         return "success";
+    }
+
+    @GetMapping("/return")
+    public RedirectView returnUrl(HttpServletRequest request) {
+        Map<String, String> params = extractParams(request);
+        String orderNo = params.getOrDefault("out_trade_no", "");
+        String frontendReturnUrl = params.getOrDefault("returnUrl", "");
+
+        if (alipayCashierService.verifyNotify(params)
+                && ("TRADE_SUCCESS".equals(params.get("trade_status"))
+                    || "TRADE_FINISHED".equals(params.get("trade_status")))) {
+            if (StringUtils.hasText(frontendReturnUrl)) {
+                return new RedirectView(frontendReturnUrl + "?orderNo=" + orderNo + "&status=SUCCESS");
+            }
+            return new RedirectView("/payment-return?orderNo=" + orderNo + "&status=SUCCESS");
+        }
+        if (StringUtils.hasText(frontendReturnUrl)) {
+            return new RedirectView(frontendReturnUrl + "?orderNo=" + orderNo + "&status=FAIL");
+        }
+        return new RedirectView("/payment-return?orderNo=" + orderNo + "&status=FAIL");
     }
 
     private Map<String, String> extractParams(HttpServletRequest request) {
