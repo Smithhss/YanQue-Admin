@@ -3,6 +3,7 @@ package cn.yanque.models.student.followup.service.impl;
 import cn.hutool.core.date.DateUtil;
 import cn.yanque.common.api.PageResult;
 import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.student.followup.pojo.bo.QueryStudentFollowupRecordBo;
 import cn.yanque.models.student.followup.pojo.bo.StudentFollowupRecordStatsBo;
@@ -43,7 +44,6 @@ import java.util.stream.Collectors;
 @Service
 public class StudentFollowupRecordServiceImpl implements StudentFollowupRecordService {
 
-    private static final String TEACHING_MODE_ONLINE = "ONLINE";
     private static final String RECORD_STATUS_NEED_FOLLOWUP = "NEED_FOLLOWUP";
 
     @Autowired
@@ -190,7 +190,7 @@ public class StudentFollowupRecordServiceImpl implements StudentFollowupRecordSe
 
     private boolean canGenerate(StudentEntity student) {
         return student != null
-                && TEACHING_MODE_ONLINE.equals(student.getTeachingMode())
+                && TeachingModeEnum.ONLINE.name().equals(student.getTeachingMode())
                 && ActiveEnum.ACTIVE.name().equals(student.getStatus())
                 && student.getStudentTag() != null
                 && !student.getStudentTag().isBlank();

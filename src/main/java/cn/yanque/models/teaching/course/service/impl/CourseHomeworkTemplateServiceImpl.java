@@ -1,6 +1,7 @@
 package cn.yanque.models.teaching.course.service.impl;
 
 import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.teaching.course.mapper.CourseDetailMapper;
 import cn.yanque.models.teaching.course.mapper.CourseHomeworkTemplateMapper;
@@ -27,8 +28,6 @@ import java.util.List;
 @Service
 public class CourseHomeworkTemplateServiceImpl implements CourseHomeworkTemplateService {
 
-    private static final String TEACHING_MODE_ONLINE = "ONLINE";
-    private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
     private static final String COURSE_HOMEWORK_TEMPLATE_PREFIX = "course/homework-template/";
 
     @Autowired
@@ -135,10 +134,10 @@ public class CourseHomeworkTemplateServiceImpl implements CourseHomeworkTemplate
         template.setRemark(remark);
 
         // 线上按阶段配置训练集,线下按天配置训练集,两个维度不能混用。
-        if (TEACHING_MODE_ONLINE.equals(course.getTeachingMode())) {
+        if (TeachingModeEnum.ONLINE.name().equals(course.getTeachingMode())) {
             template.setStageName(validateStageName(course.getId(), stageName));
             template.setDayNumber(null);
-        } else if (TEACHING_MODE_OFFLINE.equals(course.getTeachingMode())) {
+        } else if (TeachingModeEnum.OFFLINE.name().equals(course.getTeachingMode())) {
             template.setStageName(null);
             template.setDayNumber(validateDayNumber(course.getId(), dayNumber, course.getCourseDays()));
         } else {
@@ -212,7 +211,7 @@ public class CourseHomeworkTemplateServiceImpl implements CourseHomeworkTemplate
 
         CourseHomeworkTemplateEntity duplicate = templateMapper.selectDuplicate(bo);
         if (duplicate != null) {
-            if (TEACHING_MODE_ONLINE.equals(template.getTeachingMode())) {
+            if (TeachingModeEnum.ONLINE.name().equals(template.getTeachingMode())) {
                 throw BusinessException.DateExist.newInstance("该课程阶段已配置作业标准");
             }
             throw BusinessException.DateExist.newInstance("该课程第" + template.getDayNumber() + "天已配置作业标准");

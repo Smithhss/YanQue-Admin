@@ -7,6 +7,7 @@ import cn.yanque.common.api.PageResult;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.product.mapper.ProductMapper;
 import cn.yanque.models.order.product.pojo.entity.ProductEntity;
@@ -50,8 +51,6 @@ import java.util.stream.Collectors;
 @Service
 public class StudentServiceImpl implements StudentService {
 
-    private static final String TEACHING_MODE_ONLINE = "ONLINE";
-    private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
     private static final String SOP_STATUS_ASSIGNED = "ASSIGNED";
     private static final String ROLE_CODE_ADVISOR = "ADVISOR";
 
@@ -126,7 +125,7 @@ public class StudentServiceImpl implements StudentService {
         if (student == null) {
             throw BusinessException.DateError.newInstance("学生不存在");
         }
-        if (!TEACHING_MODE_OFFLINE.equals(student.getTeachingMode())) {
+        if (!TeachingModeEnum.OFFLINE.name().equals(student.getTeachingMode())) {
             throw BusinessException.DateError.newInstance("只有线下学生需要分配班级");
         }
         if (clazzMapper.selectById(req.getClassId()) == null) {
@@ -147,7 +146,7 @@ public class StudentServiceImpl implements StudentService {
         if (student == null) {
             throw BusinessException.DateError.newInstance("学生不存在");
         }
-        if (!TEACHING_MODE_ONLINE.equals(student.getTeachingMode())) {
+        if (!TeachingModeEnum.ONLINE.name().equals(student.getTeachingMode())) {
             throw BusinessException.DateError.newInstance("只有线上学生需要分配入学SOP");
         }
         if (!isActiveAdvisor(req.getMentorId())) {
@@ -199,9 +198,9 @@ public class StudentServiceImpl implements StudentService {
     private void fillAndValidateTeachingMode(StudentEntity student) {
         String teachingMode = student.getTeachingMode();
         if (teachingMode == null || teachingMode.isBlank()) {
-            teachingMode = TEACHING_MODE_ONLINE;
+            teachingMode = TeachingModeEnum.ONLINE.name();
         }
-        if (!TEACHING_MODE_ONLINE.equals(teachingMode) && !TEACHING_MODE_OFFLINE.equals(teachingMode)) {
+        if (!TeachingModeEnum.ONLINE.name().equals(teachingMode) && !TeachingModeEnum.OFFLINE.name().equals(teachingMode)) {
             throw BusinessException.DateError.newInstance("上课方式只能是ONLINE或OFFLINE");
         }
         student.setTeachingMode(teachingMode);

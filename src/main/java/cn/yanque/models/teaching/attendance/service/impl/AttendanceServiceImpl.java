@@ -1,6 +1,7 @@
 package cn.yanque.models.teaching.attendance.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.ActiveEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.student.coursehour.service.StudentCourseHourService;
 import cn.yanque.models.student.mapper.StudentMapper;
@@ -39,8 +40,6 @@ public class AttendanceServiceImpl implements AttendanceService {
     /** 一次上课消耗的课时;出勤/迟到/旷课扣减,请假不扣。 */
     private static final BigDecimal HOUR_PER_CLASS = new BigDecimal("1.0");
 
-    private static final String ACTIVE = "ACTIVE";
-
     @Autowired
     private AttendanceMapper attendanceMapper;
 
@@ -58,7 +57,7 @@ public class AttendanceServiceImpl implements AttendanceService {
         }
 
         List<StudentEntity> students = studentMapper.selectByClassId(schedule.getClassId()).stream()
-                .filter(s -> ACTIVE.equals(s.getStatus()))
+                .filter(s -> ActiveEnum.ACTIVE.name().equals(s.getStatus()))
                 .toList();
         Map<Long, ClassAttendanceEntity> done = attendanceMapper.selectByScheduleId(scheduleId).stream()
                 .collect(Collectors.toMap(ClassAttendanceEntity::getStudentId, Function.identity()));

@@ -2,6 +2,7 @@ package cn.yanque.models.teaching.course.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.teaching.course.mapper.CourseDetailMapper;
 import cn.yanque.models.teaching.course.mapper.CourseHomeworkTemplateMapper;
@@ -40,9 +41,6 @@ import java.util.List;
 
 @Service
 public class CourseServiceImpl implements CourseService {
-
-    private static final String TEACHING_MODE_ONLINE = "ONLINE";
-    private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
 
     @Autowired
     private CourseMapper courseMapper;
@@ -229,22 +227,22 @@ public class CourseServiceImpl implements CourseService {
 
             checkImportData(courseEntity, info, i);
 
-            if (TEACHING_MODE_ONLINE.equals(courseEntity.getTeachingMode())) {
+            if (TeachingModeEnum.ONLINE.name().equals(courseEntity.getTeachingMode())) {
                 if (existStageList.contains(info.getStageName())) {
                     throw BusinessException.DateExist.newInstance("第" + (i + 1) + "行阶段重复");
                 }
                 existStageList.add(info.getStageName());
             }
 
-            if (TEACHING_MODE_OFFLINE.equals(courseEntity.getTeachingMode()) && existStageList.contains(info.getStageName())) {
+            if (TeachingModeEnum.OFFLINE.name().equals(courseEntity.getTeachingMode()) && existStageList.contains(info.getStageName())) {
                 throw BusinessException.DateError.newInstance("第" + (i + 1) + "行阶段不连续");
             }
 
-            if (TEACHING_MODE_OFFLINE.equals(courseEntity.getTeachingMode()) && StrUtil.isEmpty(curStage)) {
+            if (TeachingModeEnum.OFFLINE.name().equals(courseEntity.getTeachingMode()) && StrUtil.isEmpty(curStage)) {
                 curStage = info.getStageName();
             }
 
-            if (TEACHING_MODE_OFFLINE.equals(courseEntity.getTeachingMode()) && StrUtil.isNotEmpty(curStage) && !curStage.equals(info.getStageName())){
+            if (TeachingModeEnum.OFFLINE.name().equals(courseEntity.getTeachingMode()) && StrUtil.isNotEmpty(curStage) && !curStage.equals(info.getStageName())){
                 existStageList.add(curStage);
                 curStage = info.getStageName();
             }
@@ -267,12 +265,12 @@ public class CourseServiceImpl implements CourseService {
             throw BusinessException.DateError.newInstance("第" + (row + 1) + "行阶段为空");
         }
 
-        if (TEACHING_MODE_OFFLINE.equals(course.getTeachingMode())
+        if (TeachingModeEnum.OFFLINE.name().equals(course.getTeachingMode())
                 && (info.getDayNumber() == null || StrUtil.isEmpty(info.getClassContent()))) {
             throw BusinessException.DateError.newInstance("第" + (row + 1) + "行数据有字段为空");
         }
 
-        if (TEACHING_MODE_OFFLINE.equals(course.getTeachingMode()) && row + 1 != info.getDayNumber()) {
+        if (TeachingModeEnum.OFFLINE.name().equals(course.getTeachingMode()) && row + 1 != info.getDayNumber()) {
             throw BusinessException.DateError.newInstance("第" + (row + 1) + "行天数有误");
         }
     }
@@ -290,7 +288,7 @@ public class CourseServiceImpl implements CourseService {
         detail.setStageName(stageName.trim());
 
         // 线上课程详情只维护阶段;天数和每日内容属于线下课程维度。
-        if (TEACHING_MODE_ONLINE.equals(course.getTeachingMode())) {
+        if (TeachingModeEnum.ONLINE.name().equals(course.getTeachingMode())) {
             detail.setDayNumber(null);
             detail.setClassContent(null);
             if (checkExistingDuplicate) {
@@ -299,7 +297,7 @@ public class CourseServiceImpl implements CourseService {
             return;
         }
 
-        if (TEACHING_MODE_OFFLINE.equals(course.getTeachingMode())) {
+        if (TeachingModeEnum.OFFLINE.name().equals(course.getTeachingMode())) {
             if (dayNumber == null) {
                 throw BusinessException.DateError.newInstance("线下课程第几天不能为空");
             }
@@ -350,7 +348,7 @@ public class CourseServiceImpl implements CourseService {
             throw BusinessException.DateError.newInstance("上课方式不能为空");
         }
         String normalizedTeachingMode = teachingMode.trim();
-        if (!TEACHING_MODE_ONLINE.equals(normalizedTeachingMode) && !TEACHING_MODE_OFFLINE.equals(normalizedTeachingMode)) {
+        if (!TeachingModeEnum.ONLINE.name().equals(normalizedTeachingMode) && !TeachingModeEnum.OFFLINE.name().equals(normalizedTeachingMode)) {
             throw BusinessException.DateError.newInstance("上课方式只能是ONLINE或OFFLINE");
         }
         return normalizedTeachingMode;

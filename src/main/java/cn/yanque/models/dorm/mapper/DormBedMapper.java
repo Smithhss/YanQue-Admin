@@ -17,10 +17,11 @@ public interface DormBedMapper {
 
     int updateById(DormBedEntity bed);
 
-    /** 更新床位占用状态与当前入住学生(入住/退宿流转用)。 */
+    /** 更新床位占用状态与当前入住学生(入住/退宿流转用)。WHERE包含oldStatus防止并发重复操作。 */
     int updateStatusAndStudent(@Param("id") Long id,
                                @Param("status") String status,
-                               @Param("currentStudentId") Long currentStudentId);
+                               @Param("currentStudentId") Long currentStudentId,
+                               @Param("oldStatus") String oldStatus);
 
     DormBedEntity selectById(@Param("id") Long id);
 

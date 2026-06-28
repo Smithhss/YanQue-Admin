@@ -64,6 +64,8 @@ import java.util.stream.Collectors;
 @Service
 public class ClassDutyServiceImpl implements ClassDutyService {
 
+    private static final String ROLE_CODE_TEACHER = "TEACHER";
+
     @Autowired
     private ClassDutyMapper classDutyMapper;
 
@@ -374,7 +376,7 @@ public class ClassDutyServiceImpl implements ClassDutyService {
      * 查询所有 TEACHER 角色的用户ID,检查传入的 teacherId 是否在其中。
      */
     private void validateTeacher(Long teacherId) {
-        Set<Long> teacherIds = sysUserService.getUserByRoleCode("TEACHER").stream()
+        Set<Long> teacherIds = sysUserService.getUserByRoleCode(ROLE_CODE_TEACHER).stream()
                 .map(SysUserEntity::getId)
                 .collect(Collectors.toSet());
         if (!teacherIds.contains(teacherId)) {

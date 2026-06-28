@@ -40,6 +40,8 @@ import java.util.stream.Collectors;
 @Service
 public class ClassScheduleServiceImpl implements ClassScheduleService {
 
+    private static final String ROLE_CODE_TEACHER = "TEACHER";
+
     @Autowired
     private ClazzMapper clazzMapper;
 
@@ -160,7 +162,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
             List<Long> teacherIds = classScheduleMapper.selectTeacheringUserId(stageStartDate, stageEndDate, classId);
 
             // 查询所有老师
-            List<SysUserEntity> teacher = sysUserService.getUserByRoleCode("TEACHER");
+            List<SysUserEntity> teacher = sysUserService.getUserByRoleCode(ROLE_CODE_TEACHER);
 
             teacher.removeIf(next -> teacherIds.contains(next.getId()));
 
@@ -222,7 +224,7 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
         Map<String, List<CourseDetailEntity>> courseDetailGroup = groupCourseDetailsByStage(courseDetails);
 
         // 查询所有老师id
-        Set<Long> teacherIds = sysUserService.getUserByRoleCode("TEACHER").stream()
+        Set<Long> teacherIds = sysUserService.getUserByRoleCode(ROLE_CODE_TEACHER).stream()
                 .map(SysUserEntity::getId)
                 .collect(Collectors.toSet());
 

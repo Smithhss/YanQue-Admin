@@ -1,6 +1,8 @@
 package cn.yanque.models.student.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.student.mapper.StudentLearningCalendarMapper;
 import cn.yanque.models.student.mapper.StudentLearningPlanMapper;
@@ -42,9 +44,7 @@ import java.util.stream.Collectors;
 @Service
 public class StudentLearningPlanServiceImpl implements StudentLearningPlanService {
 
-    private static final String TEACHING_MODE_ONLINE = "ONLINE";
     private static final String SOP_STATUS_COMPLETED = "COMPLETED";
-    private static final String PLAN_STATUS_ACTIVE = "ACTIVE";
     private static final String CALENDAR_STATUS_TODO = "TODO";
 
     @Autowired
@@ -79,7 +79,7 @@ public class StudentLearningPlanServiceImpl implements StudentLearningPlanServic
         if (student == null) {
             throw BusinessException.DateError.newInstance("学生不存在");
         }
-        if (!TEACHING_MODE_ONLINE.equals(student.getTeachingMode())) {
+        if (!TeachingModeEnum.ONLINE.name().equals(student.getTeachingMode())) {
             throw BusinessException.DateError.newInstance("只有线上学员可以定制学习计划");
         }
         if (planMapper.selectActiveByStudentId(student.getId()) != null) {
@@ -90,7 +90,7 @@ public class StudentLearningPlanServiceImpl implements StudentLearningPlanServic
         if (course == null) {
             throw BusinessException.CourseNotExist;
         }
-        if (!TEACHING_MODE_ONLINE.equals(course.getTeachingMode())) {
+        if (!TeachingModeEnum.ONLINE.name().equals(course.getTeachingMode())) {
             throw BusinessException.DateError.newInstance("学习计划只能选择线上课程");
         }
         List<StudentLearningPlanStageReq> normalizedStages = validateStages(course.getId(), req.getStages());
@@ -100,7 +100,7 @@ public class StudentLearningPlanServiceImpl implements StudentLearningPlanServic
         plan.setCourseId(course.getId());
         plan.setSopId(sop.getId());
         plan.setStartDate(truncateDate(req.getStartDate()));
-        plan.setStatus(PLAN_STATUS_ACTIVE);
+        plan.setStatus(ActiveEnum.ACTIVE.name());
         plan.setCreatedAt(new Date());
         plan.setUpdatedAt(new Date());
         planMapper.insert(plan);

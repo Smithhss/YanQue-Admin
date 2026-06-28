@@ -45,6 +45,7 @@
             current_student_id = #{currentStudentId},
             updated_at = now()
         where id = #{id}
+          and status = #{oldStatus}
     </update>
 
     <select id="selectById" resultMap="DormBedMap">

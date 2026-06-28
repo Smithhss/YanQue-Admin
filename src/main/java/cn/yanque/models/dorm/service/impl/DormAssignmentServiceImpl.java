@@ -1,6 +1,7 @@
 package cn.yanque.models.dorm.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.dorm.enums.DormAssignmentStatusEnum;
 import cn.yanque.models.dorm.enums.DormBedStatusEnum;
@@ -31,8 +32,6 @@ import java.util.List;
 @Service
 public class DormAssignmentServiceImpl implements DormAssignmentService {
 
-    private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
-
     @Autowired
     private DormAssignmentMapper assignmentMapper;
 
@@ -62,7 +61,7 @@ public class DormAssignmentServiceImpl implements DormAssignmentService {
         }
 
         Long assignmentId = createLivingAssignment(student.getId(), bed, building, req.getCheckInDate(), req.getRemark(), operatorId);
-        bedMapper.updateStatusAndStudent(bed.getId(), DormBedStatusEnum.OCCUPIED.name(), student.getId());
+        bedMapper.updateStatusAndStudent(bed.getId(), DormBedStatusEnum.OCCUPIED.name(), student.getId(), DormBedStatusEnum.FREE.name());
         return assignmentId;
     }
 
@@ -77,7 +76,7 @@ public class DormAssignmentServiceImpl implements DormAssignmentService {
             throw BusinessException.DormAssignmentNotLiving;
         }
         assignmentMapper.checkout(assignmentId, new Date());
-        bedMapper.updateStatusAndStudent(assignment.getBedId(), DormBedStatusEnum.FREE.name(), null);
+        bedMapper.updateStatusAndStudent(assignment.getBedId(), DormBedStatusEnum.FREE.name(), null, DormBedStatusEnum.OCCUPIED.name());
         return assignmentId;
     }
 
@@ -96,11 +95,11 @@ public class DormAssignmentServiceImpl implements DormAssignmentService {
 
         // 退旧床
         assignmentMapper.checkout(living.getId(), new Date());
-        bedMapper.updateStatusAndStudent(living.getBedId(), DormBedStatusEnum.FREE.name(), null);
+        bedMapper.updateStatusAndStudent(living.getBedId(), DormBedStatusEnum.FREE.name(), null, DormBedStatusEnum.OCCUPIED.name());
 
         // 入新床
         Long assignmentId = createLivingAssignment(student.getId(), newBed, building, new Date(), req.getRemark(), operatorId);
-        bedMapper.updateStatusAndStudent(newBed.getId(), DormBedStatusEnum.OCCUPIED.name(), student.getId());
+        bedMapper.updateStatusAndStudent(newBed.getId(), DormBedStatusEnum.OCCUPIED.name(), student.getId(), DormBedStatusEnum.FREE.name());
         return assignmentId;
     }
 
@@ -126,7 +125,7 @@ public class DormAssignmentServiceImpl implements DormAssignmentService {
         if (student == null) {
             throw BusinessException.DormStudentNotExist;
         }
-        if (!TEACHING_MODE_OFFLINE.equals(student.getTeachingMode())) {
+        if (!TeachingModeEnum.OFFLINE.name().equals(student.getTeachingMode())) {
             throw BusinessException.DormStudentNotOffline;
         }
         if (student.getGender() == null || student.getGender().isEmpty()) {
