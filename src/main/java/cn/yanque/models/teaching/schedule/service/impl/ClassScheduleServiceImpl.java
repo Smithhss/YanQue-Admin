@@ -82,16 +82,33 @@ public class ClassScheduleServiceImpl implements ClassScheduleService {
             throw BusinessException.CourseDetailNotExist;
         }
 
+        // 保存已有的老师分配(按courseDetailId索引)
+        Map<Long, Long> existingTeacherMap = classScheduleMapper.selectByClassId(req.getClassId()).stream()
+                .filter(s -> s.getTeacherId() != null && s.getCourseDetailId() != null)
+                .collect(Collectors.toMap(ClassScheduleEntity::getCourseDetailId, ClassScheduleEntity::getTeacherId, (a, b) -> a));
+
         // 构建课表信息
         List<ClassScheduleEntity> schedules = buildSchedules(req.getClassId(), req.getFirstClassDate(), courseDetails, rule);
 
-        // 删除之前的课表信息/ 批量插入信息
+        // 回填已有老师分配
+        for (ClassScheduleEntity schedule : schedules) {
+            if (schedule.getCourseDetailId() != null && schedule.getTeacherId() == null) {
+                Long existingTeacherId = existingTeacherMap.get(schedule.getCourseDetailId());
+                if (existingTeacherId != null) {
+                    schedule.setTeacherId(existingTeacherId);
+                }
+            }
+        }
+
+        // 删除之前的课表信息/批量插入信息
         classScheduleMapper.deleteByClassId(req.getClassId());
         classScheduleMapper.batchInsert(schedules);
 
+        long preservedCount = schedules.stream().filter(s -> s.getTeacherId() != null).count();
         ClassScheduleGenerateRes res = new ClassScheduleGenerateRes();
         res.setClassId(req.getClassId());
         res.setScheduleCount(schedules.size());
+        res.setPreservedTeacherCount((int) preservedCount);
         return res;
     }
 

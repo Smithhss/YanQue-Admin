@@ -14,4 +14,8 @@ public class ClassScheduleGenerateRes {
     /** 生成课表数量 */
     @Schema(description = "生成课表数量")
     private Integer scheduleCount;
+
+    /** 回填保留的老师分配数 */
+    @Schema(description = "重新生成时保留的老师分配数量")
+    private Integer preservedTeacherCount;
 }
