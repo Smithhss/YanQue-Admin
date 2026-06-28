@@ -4,8 +4,6 @@ WORKDIR /app
 
 COPY settings.xml /root/.m2/settings.xml
 COPY pom.xml .
-RUN mvn -B dependency:go-offline
-
 COPY src ./src
 RUN mvn -B -DskipTests package
 
