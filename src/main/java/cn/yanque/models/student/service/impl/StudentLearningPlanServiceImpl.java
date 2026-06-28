@@ -2,6 +2,8 @@ package cn.yanque.models.student.service.impl;
 
 import cn.yanque.common.api.PageResult;
 import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.CalendarStatusEnum;
+import cn.yanque.common.enums.SopStatusEnum;
 import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.student.mapper.StudentLearningCalendarMapper;
@@ -44,8 +46,8 @@ import java.util.stream.Collectors;
 @Service
 public class StudentLearningPlanServiceImpl implements StudentLearningPlanService {
 
-    private static final String SOP_STATUS_COMPLETED = "COMPLETED";
-    private static final String CALENDAR_STATUS_TODO = "TODO";
+    private static final String SOP_STATUS_COMPLETED = SopStatusEnum.COMPLETED.name();
+    private static final String CALENDAR_STATUS_TODO = CalendarStatusEnum.TODO.name();
 
     @Autowired
     private StudentLearningPlanMapper planMapper;

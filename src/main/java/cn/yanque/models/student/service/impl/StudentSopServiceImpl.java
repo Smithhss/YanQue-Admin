@@ -1,6 +1,7 @@
 package cn.yanque.models.student.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.SopStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.student.mapper.StudentLearningPlanMapper;
 import cn.yanque.models.student.mapper.StudentMapper;
@@ -32,8 +33,8 @@ import java.util.stream.Collectors;
 @Service
 public class StudentSopServiceImpl implements StudentSopService {
 
-    private static final String SOP_STATUS_ASSIGNED = "ASSIGNED";
-    private static final String SOP_STATUS_COMPLETED = "COMPLETED";
+    private static final String SOP_STATUS_ASSIGNED = SopStatusEnum.ASSIGNED.name();
+    private static final String SOP_STATUS_COMPLETED = SopStatusEnum.COMPLETED.name();
 
     @Autowired
     private StudentSopMapper studentSopMapper;

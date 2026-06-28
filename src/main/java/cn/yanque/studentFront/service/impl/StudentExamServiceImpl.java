@@ -1,6 +1,8 @@
 package cn.yanque.studentFront.service.impl;
 
 import cn.yanque.common.api.PageResult;
+import cn.yanque.common.enums.ExamStatusEnum;
+import cn.yanque.common.enums.GradingStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.common.threadlocal.StudentThreadLocal;
 import cn.yanque.models.exam.exam.mapper.ExamMapper;
@@ -50,26 +52,13 @@ import java.util.stream.Collectors;
 @Service
 public class StudentExamServiceImpl implements StudentExamService {
 
-    private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
-
-    private static final String STATUS_SUBMITTED = "SUBMITTED";
-
-    private static final String GRADING_STATUS_PENDING = "PENDING";
-
-    private static final String GRADING_STATUS_COMPLETED = "COMPLETED";
-
     private static final List<String> OBJECTIVE_QUESTION_TYPES = List.of("SINGLE", "MULTIPLE", "JUDGE");
 
-    private static final String VIEW_STATUS_NOT_STARTED = "NOT_STARTED";
-
+    private static final String VIEW_STATUS_NOT_STARTED = ExamStatusEnum.NOT_STARTED.name();
     private static final String VIEW_STATUS_AVAILABLE = "AVAILABLE";
-
-    private static final String VIEW_STATUS_IN_PROGRESS = "IN_PROGRESS";
-
-    private static final String VIEW_STATUS_SUBMITTED = "SUBMITTED";
-
+    private static final String VIEW_STATUS_IN_PROGRESS = ExamStatusEnum.IN_PROGRESS.name();
+    private static final String VIEW_STATUS_SUBMITTED = ExamStatusEnum.SUBMITTED.name();
     private static final String VIEW_STATUS_TIMEOUT = "TIMEOUT";
-
     private static final String VIEW_STATUS_ENDED = "ENDED";
 
     @Autowired
@@ -138,7 +127,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         // 查询学生提交信息
         StudentExamRecordEntity record = studentExamRecordMapper.selectByExamIdAndStudentId(examId, student.getId());
         if (record != null) {
-            if (STATUS_SUBMITTED.equals(record.getStatus())) {
+            if (ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
                 throw BusinessException.DateError.newInstance("考试已提交");
             }
             if (record.getDeadlineTime() != null && record.getDeadlineTime().before(now)) {
@@ -152,8 +141,8 @@ public class StudentExamServiceImpl implements StudentExamService {
         record.setStudentId(student.getId());
         record.setStartTime(now);
         record.setDeadlineTime(buildDeadlineTime(now, exam));
-        record.setStatus(STATUS_IN_PROGRESS);
-        record.setGradingStatus(GRADING_STATUS_PENDING);
+        record.setStatus(ExamStatusEnum.IN_PROGRESS.name());
+        record.setGradingStatus(GradingStatusEnum.PENDING.name());
         record.setCreatedAt(now);
         record.setUpdatedAt(now);
         studentExamRecordMapper.insert(record);
@@ -167,7 +156,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (record == null || !student.getId().equals(record.getStudentId())) {
             throw BusinessException.DateError.newInstance("考试记录不存在");
         }
-        if (STATUS_SUBMITTED.equals(record.getStatus())) {
+        if (ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
             throw BusinessException.DateError.newInstance("考试已提交");
         }
         Date now = new Date();
@@ -209,7 +198,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (record == null || !student.getId().equals(record.getStudentId())) {
             throw BusinessException.DateError.newInstance("考试记录不存在");
         }
-        if (STATUS_SUBMITTED.equals(record.getStatus())) {
+        if (ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
             throw BusinessException.DateError.newInstance("考试已提交");
         }
 
@@ -256,7 +245,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         studentExamAnswerMapper.deleteByRecordId(recordId);
         studentExamAnswerMapper.insertBatch(answers);
 
-        record.setStatus(STATUS_SUBMITTED);
+        record.setStatus(ExamStatusEnum.SUBMITTED.name());
         record.setGradingStatus(buildGradingStatus(answers));
         record.setSubmitTime(now);
         record.setScore(totalScore);
@@ -283,7 +272,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (record == null || !student.getId().equals(record.getStudentId())) {
             throw BusinessException.DateError.newInstance("考试记录不存在");
         }
-        if (!STATUS_SUBMITTED.equals(record.getStatus())) {
+        if (!ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
             throw BusinessException.DateError.newInstance("考试尚未提交");
         }
         ExamEntity exam = validateStudentExam(student, record.getExamId());
@@ -339,7 +328,7 @@ public class StudentExamServiceImpl implements StudentExamService {
             res.setInvigilatorName(buildUserName(userMap.get(exam.getInvigilatorUserId())));
             res.setTotalScore(paper == null ? null : paper.getTotalScore());
             fillRecord(res, record);
-            if (record != null && STATUS_SUBMITTED.equals(record.getStatus()) && !Boolean.TRUE.equals(exam.getAnswerVisible())) {
+            if (record != null && ExamStatusEnum.SUBMITTED.name().equals(record.getStatus()) && !Boolean.TRUE.equals(exam.getAnswerVisible())) {
                 res.setScore(null);
             }
             fillViewStatus(res, exam, record, now);
@@ -377,9 +366,9 @@ public class StudentExamServiceImpl implements StudentExamService {
     }
 
     private void fillViewStatus(StudentExamPageRes res, ExamEntity exam, StudentExamRecordEntity record, Date now) {
-        if (record != null && STATUS_SUBMITTED.equals(record.getStatus())) {
+        if (record != null && ExamStatusEnum.SUBMITTED.name().equals(record.getStatus())) {
             String text = Boolean.TRUE.equals(exam.getAnswerVisible())
-                    ? (GRADING_STATUS_COMPLETED.equals(record.getGradingStatus()) ? "已批改" : "待批改")
+                    ? (GradingStatusEnum.COMPLETED.name().equals(record.getGradingStatus()) ? "已批改" : "待批改")
                     : "已提交";
             setViewStatus(res, VIEW_STATUS_SUBMITTED, text, false);
             return;
@@ -500,7 +489,7 @@ public class StudentExamServiceImpl implements StudentExamService {
     private String buildGradingStatus(List<StudentExamAnswerEntity> answers) {
         boolean allObjective = answers.stream()
                 .allMatch(answer -> OBJECTIVE_QUESTION_TYPES.contains(answer.getQuestionType()));
-        return allObjective ? GRADING_STATUS_COMPLETED : GRADING_STATUS_PENDING;
+        return allObjective ? GradingStatusEnum.COMPLETED.name() : GradingStatusEnum.PENDING.name();
     }
 
     private void validateSubmitQuestions(Map<Long, String> answerMap, Map<Long, ExamPaperQuestionEntity> paperQuestionMap) {

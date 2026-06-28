@@ -95,7 +95,7 @@ public class RefundOrderBizImpl implements RefundOrderBiz {
             throw e;
         }
 
-        // 4. 调用易宝退款接口
+        // 4. 调用支付退款接口
         //    失败则:回退已退金额 + 标记退款单为 FAIL
         PaymentRefundRes paymentRefundRes;
         try {
@@ -237,7 +237,7 @@ public class RefundOrderBizImpl implements RefundOrderBiz {
 
     /**
      * 构建退款申请响应(新申请场景)。
-     * 状态固定为 PROCESSING,因为已成功调用易宝退款接口。
+     * 状态固定为 PROCESSING,因为已成功调用支付退款接口。
      */
     private RefundApplyRes buildRefundApplyRes(String refundOrderNo, String paymentOrderNo, BigDecimal refundAmount, PaymentRefundRes paymentRefundRes) {
         RefundApplyRes res = new RefundApplyRes();

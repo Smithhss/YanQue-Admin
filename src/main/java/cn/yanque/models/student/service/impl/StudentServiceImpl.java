@@ -7,6 +7,7 @@ import cn.yanque.common.api.PageResult;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.SopStatusEnum;
 import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.product.mapper.ProductMapper;
@@ -51,7 +52,7 @@ import java.util.stream.Collectors;
 @Service
 public class StudentServiceImpl implements StudentService {
 
-    private static final String SOP_STATUS_ASSIGNED = "ASSIGNED";
+    private static final String SOP_STATUS_ASSIGNED = SopStatusEnum.ASSIGNED.name();
     private static final String ROLE_CODE_ADVISOR = "ADVISOR";
 
     @Autowired

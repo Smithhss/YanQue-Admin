@@ -20,6 +20,9 @@
 | ActiveEnum | 活跃状态 | ACTIVE |
 | OrderStatusEnum | 支付订单 | INIT, FAIL, PROCESSING, SUCCESS, TIMEOUT |
 | PrepayOrderStatusEnum | 预付单 | PENDING_PAYMENT, SUCCESS, CANCELED |
+| SopStatusEnum | SOP状态 | ASSIGNED, COMPLETED |
+| CalendarStatusEnum | 日历状态 | TODO, DONE |
+| FollowupStatusEnum | 跟进状态 | NEED_FOLLOWUP, COMPLETED |
 | DormBedStatusEnum | 床位 | FREE, OCCUPIED |
 | DormAssignmentStatusEnum | 入住 | LIVING, CHECKED_OUT |
 | TeachingModeEnum | 授课模式 | ONLINE, OFFLINE |

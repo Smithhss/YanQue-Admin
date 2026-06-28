@@ -3,6 +3,7 @@ package cn.yanque.models.student.followup.service.impl;
 import cn.hutool.core.date.DateUtil;
 import cn.yanque.common.api.PageResult;
 import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.FollowupStatusEnum;
 import cn.yanque.common.enums.TeachingModeEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.student.followup.pojo.bo.QueryStudentFollowupRecordBo;
@@ -44,7 +45,7 @@ import java.util.stream.Collectors;
 @Service
 public class StudentFollowupRecordServiceImpl implements StudentFollowupRecordService {
 
-    private static final String RECORD_STATUS_NEED_FOLLOWUP = "NEED_FOLLOWUP";
+    private static final String RECORD_STATUS_NEED_FOLLOWUP = FollowupStatusEnum.NEED_FOLLOWUP.name();
 
     @Autowired
     private StudentFollowupRecordMapper studentFollowupRecordMapper;

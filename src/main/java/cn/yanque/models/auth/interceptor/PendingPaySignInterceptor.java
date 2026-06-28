@@ -4,6 +4,7 @@ import cn.hutool.jwt.JWT;
 import cn.yanque.common.api.ApiResponse;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
+import cn.yanque.common.enums.PrepayOrderStatusEnum;
 import cn.yanque.common.utils.RedisUtil;
 import cn.yanque.models.order.prepay.mapper.PrepayOrderMapper;
 import cn.yanque.models.order.prepay.pojo.entity.PrepayOrderEntity;
@@ -31,7 +32,7 @@ public class PendingPaySignInterceptor implements HandlerInterceptor {
     private static final String HMAC_SHA256 = "HmacSHA256";
     private static final String PENDING_PAY_KEY_PREFIX = "yanque:student:pending-pay:";
     private static final String PENDING_PAY_NONCE_KEY_PREFIX = "yanque:student:pending-pay:nonce:";
-    private static final String STATUS_PENDING_PAYMENT = "PENDING_PAYMENT";
+    private static final String STATUS_PENDING_PAYMENT = PrepayOrderStatusEnum.PENDING_PAYMENT.name();
     private static final String TOKEN_TYPE_PENDING_PAY = "PENDING_PAY";
     private static final long ALLOWED_SKEW_MILLIS = 1000 * 60 * 60;
     private static final Duration NONCE_EXPIRE = Duration.ofMillis(ALLOWED_SKEW_MILLIS);

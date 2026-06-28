@@ -60,7 +60,7 @@ public class StudentOrderBizImpl implements StudentOrderBiz {
 
         orderService.saveOrder(orderEntity);
 
-        // 调用易宝接口
+        // 调用支付接口
         PaymentUnifiedOrderReq paymentUnifiedOrderReq = new PaymentUnifiedOrderReq();
         paymentUnifiedOrderReq.setOrderNo(orderEntity.getOrderNo());
         paymentUnifiedOrderReq.setOrderAmount(orderEntity.getOrderAmount());

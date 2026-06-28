@@ -6,6 +6,7 @@ import cn.yanque.common.utils.RedisUtil;
 import cn.yanque.common.dataConfig.service.SysConfig;
 import cn.yanque.common.dataConfig.service.SysConfigService;
 import cn.yanque.common.enums.ActiveEnum;
+import cn.yanque.common.enums.PrepayOrderStatusEnum;
 import cn.yanque.common.exception.BusinessException;
 import cn.yanque.models.order.product.mapper.ProductMapper;
 import cn.yanque.models.order.product.pojo.entity.ProductEntity;
@@ -33,7 +34,7 @@ import java.util.Map;
 @Service
 public class StudentFrontServiceImpl implements StudentFrontService {
 
-    private static final String STATUS_PENDING_PAYMENT = "PENDING_PAYMENT";
+    private static final String STATUS_PENDING_PAYMENT = PrepayOrderStatusEnum.PENDING_PAYMENT.name();
     private static final long PENDING_PAY_TOKEN_EXPIRE_MILLIS = 1000 * 60 * 30;
     private static final Duration PENDING_PAY_EXPIRE = Duration.ofMinutes(30);
     private static final String PENDING_PAY_KEY_PREFIX = "yanque:student:pending-pay:";
