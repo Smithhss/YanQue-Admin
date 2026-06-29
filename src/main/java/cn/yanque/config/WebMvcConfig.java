@@ -39,6 +39,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/sysUser/login",
+                        "/alipay/**",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");
@@ -48,6 +49,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/sysUser/login",
+                        "/alipay/**",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");
@@ -57,6 +59,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/sysUser/login",
+                        "/alipay/**",
                         "/v3/api-docs/**",
                         "/swagger-ui.html",
                         "/swagger-ui/**");

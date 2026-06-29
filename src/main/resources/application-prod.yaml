@@ -35,16 +35,8 @@ alipay:
   notify-url: ${YQ_ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/alipay/notify}
   return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:8080/yq-admin/alipay/return}
   cashier-url: ${YQ_ALIPAY_CASHIER_URL:/yq-admin/alipay/cashier}
-
-yeepay:
-  mode: ${YQ_YEEPAY_MODE:prod}
-  parent-merchant-no: ${YQ_YEEPAY_PARENT_MERCHANT_NO:}
-  merchant-no: ${YQ_YEEPAY_MERCHANT_NO:}
-  pay-success-notify-url: ${YQ_YEEPAY_PAY_SUCCESS_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/paySuccess}
-  pay-success-return-url: ${YQ_YEEPAY_PAY_SUCCESS_RETURN_URL:http://127.0.0.1:5174/payment-return}
-  refund-notify-url: ${YQ_YEEPAY_REFUND_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/refund}
-  mock-cashier-url: ${YQ_YEEPAY_MOCK_CASHIER_URL:http://127.0.0.1:5174/payment-return}
-  sdk-config-file: ${YQ_YEEPAY_SDK_CONFIG_FILE:}
+  page-pay-http-method: ${YQ_ALIPAY_PAGE_PAY_HTTP_METHOD:GET}
+  return-url-enabled: ${YQ_ALIPAY_RETURN_URL_ENABLED:false}
 
 tos:
   endpoint: ${YQ_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
