@@ -23,6 +23,13 @@ public class AlipayProperties {
 
     private String cashierUrl;
 
+    /** 支付成功后跳转的学生端前端地址 */
+    private String studentWebReturnUrl;
+
+    private String pagePayHttpMethod = "GET";
+
+    private Boolean returnUrlEnabled = false;
+
     private String charset = "UTF-8";
 
     private String signType = "RSA2";

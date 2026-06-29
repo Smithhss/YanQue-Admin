@@ -8,6 +8,8 @@ import cn.yanque.models.order.prepay.pojo.entity.OrderEntity;
 import cn.yanque.models.order.prepay.pojo.info.UpdateOrderStatusInfo;
 import cn.yanque.models.order.prepay.service.OrderService;
 import cn.yanque.models.order.prepay.service.PrepayOrderService;
+import lombok.extern.slf4j.Slf4j;
+
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.view.RedirectView;
-import org.springframework.util.StringUtils;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -29,6 +30,7 @@ import java.util.Map;
 @Controller
 @RequestMapping("/alipay")
 @ConditionalOnProperty(prefix = "payment", name = "provider", havingValue = "alipay", matchIfMissing = true)
+@Slf4j
 public class AlipayController {
 
     @Autowired
@@ -52,9 +54,12 @@ public class AlipayController {
         if (!OrderStatusEnum.PROCESSING.name().equals(order.getStatus())) {
             throw BusinessException.DateError.newInstance("支付订单状态不允许发起支付");
         }
+        String html = alipayCashierService.buildPagePayForm(order);
         return ResponseEntity.ok()
+                .header("Cache-Control", "no-store, no-cache, must-revalidate")
+                .header("Pragma", "no-cache")
                 .contentType(MediaType.TEXT_HTML)
-                .body(alipayCashierService.buildPagePayForm(order));
+                .body(html);
     }
 
     @PostMapping("/notify")
@@ -82,34 +87,42 @@ public class AlipayController {
             return "failure";
         }
 
-        orderService.updateOrderStatus(new UpdateOrderStatusInfo(
-                orderNo,
-                OrderStatusEnum.SUCCESS.name(),
-                OrderStatusEnum.PROCESSING.name(),
-                params.get("trade_no"),
-                new Date()));
-        prepayOrderService.updatePrepayOrderSuccess(order.getPrepayOrderNo());
+        try {
+            orderService.updateOrderStatus(new UpdateOrderStatusInfo(
+                    orderNo,
+                    OrderStatusEnum.SUCCESS.name(),
+                    OrderStatusEnum.PROCESSING.name(),
+                    params.get("trade_no"),
+                    new Date()));
+        } catch (BusinessException e) {
+            log.warn("notify CAS update failed (concurrent?), orderNo={}, msg={}", orderNo, e.getMessage());
+        }
+        try {
+            prepayOrderService.updatePrepayOrderSuccess(order.getPrepayOrderNo());
+        } catch (BusinessException e) {
+            log.warn("notify prepay update failed (concurrent?), prepayOrderNo={}, msg={}", order.getPrepayOrderNo(), e.getMessage());
+        }
         return "success";
     }
 
     @GetMapping("/return")
     public RedirectView returnUrl(HttpServletRequest request) {
         Map<String, String> params = extractParams(request);
-        String orderNo = params.getOrDefault("out_trade_no", "");
-        String frontendReturnUrl = params.getOrDefault("returnUrl", "");
 
-        if (alipayCashierService.verifyNotify(params)
-                && ("TRADE_SUCCESS".equals(params.get("trade_status"))
-                    || "TRADE_FINISHED".equals(params.get("trade_status")))) {
-            if (StringUtils.hasText(frontendReturnUrl)) {
-                return new RedirectView(frontendReturnUrl + "?orderNo=" + orderNo + "&status=SUCCESS");
-            }
-            return new RedirectView("/payment-return?orderNo=" + orderNo + "&status=SUCCESS");
+        // 验签：防止回调参数被篡改
+        if (!alipayCashierService.verifyNotify(params)) {
+            log.warn("alipay return signature verify failed, params={}", params);
+            return new RedirectView(alipayProperties.getStudentWebReturnUrl() + "?error=sign_failed");
         }
-        if (StringUtils.hasText(frontendReturnUrl)) {
-            return new RedirectView(frontendReturnUrl + "?orderNo=" + orderNo + "&status=FAIL");
+
+        String orderNo = params.getOrDefault("out_trade_no", "");
+        String redirectBase = alipayProperties.getStudentWebReturnUrl();
+
+        // 同步回调仅做跳转，前端通过 paymentReturnInfo API 确认真实支付结果
+        if (orderNo != null && !orderNo.isBlank()) {
+            return new RedirectView(redirectBase + "?orderNo=" + orderNo);
         }
-        return new RedirectView("/payment-return?orderNo=" + orderNo + "&status=FAIL");
+        return new RedirectView(redirectBase);
     }
 
     private Map<String, String> extractParams(HttpServletRequest request) {

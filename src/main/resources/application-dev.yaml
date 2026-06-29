@@ -1,6 +1,13 @@
-# 沙箱支付需要公网回调: 本地开发请用 ngrok/frp 隧道映射后设置 YQ_ALIPAY_NOTIFY_URL 和 YQ_ALIPAY_RETURN_URL
-
 spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${YQ_DB_HOST:127.0.0.1}:${YQ_DB_PORT:3306}/${YQ_DB_NAME:yanque}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${YQ_DB_USERNAME:root}
+    password: ${YQ_DB_PASSWORD:root}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+
   data:
     redis:
       host: ${YQ_REDIS_HOST:127.0.0.1}
@@ -8,17 +15,17 @@ spring:
       password: ${YQ_REDIS_PASSWORD:}
       database: ${YQ_REDIS_DATABASE:0}
 
-  datasource:
-    url: jdbc:mysql://${YQ_DB_HOST:127.0.0.1}:${YQ_DB_PORT:3306}/${YQ_DB_NAME:yanque}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    username: ${YQ_DB_USERNAME:root}
-    password: ${YQ_DB_PASSWORD:}
-
 logging:
   level:
     cn.yanque: INFO
 
 payment:
-  provider: ${YQ_PAYMENT_PROVIDER:alipay}
+  # 本地开发用 yeepay mock, 不依赖外网; 服务器 prod 用支付宝沙箱
+  provider: ${YQ_PAYMENT_PROVIDER:yeepay}
+
+yeepay:
+  mode: ${YQ_YEEPAY_MODE:mock}
+  mock-cashier-url: ${YQ_YEEPAY_MOCK_CASHIER_URL:http://127.0.0.1:5174/payment-return}
 
 alipay:
   gateway-url: ${YQ_ALIPAY_GATEWAY_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
@@ -28,10 +35,5 @@ alipay:
   notify-url: ${YQ_ALIPAY_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/alipay/notify}
   return-url: ${YQ_ALIPAY_RETURN_URL:http://127.0.0.1:8080/yq-admin/alipay/return}
   cashier-url: ${YQ_ALIPAY_CASHIER_URL:/yq-admin/alipay/cashier}
-
-yeepay:
-  mode: ${YQ_YEEPAY_MODE:mock}
-  pay-success-notify-url: ${YQ_YEEPAY_PAY_SUCCESS_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/paySuccess}
-  pay-success-return-url: ${YQ_YEEPAY_PAY_SUCCESS_RETURN_URL:http://127.0.0.1:5174/payment-return}
-  refund-notify-url: ${YQ_YEEPAY_REFUND_NOTIFY_URL:http://127.0.0.1:8080/yq-admin/yop-callback/refund}
-  mock-cashier-url: ${YQ_YEEPAY_MOCK_CASHIER_URL:http://127.0.0.1:5174/payment-return}
+  page-pay-http-method: ${YQ_ALIPAY_PAGE_PAY_HTTP_METHOD:GET}
+  return-url-enabled: ${YQ_ALIPAY_RETURN_URL_ENABLED:false}
