@@ -143,4 +143,14 @@
             updated_at = now()
         where id = #{id}
     </update>
+
+    <update id="updateProfile">
+        update student
+        set education = #{education},
+            grade_year = #{gradeYear},
+            school = #{school},
+            major = #{major},
+            updated_at = now()
+        where id = #{id}
+    </update>
 </mapper>

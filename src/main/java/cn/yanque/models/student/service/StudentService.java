@@ -31,4 +31,6 @@ public interface StudentService {
     StudentTagUpdateRes updateStudentTag(Long id, StudentTagUpdateReq req);
 
     StudentEntity selectByStudentId(Long id);
+
+    void updateProfile(Long id, String education, Integer gradeYear, String school, String major);
 }

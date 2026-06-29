@@ -28,4 +28,8 @@ public interface StudentMapper {
     int updateClassId(@Param("id") Long id, @Param("classId") Long classId);
 
     int updateStudentTag(@Param("id") Long id, @Param("studentTag") String studentTag);
+
+    int updateProfile(@Param("id") Long id, @Param("education") String education,
+                      @Param("gradeYear") Integer gradeYear, @Param("school") String school,
+                      @Param("major") String major);
 }

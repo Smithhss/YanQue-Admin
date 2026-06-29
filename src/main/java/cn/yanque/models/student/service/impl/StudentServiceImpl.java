@@ -196,6 +196,14 @@ public class StudentServiceImpl implements StudentService {
         return studentMapper.selectById(id);
     }
 
+    @Override
+    public void updateProfile(Long id, String education, Integer gradeYear, String school, String major) {
+        if (studentMapper.selectById(id) == null) {
+            throw BusinessException.DateError.newInstance("学生不存在");
+        }
+        studentMapper.updateProfile(id, education, gradeYear, school, major);
+    }
+
     private void fillAndValidateTeachingMode(StudentEntity student) {
         String teachingMode = student.getTeachingMode();
         if (teachingMode == null || teachingMode.isBlank()) {
