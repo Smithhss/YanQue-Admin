@@ -69,12 +69,15 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public PageResult<OrderPageRes> pageOrder(OrderPageReq req) {
+
         int pageNum = req.getPageNum() == null ? 1 : req.getPageNum();
         int pageSize = req.getPageSize() == null ? 10 : req.getPageSize();
 
         QueryOrderBo queryOrderBo = buildQueryOrderBo(req);
         PageHelper.startPage(pageNum, pageSize);
+
         List<OrderEntity> list = orderMapper.selectPage(queryOrderBo);
+
         PageInfo<OrderEntity> pageInfo = new PageInfo<>(list);
         Map<String, ProductEntity> productMap = getProductMap(list);
         List<OrderPageRes> records = list.stream().map(order -> buildOrderPageRes(order, productMap)).toList();

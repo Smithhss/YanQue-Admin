@@ -52,6 +52,7 @@ public class PrepayOrderServiceImpl implements PrepayOrderService {
         order.setOrderStatus(req.getOrderStatus() == null || req.getOrderStatus().isBlank() ? DEFAULT_ORDER_STATUS : req.getOrderStatus());
         order.setCreatedAt(new Date());
         order.setUpdatedAt(new Date());
+
         prepayOrderMapper.insert(order);
 
         PrepayOrderCreateRes res = new PrepayOrderCreateRes();
