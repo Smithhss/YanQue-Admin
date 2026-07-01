@@ -22,7 +22,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         @MapperScan("cn.yanque.models.exam.question.mapper"),
         @MapperScan("cn.yanque.models.exam.paper.mapper"),
         @MapperScan("cn.yanque.models.exam.exam.mapper"),
-        @MapperScan("cn.yanque.models.student.mapper")
+        @MapperScan("cn.yanque.models.student.mapper"),
+        @MapperScan("cn.yanque.models.ai.chat.mapper")
 })
 public class YanqueApplication {
 

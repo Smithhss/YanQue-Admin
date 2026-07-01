@@ -48,3 +48,10 @@ xxl:
     port: ${YQ_XXL_JOB_PORT:9999}
     log-path: ${YQ_XXL_JOB_LOG_PATH:/tmp/yanque-admin/xxl-job}
     log-retention-days: ${YQ_XXL_JOB_LOG_RETENTION_DAYS:30}
+
+ai-chat:
+  base-url: ${YQ_AI_CHAT_BASE_URL:http://127.0.0.1:8000}
+  stream-path: ${YQ_AI_CHAT_STREAM_PATH:/api/ai-chat/stream}
+  connect-timeout-seconds: ${YQ_AI_CHAT_CONNECT_TIMEOUT_SECONDS:3}
+  request-timeout-seconds: ${YQ_AI_CHAT_REQUEST_TIMEOUT_SECONDS:120}
+  history-limit: ${YQ_AI_CHAT_HISTORY_LIMIT:20}
